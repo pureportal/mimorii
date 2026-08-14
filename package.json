@@ -1,0 +1,55 @@
+{
+  "name": "mimorii",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted uptime, infrastructure analytics, and observability.",
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=1 run build && pnpm run agent:build",
+    "build:web": "pnpm --filter @mimorii/web build",
+    "build:api": "pnpm --filter @mimorii/api build",
+    "db:create": "pnpm --filter @mimorii/api db:create",
+    "db:up": "pnpm --filter @mimorii/api db:up",
+    "db:down": "pnpm --filter @mimorii/api db:down",
+    "db:list": "pnpm --filter @mimorii/api db:list",
+    "db:pending": "pnpm --filter @mimorii/api db:pending",
+    "db:check": "pnpm --filter @mimorii/api db:check",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck",
+    "dev": "pnpm run seed && node scripts/dev.mjs",
+    "dev:api": "pnpm --filter @mimorii/api dev",
+    "dev:agent": "cargo run --manifest-path apps/agent/Cargo.toml -- run",
+    "dev:web": "pnpm --filter @mimorii/web dev",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware .",
+    "typecheck": "pnpm --filter @mimorii/contracts build && pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test && pnpm run agent:test",
+    "test:e2e": "pnpm --filter @mimorii/api test:e2e",
+    "seed": "pnpm --filter @mimorii/api seed",
+    "openapi": "pnpm --filter @mimorii/api openapi:generate",
+    "swetrix:configure": "node scripts/configure-swetrix.mjs",
+    "swetrix:verify": "node scripts/verify-swetrix.mjs",
+    "agent:check": "cargo check --manifest-path apps/agent/Cargo.toml",
+    "agent:test": "cargo test --manifest-path apps/agent/Cargo.toml",
+    "agent:build": "cargo build --release --manifest-path apps/agent/Cargo.toml",
+    "tauri:build": "pnpm --filter @mimorii/web tauri:build",
+    "tauri:android:build": "pnpm --filter @mimorii/web tauri:android:build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.2",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "esbuild"
+    ]
+  }
+}

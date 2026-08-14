@@ -1,0 +1,17 @@
+{
+  "plugins": ["typescript", "react", "unicorn", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "rules": {
+    "no-alert": "error",
+    "no-console": "off",
+    "react/react-in-jsx-scope": "off",
+    "typescript/no-extraneous-class": "off",
+    "typescript/no-explicit-any": "warn",
+    "unicorn/filename-case": "off"
+  },
+  "ignorePatterns": ["**/dist/**", "**/target/**", "**/src-tauri/gen/**", "**/openapi.json"]
+}

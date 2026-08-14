@@ -1,0 +1,9 @@
+[default]
+description = "Mimorii push permissions"
+permissions = [
+  "allow-status",
+  "allow-mark-permission-requested",
+  "allow-requestPermissions",
+  "allow-enable",
+  "allow-disable",
+]

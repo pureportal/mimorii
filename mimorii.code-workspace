@@ -1,0 +1,80 @@
+{
+  "folders": [
+    {
+      "name": "root",
+      "path": "."
+    },
+    {
+      "name": "api",
+      "path": "apps/api"
+    },
+    {
+      "name": "web",
+      "path": "apps/web"
+    },
+    {
+      "name": "agent",
+      "path": "apps/agent"
+    },
+    {
+      "name": "contracts",
+      "path": "packages/contracts"
+    }
+  ],
+  "settings": {
+    "powershell.cwd": "root",
+    "java.configuration.updateBuildConfiguration": "automatic"
+  },
+  "launch": {
+    "configurations": [
+      {
+        "name": "Mimorii: dev:api",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "pnpm run dev:api",
+        "cwd": "${workspaceFolder:root}"
+      },
+      {
+        "name": "Mimorii: dev:web",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "pnpm run dev:web",
+        "cwd": "${workspaceFolder:root}"
+      },
+      {
+        "name": "Mimorii: dev:agent",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "pnpm run dev:agent",
+        "cwd": "${workspaceFolder:root}"
+      }
+    ],
+    "compounds": [
+      {
+        "name": "Mimorii: dev",
+        "configurations": ["Mimorii: dev:api", "Mimorii: dev:web", "Mimorii: dev:agent"],
+        "stopAll": true
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Mimorii: seed",
+        "type": "shell",
+        "command": "pnpm",
+        "args": ["run", "seed"],
+        "options": {
+          "cwd": "${workspaceFolder:root}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "silent",
+          "panel": "dedicated",
+          "clear": false
+        }
+      }
+    ]
+  }
+}

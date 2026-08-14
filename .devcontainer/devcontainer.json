@@ -1,0 +1,50 @@
+{
+  "name": "Mimorii",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:3": {},
+    "ghcr.io/devcontainers/features/rust:1": {
+      "profile": "minimal"
+    }
+  },
+  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "remoteEnv": {
+    "SWETRIX_ADMIN_API_URL": "https://swetrix.pureportal.io/backend",
+    "VITE_SWETRIX_DEV_MODE": "true",
+    "VITE_SWETRIX_PROJECT_ID": "vN8owpoxr4NW",
+    "VITE_SWETRIX_API_URL": "https://swetrix.pureportal.io/backend/v1/log"
+  },
+  "forwardPorts": [4310, 5180],
+  "portsAttributes": {
+    "4310": {
+      "label": "Mimorii API",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    },
+    "5180": {
+      "label": "Mimorii web",
+      "onAutoForward": "openPreview",
+      "visibility": "private"
+    }
+  },
+  "secrets": {
+    "SWETRIX_API_KEY": {
+      "description": "Swetrix account API key used only by the configuration and verification commands.",
+      "documentationUrl": "https://swetrix.pureportal.io"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["oxc.oxc-vscode", "rust-lang.rust-analyzer"],
+      "settings": {
+        "terminal.integrated.cwd": "${containerWorkspaceFolder}"
+      }
+    }
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "16gb"
+  },
+  "remoteUser": "node"
+}
