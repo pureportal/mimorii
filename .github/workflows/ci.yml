@@ -153,7 +153,23 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          load: true
           platforms: linux/amd64
           pull: true
           push: false
+          tags: mimorii:local
           cache-from: type=gha,scope=mimorii
+
+      - name: Start Compose deployment
+        run: docker compose --env-file .env.example up --detach --no-build --wait --wait-timeout 120
+
+      - name: Verify application health
+        run: curl --fail --silent --show-error --output /dev/null http://127.0.0.1:4310/api/health
+
+      - name: Show deployment logs
+        if: failure()
+        run: docker compose --env-file .env.example logs --no-color
+
+      - name: Stop Compose deployment
+        if: always()
+        run: docker compose --env-file .env.example down --volumes --remove-orphans
