@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    init: true
+    environment:
+      POSTGRES_DB: ${MIMORII_DB_NAME:-mimorii}
+      POSTGRES_USER: ${MIMORII_DB_USER:-mimorii}
+      POSTGRES_PASSWORD: ${MIMORII_DB_PASSWORD:?Set MIMORII_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${MIMORII_DB_PORT:-5432}:5432"
+    volumes:
+      - mimorii-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${MIMORII_DB_USER:-mimorii} -d ${MIMORII_DB_NAME:-mimorii}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  mimorii:
+    image: mimorii:local
+    init: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SWETRIX_PROJECT_ID: ${VITE_SWETRIX_PROJECT_ID:-vN8owpoxr4NW}
+        VITE_SWETRIX_API_URL: ${VITE_SWETRIX_API_URL:-https://swetrix.pureportal.io/backend/v1/log}
+        VITE_SWETRIX_DEV_MODE: ${VITE_SWETRIX_DEV_MODE:-false}
+        VITE_SWETRIX_ERROR_SAMPLE_RATE: ${VITE_SWETRIX_ERROR_SAMPLE_RATE:-1}
+        VITE_SWETRIX_SESSION_REPLAY_ENABLED: ${VITE_SWETRIX_SESSION_REPLAY_ENABLED:-false}
+        VITE_SWETRIX_SESSION_REPLAY_SAMPLE_RATE: ${VITE_SWETRIX_SESSION_REPLAY_SAMPLE_RATE:-0.1}
+        VITE_SWETRIX_SESSION_REPLAY_MAX_DURATION_MS: ${VITE_SWETRIX_SESSION_REPLAY_MAX_DURATION_MS:-900000}
+        VITE_SWETRIX_SESSION_REPLAY_IDLE_TIMEOUT_MS: ${VITE_SWETRIX_SESSION_REPLAY_IDLE_TIMEOUT_MS:-300000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4310:4310"
+    environment:
+      MIMORII_DB_HOST: postgres
+      MIMORII_DB_PORT: 5432
+      MIMORII_DB_NAME: ${MIMORII_DB_NAME:-mimorii}
+      MIMORII_DB_USER: ${MIMORII_DB_USER:-mimorii}
+      MIMORII_DB_PASSWORD: ${MIMORII_DB_PASSWORD:?Set MIMORII_DB_PASSWORD in .env}
+      MIMORII_JWT_SECRET: ${MIMORII_JWT_SECRET:?Set MIMORII_JWT_SECRET in .env}
+      MIMORII_API_PORT: 4310
+      MIMORII_RATE_LIMIT: ${MIMORII_RATE_LIMIT:-180}
+      MIMORII_HEARTBEAT_RATE_LIMIT: ${MIMORII_HEARTBEAT_RATE_LIMIT:-2000}
+      MIMORII_CORS_ORIGINS: ${MIMORII_CORS_ORIGINS:-http://localhost:4310}
+      MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS: ${MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS:-false}
+      MIMORII_RETENTION_ENABLED: ${MIMORII_RETENTION_ENABLED:-true}
+      MIMORII_RESULT_RETENTION_DAYS: ${MIMORII_RESULT_RETENTION_DAYS:-365}
+      MIMORII_SNAPSHOT_RETENTION_DAYS: ${MIMORII_SNAPSHOT_RETENTION_DAYS:-90}
+      MIMORII_DELIVERY_RETENTION_DAYS: ${MIMORII_DELIVERY_RETENTION_DAYS:-180}
+      MIMORII_PUSH_ENDPOINT_RETENTION_DAYS: ${MIMORII_PUSH_ENDPOINT_RETENTION_DAYS:-270}
+      MIMORII_AUDIT_RETENTION_DAYS: ${MIMORII_AUDIT_RETENTION_DAYS:-730}
+      MIMORII_AGENT_TASK_RETENTION_DAYS: ${MIMORII_AGENT_TASK_RETENTION_DAYS:-7}
+      MIMORII_HEARTBEAT_RETENTION_DAYS: ${MIMORII_HEARTBEAT_RETENTION_DAYS:-365}
+      MIMORII_SCHEDULER_ENABLED: ${MIMORII_SCHEDULER_ENABLED:-true}
+      MIMORII_PUBLIC_URL: ${MIMORII_PUBLIC_URL:-http://localhost:4310}
+      MIMORII_SMTP_HOST: ${MIMORII_SMTP_HOST:-}
+      MIMORII_SMTP_PORT: ${MIMORII_SMTP_PORT:-587}
+      MIMORII_SMTP_SECURE: ${MIMORII_SMTP_SECURE:-false}
+      MIMORII_SMTP_USER: ${MIMORII_SMTP_USER:-}
+      MIMORII_SMTP_PASSWORD: ${MIMORII_SMTP_PASSWORD:-}
+      MIMORII_EMAIL_FROM: ${MIMORII_EMAIL_FROM:-}
+      MIMORII_WEB_PUSH_VAPID_PUBLIC_KEY: ${MIMORII_WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      MIMORII_WEB_PUSH_VAPID_PRIVATE_KEY: ${MIMORII_WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      MIMORII_WEB_PUSH_VAPID_SUBJECT: ${MIMORII_WEB_PUSH_VAPID_SUBJECT:-}
+      MIMORII_FIREBASE_PROJECT_ID: ${MIMORII_FIREBASE_PROJECT_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+    restart: unless-stopped
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "--eval",
+          "fetch('http://127.0.0.1:4310/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mimorii-postgres:

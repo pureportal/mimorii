@@ -1,0 +1,10 @@
+node_modules
+dist
+target
+.git
+.env
+*.db
+*.db-shm
+*.db-wal
+apps/web/src-tauri/gen
+apps/web/src-tauri/target
