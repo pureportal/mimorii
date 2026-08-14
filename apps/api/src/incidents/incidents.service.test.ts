@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IncidentsService } from "./incidents.service.js";
+
+const initialSchedulerSetting = process.env.MIMORII_SCHEDULER_ENABLED;
 
 const incident = {
   id: "incident-1",
@@ -28,6 +30,7 @@ describe("incident maintenance suppression", () => {
   const notifications = { enqueue: vi.fn().mockResolvedValue([]) };
 
   beforeEach(() => {
+    process.env.MIMORII_SCHEDULER_ENABLED = "true";
     vi.clearAllMocks();
     database.all
       .mockResolvedValueOnce([{ id: incident.id }])
@@ -37,6 +40,14 @@ describe("incident maintenance suppression", () => {
     database.transaction.mockImplementation(async (action: () => Promise<void>) => action());
     maintenance.suppressesNotifications.mockResolvedValue(false);
     notifications.enqueue.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    if (initialSchedulerSetting === undefined) {
+      delete process.env.MIMORII_SCHEDULER_ENABLED;
+    } else {
+      process.env.MIMORII_SCHEDULER_ENABLED = initialSchedulerSetting;
+    }
   });
 
   it("sends one warning when maintenance ends and the incident remains active", async () => {
