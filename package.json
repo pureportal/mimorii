@@ -20,7 +20,7 @@
     "dev:web": "pnpm --filter @mimorii/web dev",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint --type-aware .",
+    "lint": "pnpm --filter @mimorii/contracts build && oxlint --type-aware .",
     "typecheck": "pnpm --filter @mimorii/contracts build && pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test && pnpm run agent:test",
     "test:e2e": "pnpm --filter @mimorii/api test:e2e",
