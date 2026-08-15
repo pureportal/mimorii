@@ -4,8 +4,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectorsPage } from "./agents-page";
 
-const { apiMock, useAuthMock, writeTextMock } = vi.hoisted(() => ({
+const {
+  apiMock,
+  collectMobileStatusNowMock,
+  enrollMobileCollectorMock,
+  mobileCollectorStateMock,
+  unenrollMobileCollectorMock,
+  useAuthMock,
+  writeTextMock,
+} = vi.hoisted(() => ({
   apiMock: vi.fn(),
+  collectMobileStatusNowMock: vi.fn(),
+  enrollMobileCollectorMock: vi.fn(),
+  mobileCollectorStateMock: vi.fn(),
+  unenrollMobileCollectorMock: vi.fn(),
   useAuthMock: vi.fn(),
   writeTextMock: vi.fn(),
 }));
@@ -17,6 +29,13 @@ vi.mock("../lib/api", () => ({
 }));
 
 vi.mock("../lib/auth", () => ({ useAuth: useAuthMock }));
+
+vi.mock("../lib/mobile-collector", () => ({
+  collectMobileStatusNow: collectMobileStatusNowMock,
+  enrollMobileCollector: enrollMobileCollectorMock,
+  mobileCollectorState: mobileCollectorStateMock,
+  unenrollMobileCollector: unenrollMobileCollectorMock,
+}));
 
 const warehouseRelay: AgentSummary = {
   id: "agent-1",
@@ -33,9 +52,28 @@ const warehouseRelay: AgentSummary = {
   createdAt: "2026-08-13T07:00:00.000Z",
 };
 
+const fieldPhone: AgentSummary = {
+  id: "22222222-2222-4222-8222-222222222222",
+  teamId: "team-1",
+  name: "Field phone",
+  kind: "mobile",
+  collectionIntervalSeconds: 900,
+  status: "offline",
+  platform: "Android 16",
+  version: "1.0.0",
+  lastSeenAt: "2026-08-13T08:00:00.000Z",
+  capabilities: ["device-status"],
+  deviceStatus: null,
+  createdAt: "2026-08-13T07:00:00.000Z",
+};
+
 describe("CollectorsPage confirmations", () => {
   beforeEach(() => {
     apiMock.mockReset();
+    collectMobileStatusNowMock.mockReset();
+    enrollMobileCollectorMock.mockReset();
+    mobileCollectorStateMock.mockReset();
+    unenrollMobileCollectorMock.mockReset();
     useAuthMock.mockReset();
     writeTextMock.mockReset();
     Object.defineProperty(navigator, "clipboard", {
@@ -43,6 +81,14 @@ describe("CollectorsPage confirmations", () => {
       value: { writeText: writeTextMock },
     });
     writeTextMock.mockResolvedValue(undefined);
+    mobileCollectorStateMock.mockResolvedValue({
+      available: false,
+      enrolled: false,
+      collectorId: null,
+      collectionIntervalSeconds: null,
+      lastSubmittedAt: null,
+      lastError: null,
+    });
     useAuthMock.mockReturnValue({
       session: null,
       activeTeam: {
@@ -122,6 +168,78 @@ describe("CollectorsPage confirmations", () => {
         body: JSON.stringify({ collectionIntervalSeconds: 45 }),
       })
     );
+  });
+
+  it("reconnects the associated Android collector after its key is rejected", async () => {
+    const disconnectedState = {
+      available: true,
+      enrolled: false,
+      collectorId: fieldPhone.id,
+      collectionIntervalSeconds: null,
+      lastSubmittedAt: "2026-08-13T08:00:00.000Z",
+      lastError: "Collector key was rejected",
+    };
+    mobileCollectorStateMock.mockResolvedValue(disconnectedState);
+    enrollMobileCollectorMock.mockResolvedValue({
+      ...disconnectedState,
+      enrolled: true,
+      collectionIntervalSeconds: 900,
+      lastError: null,
+    });
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/teams/team-1/agents") return Promise.resolve([fieldPhone]);
+      if (path.endsWith("/rotate-key")) {
+        return Promise.resolve({
+          enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
+        });
+      }
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Collector key was rejected");
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+
+    expect(
+      screen.getByRole("alertdialog", { name: "Connect Field phone to this device?" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Its current key will stop working on any other device.")
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Connect device" }));
+
+    await waitFor(() =>
+      expect(enrollMobileCollectorMock).toHaveBeenCalledWith({
+        serverUrl: "https://monitor.example",
+        enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
+        collectorId: fieldPhone.id,
+        collectionIntervalSeconds: 900,
+      })
+    );
+  });
+
+  it("schedules an immediate collection for the enrolled Android collector", async () => {
+    const connectedState = {
+      available: true,
+      enrolled: true,
+      collectorId: fieldPhone.id,
+      collectionIntervalSeconds: 900,
+      lastSubmittedAt: "2026-08-13T08:00:00.000Z",
+      lastError: null,
+    };
+    mobileCollectorStateMock.mockResolvedValue(connectedState);
+    collectMobileStatusNowMock.mockResolvedValue(connectedState);
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/teams/team-1/agents") return Promise.resolve([fieldPhone]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Collect now" }));
+
+    await waitFor(() => expect(collectMobileStatusNowMock).toHaveBeenCalledOnce());
   });
 });
 

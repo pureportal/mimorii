@@ -5,7 +5,7 @@ import {
   type CollectorKind,
 } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Copy, Plus, RefreshCw, Smartphone, Trash2 } from "lucide-react";
+import { Bot, Copy, KeyRound, Plus, RefreshCw, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
@@ -21,6 +21,7 @@ import { api, getServerUrl, jsonBody } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelative } from "../lib/format";
 import {
+  collectMobileStatusNow,
   enrollMobileCollector,
   mobileCollectorState,
   unenrollMobileCollector,
@@ -31,8 +32,20 @@ interface CreatedAgent extends AgentSummary {
 }
 
 interface AgentConfirmation {
-  action: "rotate" | "revoke";
+  action: "connect" | "rotate" | "revoke";
   agent: AgentSummary;
+}
+
+async function enrollLocalMobileCollector(agent: AgentSummary, enrollmentKey: string) {
+  const state = await enrollMobileCollector({
+    serverUrl: getServerUrl(),
+    enrollmentKey,
+    collectorId: agent.id,
+    collectionIntervalSeconds: agent.collectionIntervalSeconds,
+  });
+  if (!state.enrolled || state.collectorId !== agent.id) {
+    throw new Error("Android collector could not be enrolled");
+  }
 }
 
 export function CollectorsPage() {
@@ -42,6 +55,7 @@ export function CollectorsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<AgentConfirmation | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [collectionPendingId, setCollectionPendingId] = useState<string | null>(null);
   const agents = useQuery({
     queryKey: ["agents", teamId],
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),
@@ -51,7 +65,8 @@ export function CollectorsPage() {
     queryKey: ["mobile-collector"],
     queryFn: mobileCollectorState,
     retry: false,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: 30_000,
+    refetchInterval: (query) => (query.state.data?.available ? 30_000 : false),
   });
   const refresh = () =>
     Promise.all([
@@ -61,6 +76,48 @@ export function CollectorsPage() {
 
   if (agents.isLoading) return <LoadingState />;
   if (agents.isError) return <ErrorState retry={() => void agents.refetch()} />;
+  const localCollectorVisible = agents.data?.some(
+    (agent) => agent.id === mobileCollector.data?.collectorId
+  );
+
+  async function collectNow(agent: AgentSummary) {
+    setCollectionPendingId(agent.id);
+    try {
+      await collectMobileStatusNow();
+      await queryClient.invalidateQueries({ queryKey: ["mobile-collector"] });
+      toast.success("Collection scheduled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Collection could not be scheduled");
+    } finally {
+      setCollectionPendingId(null);
+    }
+  }
+
+  async function connect(agent: AgentSummary) {
+    setActionPending(true);
+    let keyRotated = false;
+    try {
+      const result = await api<{ enrollmentKey: string }>(
+        `/teams/${teamId}/agents/${agent.id}/rotate-key`,
+        { method: "POST" }
+      );
+      keyRotated = true;
+      await enrollLocalMobileCollector(agent, result.enrollmentKey);
+      await refresh();
+      toast.success("Collector connected");
+    } catch (error) {
+      toast.error(
+        keyRotated
+          ? "Key rotated, but the device could not be connected. Try again."
+          : error instanceof Error
+            ? error.message
+            : "Collector could not be connected"
+      );
+    } finally {
+      setActionPending(false);
+      setConfirmation(null);
+    }
+  }
 
   async function revoke(agent: AgentSummary) {
     setActionPending(true);
@@ -97,12 +154,7 @@ export function CollectorsPage() {
       );
       if (agent.kind === "mobile" && mobileCollector.data?.collectorId === agent.id) {
         try {
-          await enrollMobileCollector({
-            serverUrl: getServerUrl(),
-            enrollmentKey: result.enrollmentKey,
-            collectorId: agent.id,
-            collectionIntervalSeconds: agent.collectionIntervalSeconds,
-          });
+          await enrollLocalMobileCollector(agent, result.enrollmentKey);
           toast.success("Key rotated");
         } catch {
           try {
@@ -138,50 +190,87 @@ export function CollectorsPage() {
       </div>
       {agents.data?.length ? (
         <div data-guide-page="collectors-list" className="grid gap-4 xl:grid-cols-2">
-          {agents.data.map((agent) => (
-            <Card key={agent.id} className="p-5">
-              <div className="flex items-start gap-3">
-                <span className="grid size-11 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                  {agent.kind === "mobile" ? (
-                    <Smartphone className="size-5" />
-                  ) : (
-                    <Bot className="size-5" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-display font-bold">{agent.name}</p>
-                  <p className="mt-1 truncate text-xs text-muted">
-                    {agent.deviceStatus?.device.model ?? agent.platform ?? "Not connected"} ·{" "}
-                    {formatRelative(agent.lastSeenAt)}
+          {agents.data.map((agent) => {
+            const localMobileState =
+              agent.kind === "mobile" && mobileCollector.data?.collectorId === agent.id
+                ? mobileCollector.data
+                : null;
+            const canConnect =
+              agent.kind === "mobile" &&
+              mobileCollector.data?.available &&
+              !mobileCollector.data.enrolled &&
+              (!localCollectorVisible || localMobileState !== null);
+            return (
+              <Card key={agent.id} className="p-5">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-11 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
+                    {agent.kind === "mobile" ? (
+                      <Smartphone className="size-5" />
+                    ) : (
+                      <Bot className="size-5" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display font-bold">{agent.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted">
+                      {agent.deviceStatus?.device.model ?? agent.platform ?? "Not connected"} ·{" "}
+                      {formatRelative(agent.lastSeenAt)}
+                    </p>
+                  </div>
+                  <StatusBadge status={agent.status} />
+                </div>
+                {agent.kind === "mobile" && agent.deviceStatus ? (
+                  <MobileDeviceStatusSummary status={agent.deviceStatus} />
+                ) : null}
+                {localMobileState?.lastError ? (
+                  <p role="alert" className="mt-4 text-xs font-medium text-danger">
+                    {localMobileState.lastError}
                   </p>
+                ) : null}
+                <div className="mt-5 flex flex-col gap-4 border-t border-line pt-4 sm:flex-row sm:items-end">
+                  <CollectionIntervalForm agent={agent} teamId={teamId} onSaved={refresh} />
+                  <div className="flex flex-wrap justify-end gap-1 sm:ml-auto">
+                    {localMobileState?.enrolled ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={collectionPendingId === agent.id}
+                        onClick={() => void collectNow(agent)}
+                      >
+                        <RefreshCw
+                          className={collectionPendingId === agent.id ? "animate-spin" : undefined}
+                        />
+                        Collect now
+                      </Button>
+                    ) : canConnect ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmation({ action: "connect", agent })}
+                      >
+                        <Smartphone /> {localMobileState ? "Reconnect" : "Connect device"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmation({ action: "rotate", agent })}
+                    >
+                      <KeyRound /> Rotate key
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger"
+                      onClick={() => setConfirmation({ action: "revoke", agent })}
+                    >
+                      <Trash2 /> Revoke
+                    </Button>
+                  </div>
                 </div>
-                <StatusBadge status={agent.status} />
-              </div>
-              {agent.kind === "mobile" && agent.deviceStatus ? (
-                <MobileDeviceStatusSummary status={agent.deviceStatus} />
-              ) : null}
-              <div className="mt-5 flex flex-col gap-4 border-t border-line pt-4 sm:flex-row sm:items-end">
-                <CollectionIntervalForm agent={agent} teamId={teamId} onSaved={refresh} />
-                <div className="flex gap-1 sm:ml-auto">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConfirmation({ action: "rotate", agent })}
-                  >
-                    <RefreshCw /> Rotate key
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-danger"
-                    onClick={() => setConfirmation({ action: "revoke", agent })}
-                  >
-                    <Trash2 /> Revoke
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <EmptyState
@@ -199,7 +288,11 @@ export function CollectorsPage() {
         onOpenChange={setCreateOpen}
         teamId={teamId}
         onCreated={refresh}
-        mobileAvailable={mobileCollector.data?.available === true}
+        mobileAvailable={
+          Boolean(mobileCollector.data?.available) &&
+          !mobileCollector.data?.enrolled &&
+          !localCollectorVisible
+        }
       />
       <ConfirmationDialog
         open={Boolean(confirmation)}
@@ -207,23 +300,34 @@ export function CollectorsPage() {
           if (!open) setConfirmation(null);
         }}
         title={
-          confirmation?.action === "rotate"
-            ? `Rotate ${confirmation.agent.name}'s key?`
-            : `Revoke ${confirmation?.agent.name ?? "collector"}?`
+          confirmation?.action === "connect"
+            ? `Connect ${confirmation.agent.name} to this device?`
+            : confirmation?.action === "rotate"
+              ? `Rotate ${confirmation.agent.name}'s key?`
+              : `Revoke ${confirmation?.agent.name ?? "collector"}?`
         }
         description={
-          confirmation?.action === "rotate"
-            ? confirmation.agent.kind === "mobile" &&
-              mobileCollector.data?.collectorId === confirmation.agent.id
-              ? "The current key will stop working."
-              : "The installed collector must be enrolled again."
-            : "Its current key will stop working."
+          confirmation?.action === "connect"
+            ? "Its current key will stop working on any other device."
+            : confirmation?.action === "rotate"
+              ? confirmation.agent.kind === "mobile" &&
+                mobileCollector.data?.collectorId === confirmation.agent.id
+                ? "The current key will stop working."
+                : "The installed collector must be enrolled again."
+              : "Its current key will stop working."
         }
-        confirmLabel={confirmation?.action === "rotate" ? "Rotate key" : "Revoke collector"}
+        confirmLabel={
+          confirmation?.action === "connect"
+            ? "Connect device"
+            : confirmation?.action === "rotate"
+              ? "Rotate key"
+              : "Revoke collector"
+        }
         pending={actionPending}
         onConfirm={() => {
           if (!confirmation) return;
-          if (confirmation.action === "rotate") void rotate(confirmation.agent);
+          if (confirmation.action === "connect") void connect(confirmation.agent);
+          else if (confirmation.action === "rotate") void rotate(confirmation.agent);
           else void revoke(confirmation.agent);
         }}
       />
@@ -324,13 +428,7 @@ function CreateCollectorDialog({
   }, [mobileAvailable, open]);
 
   async function connectMobile(agent: CreatedAgent) {
-    const state = await enrollMobileCollector({
-      serverUrl: getServerUrl(),
-      enrollmentKey: agent.enrollmentKey,
-      collectorId: agent.id,
-      collectionIntervalSeconds: agent.collectionIntervalSeconds,
-    });
-    if (!state.enrolled) throw new Error("Android collector could not be enrolled");
+    await enrollLocalMobileCollector(agent, agent.enrollmentKey);
     setMobileConnected(true);
   }
 
@@ -451,7 +549,8 @@ function CreateCollectorDialog({
                 id="agent-kind"
                 value={kind}
                 onChange={(event) => {
-                  const nextKind = event.target.value as CollectorKind;
+                  const nextKind: CollectorKind =
+                    event.target.value === "mobile" ? "mobile" : "desktop";
                   setKind(nextKind);
                   setInterval(
                     String(
