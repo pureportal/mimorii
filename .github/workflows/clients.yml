@@ -187,9 +187,26 @@ jobs:
       - name: Initialize Android project
         run: pnpm tauri:android:init
 
+      - name: Test Android collector
+        working-directory: apps/client/src-tauri/gen/android
+        run: >-
+          ./gradlew
+          :tauri-plugin-agent-mobile:testDebugUnitTest
+          --no-daemon
+          --console=plain
+
       - name: Build and sign Android release
         id: android_artifacts
         run: pnpm tauri:android:release
+
+      - name: Lint Android release
+        working-directory: apps/client/src-tauri/gen/android
+        run: >-
+          ./gradlew
+          :tauri-plugin-agent-mobile:lintRelease
+          :app:lintUniversalRelease
+          --no-daemon
+          --console=plain
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v7
