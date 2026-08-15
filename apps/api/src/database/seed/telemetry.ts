@@ -62,7 +62,7 @@ async function seedSnapshots(context: SeedContext, identity: SeedIdentityIds): P
     const value = {
       hostname: snapshot.key.startsWith("local") ? "app-01" : snapshot.key,
       platform: snapshot.key === "warehouse" ? "Windows Server 2025" : "Linux 6.12",
-      version: "1.0.0",
+      version: "2.0.0",
       uptimeSeconds: Math.max(3_600, Math.round((days(30) + snapshot.offset) / 1_000)),
       cpuPercent: snapshot.cpu,
       loadAverage: snapshot.cpu / 25,

@@ -187,7 +187,7 @@ export function SettingsPage() {
           <div className="grid gap-4">
             <div className="flex items-center justify-between rounded-xl bg-ink/[.035] p-4 text-sm">
               <span className="text-muted">Version</span>
-              <span className="font-mono font-semibold">1.0.0</span>
+              <span className="font-mono font-semibold">2.0.0</span>
             </div>
             <nav
               aria-label="Legal"

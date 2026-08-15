@@ -5,7 +5,7 @@ export function createOpenApiDocument(app: INestApplication) {
   const configuration = new DocumentBuilder()
     .setTitle("Mimorii API")
     .setDescription("Self-hosted uptime, server analytics, and relay-agent API.")
-    .setVersion("1.0.0")
+    .setVersion("2.0.0")
     .addBearerAuth(
       { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "User access token" },
       "bearer"
