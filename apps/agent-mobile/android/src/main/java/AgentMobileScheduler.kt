@@ -1,7 +1,6 @@
 package app.mimorii.agentmobile
 
 import android.content.Context
-import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -12,21 +11,20 @@ import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 object AgentMobileScheduler {
-  private const val PERIODIC_WORK = "mimorii-agent-mobile-periodic"
-  private const val IMMEDIATE_WORK = "mimorii-agent-mobile-immediate"
+  internal const val PERIODIC_WORK = "mimorii-agent-mobile-periodic"
+  internal const val COLLECTION_WORK = "mimorii-agent-mobile-collection"
 
   fun ensurePeriodic(context: Context, intervalSeconds: Long) {
     require(intervalSeconds in 900L..3_600L) { "Mobile collection interval is invalid" }
     val constraints = Constraints.Builder()
       .setRequiredNetworkType(NetworkType.CONNECTED)
       .build()
-    val request = PeriodicWorkRequestBuilder<DeviceStatusWorker>(
+    val request = PeriodicWorkRequestBuilder<DeviceStatusScheduleWorker>(
       intervalSeconds,
       TimeUnit.SECONDS
     )
       .setInitialDelay(intervalSeconds, TimeUnit.SECONDS)
       .setConstraints(constraints)
-      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
       .build()
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
       PERIODIC_WORK,
@@ -36,15 +34,22 @@ object AgentMobileScheduler {
   }
 
   fun collectNow(context: Context) {
+    enqueueCollection(context, ExistingWorkPolicy.REPLACE)
+  }
+
+  fun scheduleCollection(context: Context) {
+    enqueueCollection(context, ExistingWorkPolicy.KEEP)
+  }
+
+  private fun enqueueCollection(context: Context, policy: ExistingWorkPolicy) {
     val request = OneTimeWorkRequestBuilder<DeviceStatusWorker>()
       .setConstraints(
         Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
       )
-      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
       .build()
     WorkManager.getInstance(context).enqueueUniqueWork(
-      IMMEDIATE_WORK,
-      ExistingWorkPolicy.REPLACE,
+      COLLECTION_WORK,
+      policy,
       request
     )
   }
@@ -52,6 +57,6 @@ object AgentMobileScheduler {
   fun cancel(context: Context) {
     val workManager = WorkManager.getInstance(context)
     workManager.cancelUniqueWork(PERIODIC_WORK)
-    workManager.cancelUniqueWork(IMMEDIATE_WORK)
+    workManager.cancelUniqueWork(COLLECTION_WORK)
   }
 }

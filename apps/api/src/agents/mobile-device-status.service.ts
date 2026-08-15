@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import type { MobileDeviceStatus, MobileDeviceStatusResponse } from "@mimorii/contracts";
-import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { DatabaseService } from "../database/database.service.js";
 import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { MobileDeviceStatusDto } from "./mobile-device-status.dto.js";
@@ -8,6 +8,10 @@ import type { MobileDeviceStatusDto } from "./mobile-device-status.dto.js";
 interface MobileDeviceStatusRow {
   agent_id: string;
   status_json: MobileDeviceStatus | string;
+}
+
+interface ExistingSubmissionRow extends MobileDeviceStatusRow {
+  received_at: Date | string;
 }
 
 @Injectable()
@@ -21,21 +25,40 @@ export class MobileDeviceStatusService {
     if (agent.kind !== "mobile") {
       throw new ForbiddenException("Collector does not support mobile device status");
     }
+    if (input.collectorId !== agent.id) {
+      throw new ForbiddenException("Collector identity does not match key");
+    }
     this.validateTotals(input);
     const receivedAt = new Date().toISOString();
     const status = this.normalize(input);
 
-    await this.database.transaction(async () => {
-      await this.database.run(
+    const acceptedAt = await this.database.transaction(async () => {
+      const inserted = await this.database.run(
         `INSERT INTO mobile_device_statuses
          (id, agent_id, status_json, observed_at, received_at)
-         VALUES (?, ?, ?, ?, ?)`,
-        randomUUID(),
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO NOTHING`,
+        input.submissionId,
         agent.id,
         JSON.stringify(status),
         status.observedAt,
         receivedAt
       );
+      let submissionAcceptedAt = receivedAt;
+      if (inserted.changes === 0) {
+        const existing = await this.database.get<ExistingSubmissionRow>(
+          `SELECT agent_id, status_json, received_at FROM mobile_device_statuses WHERE id = ?`,
+          input.submissionId
+        );
+        if (
+          !existing ||
+          existing.agent_id !== agent.id ||
+          !isDeepStrictEqual(this.parse(existing.status_json), status)
+        ) {
+          throw new BadRequestException("Submission ID has already been used");
+        }
+        submissionAcceptedAt = new Date(existing.received_at).toISOString();
+      }
       const update = await this.database.run(
         `UPDATE agents SET platform = ?, version = ?, capabilities_json = ?,
          last_seen_at = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL`,
@@ -47,10 +70,11 @@ export class MobileDeviceStatusService {
         agent.id
       );
       if (update.changes === 0) throw new ForbiddenException("Collector key was rejected");
+      return submissionAcceptedAt;
     });
 
     return {
-      acceptedAt: receivedAt,
+      acceptedAt,
       collectionIntervalSeconds: agent.collectionIntervalSeconds,
     };
   }
@@ -58,7 +82,7 @@ export class MobileDeviceStatusService {
   async latest(agentId: string): Promise<MobileDeviceStatus | null> {
     const row = await this.database.get<MobileDeviceStatusRow>(
       `SELECT agent_id, status_json FROM mobile_device_statuses
-       WHERE agent_id = ? ORDER BY observed_at DESC LIMIT 1`,
+       WHERE agent_id = ? ORDER BY received_at DESC, id DESC LIMIT 1`,
       agentId
     );
     return row ? this.parse(row.status_json) : null;
@@ -70,7 +94,7 @@ export class MobileDeviceStatusService {
     const rows = await this.database.all<MobileDeviceStatusRow>(
       `SELECT DISTINCT ON (agent_id) agent_id, status_json
        FROM mobile_device_statuses WHERE agent_id IN (${placeholders})
-       ORDER BY agent_id, observed_at DESC`,
+       ORDER BY agent_id, received_at DESC, id DESC`,
       ...agentIds
     );
     return new Map(rows.map((row) => [row.agent_id, this.parse(row.status_json)]));

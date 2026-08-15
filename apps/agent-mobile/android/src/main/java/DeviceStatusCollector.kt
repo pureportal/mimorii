@@ -19,18 +19,24 @@ object DeviceStatusCollector {
     activityManager.getMemoryInfo(memoryInfo)
     val files = context.filesDir
     val powerManager = context.getSystemService(PowerManager::class.java)
+    val totalMemoryBytes = memoryInfo.totalMem.coerceAtLeast(0)
+    val totalStorageBytes = files.totalSpace.coerceAtLeast(0)
 
     return DeviceStatus(
       observedAt = Timestamps.now(),
       device = DeviceIdentity(
-        manufacturer = requiredBuildValue(Build.MANUFACTURER, "manufacturer"),
-        model = requiredBuildValue(Build.MODEL, "model"),
-        androidRelease = requiredBuildValue(Build.VERSION.RELEASE, "Android release"),
+        manufacturer = requiredText(Build.MANUFACTURER, "manufacturer", 100),
+        model = requiredText(Build.MODEL, "model", 100),
+        androidRelease = requiredText(Build.VERSION.RELEASE, "Android release", 40),
         apiLevel = Build.VERSION.SDK_INT,
-        securityPatch = Build.VERSION.SECURITY_PATCH.trim().ifEmpty { null }
+        securityPatch = optionalText(Build.VERSION.SECURITY_PATCH, 40)
       ),
       collector = CollectorBuild(
-        appVersion = requireNotNull(packageInfo.versionName) { "Application version is unavailable" },
+        appVersion = requiredText(
+          requireNotNull(packageInfo.versionName) { "Application version is unavailable" },
+          "Application version",
+          40
+        ),
         buildNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
           packageInfo.longVersionCode
         } else {
@@ -41,13 +47,13 @@ object DeviceStatusCollector {
       uptimeSeconds = SystemClock.elapsedRealtime() / 1_000,
       battery = battery(context),
       memory = MemoryStatus(
-        totalBytes = memoryInfo.totalMem,
-        availableBytes = memoryInfo.availMem,
+        totalBytes = totalMemoryBytes,
+        availableBytes = boundedAvailableBytes(memoryInfo.availMem, totalMemoryBytes),
         lowMemory = memoryInfo.lowMemory
       ),
       storage = StorageStatus(
-        totalBytes = files.totalSpace,
-        availableBytes = files.usableSpace
+        totalBytes = totalStorageBytes,
+        availableBytes = boundedAvailableBytes(files.usableSpace, totalStorageBytes)
       ),
       connectivity = connectivity(context),
       power = PowerStatus(
@@ -86,11 +92,11 @@ object DeviceStatusCollector {
       else -> null
     }
     return BatteryStatus(
-      percent = if (level >= 0 && scale > 0) level.toDouble() * 100 / scale else null,
+      percent = batteryPercent(level, scale),
       charging = charging,
       powerSource = powerSource(plugged),
       health = batteryHealth(health),
-      temperatureCelsius = if (temperature == Int.MIN_VALUE) null else temperature / 10.0
+      temperatureCelsius = batteryTemperature(temperature)
     )
   }
 
@@ -158,6 +164,18 @@ object DeviceStatusCollector {
     else -> null
   }
 
-  private fun requiredBuildValue(value: String, label: String): String =
-    value.trim().also { require(it.isNotEmpty()) { "$label is unavailable" } }
+  internal fun requiredText(value: String, label: String, maximumLength: Int): String =
+    value.trim().also { require(it.isNotEmpty()) { "$label is unavailable" } }.take(maximumLength)
+
+  internal fun optionalText(value: String, maximumLength: Int): String? =
+    value.trim().ifEmpty { null }?.take(maximumLength)
+
+  internal fun boundedAvailableBytes(availableBytes: Long, totalBytes: Long): Long =
+    availableBytes.coerceIn(0, totalBytes)
+
+  internal fun batteryPercent(level: Int, scale: Int): Double? =
+    if (scale > 0 && level in 0..scale) level.toDouble() * 100 / scale else null
+
+  internal fun batteryTemperature(value: Int): Double? =
+    if (value in -1_000..2_000) value / 10.0 else null
 }

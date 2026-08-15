@@ -16,6 +16,8 @@ const mobileAgent: AuthenticatedAgent = {
 
 function deviceStatus(overrides: Partial<MobileDeviceStatusDto> = {}): MobileDeviceStatusDto {
   return {
+    collectorId: mobileAgent.id,
+    submissionId: "11111111-1111-4111-8111-111111111111",
     schemaVersion: 1,
     observedAt: new Date().toISOString(),
     device: {
@@ -52,11 +54,13 @@ function deviceStatus(overrides: Partial<MobileDeviceStatusDto> = {}): MobileDev
 
 function createService() {
   const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+  const get = vi.fn();
   const database = {
+    get,
     run,
     transaction: async <T>(action: () => Promise<T>) => action(),
   } as unknown as DatabaseService;
-  return { run, service: new MobileDeviceStatusService(database) };
+  return { get, run, service: new MobileDeviceStatusService(database) };
 }
 
 describe("MobileDeviceStatusService", () => {
@@ -72,7 +76,7 @@ describe("MobileDeviceStatusService", () => {
     expect(run).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining("INSERT INTO mobile_device_statuses"),
-      expect.any(String),
+      "11111111-1111-4111-8111-111111111111",
       "mobile-1",
       expect.any(String),
       expect.any(String),
@@ -83,7 +87,62 @@ describe("MobileDeviceStatusService", () => {
       device: { model: "Pixel" },
       connectivity: { transport: "wifi" },
     });
-    expect(run.mock.calls.some(([sql]) => String(sql).includes("host_snapshots"))).toBe(false);
+    expect(run.mock.calls.some(([sql]) => sql.includes("host_snapshots"))).toBe(false);
+  });
+
+  it("accepts a retried submission once without inserting duplicate status", async () => {
+    const { get, run, service } = createService();
+    const input = deviceStatus({ observedAt: "2026-08-15T10:00:00.000Z" });
+    await service.report(mobileAgent, input);
+    const storedStatus = JSON.parse(String(run.mock.calls[0]?.[3]));
+    run.mockReset();
+    run.mockResolvedValueOnce({ changes: 0 }).mockResolvedValueOnce({ changes: 1 });
+    get.mockResolvedValue({
+      agent_id: mobileAgent.id,
+      status_json: storedStatus,
+      received_at: "2026-08-15T10:00:05.000Z",
+    });
+
+    const response = await service.report(mobileAgent, input);
+
+    expect(response.acceptedAt).toBe("2026-08-15T10:00:05.000Z");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(String(run.mock.calls[0]?.[0])).toContain("ON CONFLICT (id) DO NOTHING");
+    expect(get).toHaveBeenCalledWith(
+      expect.stringContaining("FROM mobile_device_statuses WHERE id = ?"),
+      input.submissionId
+    );
+  });
+
+  it("rejects reuse of a submission ID with different status", async () => {
+    const { get, run, service } = createService();
+    const original = deviceStatus({ observedAt: "2026-08-15T10:00:00.000Z" });
+    await service.report(mobileAgent, original);
+    const storedStatus = JSON.parse(String(run.mock.calls[0]?.[3]));
+    run.mockReset();
+    run.mockResolvedValueOnce({ changes: 0 });
+    get.mockResolvedValue({
+      agent_id: mobileAgent.id,
+      status_json: storedStatus,
+      received_at: "2026-08-15T10:00:05.000Z",
+    });
+
+    await expect(
+      service.report(
+        mobileAgent,
+        deviceStatus({
+          observedAt: original.observedAt,
+          device: {
+            manufacturer: original.device.manufacturer,
+            model: "Different phone",
+            androidRelease: original.device.androidRelease,
+            apiLevel: original.device.apiLevel,
+            securityPatch: original.device.securityPatch,
+          },
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it("rejects desktop collectors", async () => {
@@ -93,6 +152,33 @@ describe("MobileDeviceStatusService", () => {
       service.report({ ...mobileAgent, kind: "desktop" }, deviceStatus())
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("rejects a key for a different mobile collector", async () => {
+    const { run, service } = createService();
+
+    await expect(
+      service.report(
+        mobileAgent,
+        deviceStatus({ collectorId: "22222222-2222-4222-8222-222222222222" })
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("uses server receipt order for the latest status", async () => {
+    const { get, service } = createService();
+    get.mockResolvedValue({
+      agent_id: mobileAgent.id,
+      status_json: deviceStatus(),
+    });
+
+    await service.latest(mobileAgent.id);
+
+    expect(get).toHaveBeenCalledWith(
+      expect.stringContaining("ORDER BY received_at DESC, id DESC"),
+      mobileAgent.id
+    );
   });
 
   it("rejects impossible totals and future observations", async () => {

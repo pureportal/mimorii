@@ -48,7 +48,7 @@ export class RetentionService implements OnModuleInit {
         cutoffs.snapshots
       );
       await this.database.run(
-        "DELETE FROM mobile_device_statuses WHERE observed_at < ?",
+        "DELETE FROM mobile_device_statuses WHERE received_at < ?",
         cutoffs.snapshots
       );
       await this.database.run(

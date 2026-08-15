@@ -60,6 +60,28 @@ describe("AgentsService transport", () => {
     ).rejects.toThrow("Collector does not support active checks");
   });
 
+  it("rejects desktop heartbeats from mobile collectors", async () => {
+    const service = new AgentsService(
+      {} as DatabaseService,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    await expect(
+      service.heartbeat(
+        { ...agent, kind: "mobile", capabilities: ["device-status"] },
+        {
+          snapshots: [snapshot(new Date().toISOString(), 10)],
+          results: [],
+          capabilities: ["device-status"],
+        }
+      )
+    ).rejects.toThrow("Collector does not support desktop heartbeats");
+  });
+
   it("uses the mobile collection cadence when calculating freshness", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));

@@ -113,6 +113,16 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         "status_json",
       ]);
 
+      const mobileStatusIndexes = await database.all<{ indexname: string; indexdef: string }>(
+        `SELECT indexname, indexdef FROM pg_indexes
+         WHERE schemaname = 'public'
+           AND indexname IN ('idx_mobile_device_statuses_agent_time', 'idx_mobile_device_statuses_time')
+         ORDER BY indexname`
+      );
+      expect(mobileStatusIndexes).toHaveLength(2);
+      expect(mobileStatusIndexes[0]?.indexdef).toContain("(agent_id, received_at DESC)");
+      expect(mobileStatusIndexes[1]?.indexdef).toContain("(received_at)");
+
       const sponsorFaviconColumns = await database.all<{
         column_name: string;
         data_type: string;

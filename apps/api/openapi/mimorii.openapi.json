@@ -6054,6 +6054,14 @@
       "MobileDeviceStatusDto": {
         "type": "object",
         "properties": {
+          "collectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "submissionId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "schemaVersion": {
             "type": "number",
             "enum": [
@@ -6103,6 +6111,8 @@
           }
         },
         "required": [
+          "collectorId",
+          "submissionId",
           "schemaVersion",
           "observedAt",
           "device",

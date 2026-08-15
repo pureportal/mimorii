@@ -596,6 +596,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
     const observedAt = new Date().toISOString();
     const status = {
+      collectorId: createdAgent.body.id,
+      submissionId: randomUUID(),
       schemaVersion: 1,
       observedAt,
       device: {
@@ -628,7 +630,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       thermalStatus: "none",
     };
 
-    await request(app.getHttpServer())
+    const accepted = await request(app.getHttpServer())
       .post("/api/agent/device-status")
       .set("authorization", agentAuthorization)
       .send(status)
@@ -636,10 +638,49 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(({ body }) => expect(body.collectionIntervalSeconds).toBe(900));
 
     await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send({ ...status, collectorId: randomUUID(), submissionId: randomUUID() })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send(status)
+      .expect(200)
+      .expect(({ body }) => expect(body.acceptedAt).toBe(accepted.body.acceptedAt));
+
+    const storedSubmission = await app
+      .get(DatabaseService)
+      .get<{ count: number }>(
+        "SELECT COUNT(*)::int AS count FROM mobile_device_statuses WHERE id = ?",
+        status.submissionId
+      );
+    expect(storedSubmission?.count).toBe(1);
+
+    const clockCorrectedStatus = {
+      ...status,
+      submissionId: randomUUID(),
+      observedAt: new Date(Date.now() - 60_000).toISOString(),
+      battery: { ...status.battery, percent: 68 },
+    };
+    await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send(clockCorrectedStatus)
+      .expect(200);
+
+    await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/agents/${createdAgent.body.id}/device-status`)
       .set("authorization", authorization)
       .expect(200)
-      .expect(({ body }) => expect(body).toMatchObject({ device: { model: "Pixel" } }));
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          observedAt: clockCorrectedStatus.observedAt,
+          device: { model: "Pixel" },
+          battery: { percent: 68 },
+        })
+      );
 
     await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/agents`)
@@ -650,7 +691,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
           kind: "mobile",
           status: "online",
           platform: "Android 16",
-          deviceStatus: { battery: { percent: 72 } },
+          deviceStatus: { battery: { percent: 68 } },
         })
       );
 

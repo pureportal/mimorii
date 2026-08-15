@@ -23,8 +23,22 @@ class EnrollArgs {
 @TauriPlugin
 class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
   override fun load(webView: WebView) {
-    val enrollment = AgentMobileStorage.enrollment(activity) ?: return
-    AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
+    val enrollment = AgentMobileStorage.enrollment(activity)
+    try {
+      if (enrollment == null) {
+        AgentMobileScheduler.cancel(activity)
+      } else {
+        AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
+      }
+    } catch (error: Exception) {
+      if (enrollment != null) {
+        AgentMobileStorage.recordError(
+          activity,
+          enrollment,
+          error.message ?: "Background collection could not be scheduled"
+        )
+      }
+    }
   }
 
   @Command
@@ -40,11 +54,21 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
         serverUrl = normalizeServerUrl(args.serverUrl),
         enrollmentKey = validateEnrollmentKey(args.enrollmentKey),
         collectorId = UUID.fromString(args.collectorId).toString(),
-        collectionIntervalSeconds = validateInterval(args.collectionIntervalSeconds)
+        collectionIntervalSeconds = validateInterval(args.collectionIntervalSeconds),
+        revision = UUID.randomUUID().toString()
       )
       AgentMobileStorage.saveEnrollment(activity, enrollment)
-      AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
-      AgentMobileScheduler.collectNow(activity)
+      try {
+        AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
+        AgentMobileScheduler.collectNow(activity)
+      } catch (error: Exception) {
+        AgentMobileStorage.recordError(
+          activity,
+          enrollment,
+          error.message ?: "Background collection could not be scheduled"
+        )
+        throw error
+      }
       invoke.resolve(state())
     } catch (error: Exception) {
       invoke.reject(error.message ?: "Mobile collector enrollment failed")
@@ -53,19 +77,28 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun collect_now(invoke: Invoke) {
-    if (AgentMobileStorage.enrollment(activity) == null) {
-      invoke.reject("Mobile collector is not enrolled")
-      return
+    try {
+      if (AgentMobileStorage.enrollment(activity) == null) {
+        AgentMobileScheduler.cancel(activity)
+        invoke.reject("Mobile collector is not enrolled")
+        return
+      }
+      AgentMobileScheduler.collectNow(activity)
+      invoke.resolve(state())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Device status collection could not be scheduled")
     }
-    AgentMobileScheduler.collectNow(activity)
-    invoke.resolve(state())
   }
 
   @Command
   fun unenroll(invoke: Invoke) {
-    AgentMobileScheduler.cancel(activity)
-    AgentMobileStorage.clearEnrollment(activity, clearError = true)
-    invoke.resolve(state())
+    try {
+      AgentMobileScheduler.cancel(activity)
+      AgentMobileStorage.clearEnrollment(activity)
+      invoke.resolve(state())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Mobile collector could not be disconnected")
+    }
   }
 
   private fun state(): JSObject {
@@ -73,7 +106,10 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
     return JSObject().apply {
       put("available", true)
       put("enrolled", enrollment != null)
-      put("collectorId", enrollment?.collectorId ?: JSONObject.NULL)
+      put(
+        "collectorId",
+        enrollment?.collectorId ?: AgentMobileStorage.collectorId(activity) ?: JSONObject.NULL
+      )
       put(
         "collectionIntervalSeconds",
         enrollment?.collectionIntervalSeconds ?: JSONObject.NULL

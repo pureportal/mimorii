@@ -18,6 +18,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Max,
   Min,
@@ -171,6 +172,14 @@ class MobilePowerStatusDto {
 }
 
 export class MobileDeviceStatusDto {
+  @ApiProperty({ format: "uuid" })
+  @IsUUID("4")
+  collectorId!: string;
+
+  @ApiProperty({ format: "uuid" })
+  @IsUUID("4")
+  submissionId!: string;
+
   @ApiProperty({ enum: [1] })
   @IsIn([1])
   schemaVersion!: 1;
