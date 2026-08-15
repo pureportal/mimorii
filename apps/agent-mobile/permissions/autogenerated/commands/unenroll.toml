@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-unenroll"
+description = "Enables the unenroll command without any pre-configured scope."
+commands.allow = ["unenroll"]
+
+[[permission]]
+identifier = "deny-unenroll"
+description = "Denies the unenroll command without any pre-configured scope."
+commands.deny = ["unenroll"]

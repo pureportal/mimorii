@@ -9,12 +9,16 @@
       "path": "apps/api"
     },
     {
-      "name": "web",
-      "path": "apps/web"
+      "name": "client",
+      "path": "apps/client"
     },
     {
-      "name": "agent",
-      "path": "apps/agent"
+      "name": "agent-deskopt",
+      "path": "apps/agent-deskopt"
+    },
+    {
+      "name": "agent-mobile",
+      "path": "apps/agent-mobile"
     },
     {
       "name": "contracts",
@@ -35,24 +39,24 @@
         "cwd": "${workspaceFolder:root}"
       },
       {
-        "name": "Mimorii: dev:web",
+        "name": "Mimorii: dev:client",
         "type": "node-terminal",
         "request": "launch",
-        "command": "pnpm run dev:web",
+        "command": "pnpm run dev:client",
         "cwd": "${workspaceFolder:root}"
       },
       {
-        "name": "Mimorii: dev:agent",
+        "name": "Mimorii: dev:agent-deskopt",
         "type": "node-terminal",
         "request": "launch",
-        "command": "pnpm run dev:agent",
+        "command": "pnpm run dev:agent-deskopt",
         "cwd": "${workspaceFolder:root}"
       }
     ],
     "compounds": [
       {
         "name": "Mimorii: dev",
-        "configurations": ["Mimorii: dev:api", "Mimorii: dev:web", "Mimorii: dev:agent"],
+        "configurations": ["Mimorii: dev:api", "Mimorii: dev:client", "Mimorii: dev:agent-deskopt"],
         "stopAll": true
       }
     ]

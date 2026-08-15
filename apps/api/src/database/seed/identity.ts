@@ -115,7 +115,7 @@ async function seedInvitations(context: SeedContext): Promise<void> {
 
 async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<void> {
   await context.database.run(
-    `UPDATE agents SET platform = ?, version = ?, capabilities_json = ?, last_seen_at = ?,
+    `UPDATE agents SET kind = 'desktop', platform = ?, version = ?, capabilities_json = ?, last_seen_at = ?,
      revoked_at = NULL, updated_at = ? WHERE id = ? AND team_id = ?`,
     "Local development",
     "0.1.0",
@@ -152,7 +152,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
       name: "Unenrolled relay",
       platform: null,
       version: null,
-      capabilities: [],
+      capabilities: ["http", "tcp", "dns", "host", "disk"],
       lastSeenAt: null,
       revokedAt: null,
     },
@@ -170,17 +170,18 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
   for (const agent of agents) {
     await context.database.run(
       `INSERT INTO agents
-       (id, team_id, name, key_hash, platform, version, capabilities_json, last_seen_at,
+       (id, team_id, name, key_hash, kind, platform, version, capabilities_json, last_seen_at,
         revoked_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, key_hash = excluded.key_hash,
-       platform = excluded.platform, version = excluded.version,
+       kind = excluded.kind, platform = excluded.platform, version = excluded.version,
        capabilities_json = excluded.capabilities_json, last_seen_at = excluded.last_seen_at,
        revoked_at = excluded.revoked_at, updated_at = excluded.updated_at`,
       agent.id,
       context.teamId,
       agent.name,
       hashSecret(seedSecret(context, "mim_agent", agent.key)),
+      "desktop",
       agent.platform,
       agent.version,
       JSON.stringify(agent.capabilities),

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const isWindows = process.platform === "win32";
 const command = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
-const scripts = ["dev:api", "dev:web", "dev:agent"];
+const scripts = ["dev:api", "dev:client", "dev:agent-deskopt"];
 const children = scripts.map((script) =>
   spawn(command, isWindows ? ["/d", "/s", "/c", "pnpm.cmd", "run", script] : ["run", script], {
     stdio: "inherit",

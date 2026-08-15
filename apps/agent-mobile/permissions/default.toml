@@ -1,0 +1,3 @@
+[default]
+description = "Mimorii mobile collector permissions"
+permissions = ["allow-status", "allow-enroll", "allow-collect-now", "allow-unenroll"]

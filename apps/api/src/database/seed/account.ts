@@ -111,9 +111,11 @@ export async function seedAccount(
   if (existing) {
     agentId = existing.id;
     await database.run(
-      `UPDATE agents SET key_hash = ?, collection_interval_seconds = ?, updated_at = ?
+      `UPDATE agents SET key_hash = ?, kind = 'desktop', capabilities_json = ?,
+       collection_interval_seconds = ?, updated_at = ?
        WHERE id = ? AND team_id = ?`,
       hashSecret(enrollmentKey),
+      JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
       configuration.agentIntervalSeconds,
       now,
       existing.id,
@@ -130,12 +132,15 @@ export async function seedAccount(
     agentId = randomUUID();
     await database.run(
       `INSERT INTO agents
-       (id, team_id, name, key_hash, collection_interval_seconds, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, team_id, name, key_hash, kind, capabilities_json, collection_interval_seconds,
+        created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       agentId,
       team.id,
       configuration.agentName,
       hashSecret(enrollmentKey),
+      "desktop",
+      JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
       configuration.agentIntervalSeconds,
       now,
       now

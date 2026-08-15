@@ -92,9 +92,26 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const agentColumns = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'agents'
-           AND column_name = 'collection_interval_seconds'`
+           AND column_name IN ('collection_interval_seconds', 'kind')
+         ORDER BY column_name`
       );
-      expect(agentColumns).toEqual([{ column_name: "collection_interval_seconds" }]);
+      expect(agentColumns).toEqual([
+        { column_name: "collection_interval_seconds" },
+        { column_name: "kind" },
+      ]);
+
+      const mobileStatusColumns = await database.all<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'mobile_device_statuses'
+         ORDER BY column_name`
+      );
+      expect(mobileStatusColumns.map((column) => column.column_name)).toEqual([
+        "agent_id",
+        "id",
+        "observed_at",
+        "received_at",
+        "status_json",
+      ]);
 
       const sponsorFaviconColumns = await database.all<{
         column_name: string;
@@ -167,7 +184,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260820000000");
+      expect(migration?.name).toBe("Migration20260821000000");
     } finally {
       await orm.close(true);
     }

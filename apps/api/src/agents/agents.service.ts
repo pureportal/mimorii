@@ -1,11 +1,22 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   agentCollectionInterval,
+  collectorCapabilitiesByKind,
+  mobileAgentCollectionInterval,
   type AgentHeartbeatResponse,
   type AgentPollResponse,
   type AgentSummary,
   type AgentTask,
+  type CheckType,
+  type CollectorCapability,
+  type CollectorKind,
   type HostSnapshot,
+  type MobileDeviceStatus,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
@@ -22,11 +33,13 @@ import type {
 } from "./agents.dto.js";
 import { ResultsService } from "../checks/results.service.js";
 import { TechnologiesService } from "../technologies/technologies.service.js";
+import { MobileDeviceStatusService } from "./mobile-device-status.service.js";
 
 interface AgentRow {
   id: string;
   team_id: string;
   name: string;
+  kind: CollectorKind;
   collection_interval_seconds: number;
   platform: string | null;
   version: string | null;
@@ -51,7 +64,8 @@ export class AgentsService {
     private readonly access: TeamAccessService,
     private readonly audit: AuditService,
     private readonly results: ResultsService,
-    private readonly technologies: TechnologiesService
+    private readonly technologies: TechnologiesService,
+    private readonly mobileDeviceStatuses: MobileDeviceStatusService
   ) {}
 
   async list(userId: string, teamId: string): Promise<AgentSummary[]> {
@@ -60,7 +74,10 @@ export class AgentsService {
       "SELECT * FROM agents WHERE team_id = ? AND revoked_at IS NULL ORDER BY name",
       teamId
     );
-    return rows.map((row) => this.map(row));
+    const mobileStatuses = await this.mobileDeviceStatuses.latestByAgentIds(
+      rows.filter((row) => row.kind === "mobile").map((row) => row.id)
+    );
+    return rows.map((row) => this.map(row, mobileStatuses.get(row.id) ?? null));
   }
 
   async create(userId: string, teamId: string, input: CreateAgentDto) {
@@ -68,15 +85,23 @@ export class AgentsService {
     const id = randomUUID();
     const enrollmentKey = createSecret("mim_agent");
     const now = new Date().toISOString();
+    const collectionIntervalSeconds = this.collectionInterval(
+      input.kind,
+      input.collectionIntervalSeconds
+    );
+    const capabilities = [...collectorCapabilitiesByKind[input.kind]];
     await this.database.run(
       `INSERT INTO agents
-       (id, team_id, name, key_hash, collection_interval_seconds, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, team_id, name, key_hash, kind, capabilities_json, collection_interval_seconds,
+        created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.name.trim(),
       hashSecret(enrollmentKey),
-      input.collectionIntervalSeconds ?? agentCollectionInterval.defaultSeconds,
+      input.kind,
+      JSON.stringify(capabilities),
+      collectionIntervalSeconds,
       now,
       now
     );
@@ -86,17 +111,22 @@ export class AgentsService {
       action: "agent.created",
       subjectType: "agent",
       subjectId: id,
+      metadata: { kind: input.kind },
     });
-    return { ...this.map(await this.requireRow(teamId, id)), enrollmentKey };
+    return { ...this.map(await this.requireRow(teamId, id), null), enrollmentKey };
   }
 
   async update(userId: string, teamId: string, id: string, input: UpdateAgentDto) {
     await this.access.require(userId, teamId, "admin");
-    await this.requireRow(teamId, id);
+    const agent = await this.requireRow(teamId, id);
+    const collectionIntervalSeconds = this.collectionInterval(
+      agent.kind,
+      input.collectionIntervalSeconds
+    );
     await this.database.run(
       `UPDATE agents SET collection_interval_seconds = ?, updated_at = ?
        WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
-      input.collectionIntervalSeconds,
+      collectionIntervalSeconds,
       new Date().toISOString(),
       id,
       teamId
@@ -107,9 +137,12 @@ export class AgentsService {
       action: "agent.updated",
       subjectType: "agent",
       subjectId: id,
-      metadata: { collectionIntervalSeconds: input.collectionIntervalSeconds },
+      metadata: { collectionIntervalSeconds },
     });
-    return this.map(await this.requireRow(teamId, id));
+    return this.map(
+      await this.requireRow(teamId, id),
+      agent.kind === "mobile" ? await this.mobileDeviceStatuses.latest(id) : null
+    );
   }
 
   async rotate(userId: string, teamId: string, id: string) {
@@ -154,7 +187,10 @@ export class AgentsService {
 
   async snapshots(userId: string, teamId: string, id: string, limit = 200) {
     await this.access.require(userId, teamId, "viewer");
-    await this.requireRow(teamId, id);
+    const agent = await this.requireRow(teamId, id);
+    if (agent.kind !== "desktop") {
+      throw new BadRequestException("Mobile collectors do not submit host snapshots");
+    }
     const rows = await this.database.all<{ snapshot_json: string }>(
       `SELECT snapshot_json FROM host_snapshots WHERE agent_id = ?
        ORDER BY observed_at DESC LIMIT ?`,
@@ -164,7 +200,19 @@ export class AgentsService {
     return rows.map((row) => JSON.parse(row.snapshot_json) as HostSnapshot);
   }
 
+  async deviceStatus(userId: string, teamId: string, id: string) {
+    await this.access.require(userId, teamId, "viewer");
+    const agent = await this.requireRow(teamId, id);
+    if (agent.kind !== "mobile") {
+      throw new BadRequestException("Desktop collectors do not submit mobile device status");
+    }
+    return this.mobileDeviceStatuses.latest(id);
+  }
+
   async poll(agent: AuthenticatedAgent, limit = 25): Promise<AgentPollResponse> {
+    if (agent.kind !== "desktop") {
+      throw new ForbiddenException("Collector does not support active checks");
+    }
     const now = new Date().toISOString();
     const rows = await this.database.all<TaskRow>(
       `SELECT * FROM agent_tasks WHERE agent_id = ? AND status IN ('pending', 'claimed')
@@ -172,13 +220,23 @@ export class AgentsService {
       agent.id,
       Math.min(Math.max(limit, 1), 100)
     );
-    if (rows.length > 0) {
-      const ids = rows.map(() => "?").join(",");
+    const tasks = rows.map((row) => ({ row, task: JSON.parse(row.payload_json) as AgentTask }));
+    const supported = tasks.filter(({ task }) => agent.capabilities.includes(task.type));
+    const unsupported = tasks.filter(({ task }) => !agent.capabilities.includes(task.type));
+    if (unsupported.length > 0) {
+      const ids = unsupported.map(() => "?").join(",");
+      await this.database.run(
+        `UPDATE agent_tasks SET status = 'expired' WHERE id IN (${ids})`,
+        ...unsupported.map(({ row }) => row.id)
+      );
+    }
+    if (supported.length > 0) {
+      const ids = supported.map(() => "?").join(",");
       await this.database.run(
         `UPDATE agent_tasks SET status = 'claimed', claimed_at = COALESCE(claimed_at, ?)
          WHERE id IN (${ids})`,
         now,
-        ...rows.map((row) => row.id)
+        ...supported.map(({ row }) => row.id)
       );
     }
     await this.database.run(
@@ -188,7 +246,7 @@ export class AgentsService {
     );
     return {
       collectionIntervalSeconds: agent.collectionIntervalSeconds,
-      tasks: rows.map((row) => JSON.parse(row.payload_json) as AgentTask),
+      tasks: supported.map(({ task }) => task),
     };
   }
 
@@ -196,6 +254,17 @@ export class AgentsService {
     agent: AuthenticatedAgent,
     input: AgentHeartbeatDto
   ): Promise<AgentHeartbeatResponse> {
+    if (agent.kind !== "desktop") {
+      throw new ForbiddenException("Collector does not support desktop heartbeats");
+    }
+    const capabilities = [...new Set(input.capabilities)] as CollectorCapability[];
+    if (
+      capabilities.some(
+        (capability) => !collectorCapabilitiesByKind.desktop.includes(capability as CheckType)
+      )
+    ) {
+      throw new BadRequestException("Desktop collector capabilities are invalid");
+    }
     const receivedAt = new Date().toISOString();
     const snapshots = input.snapshots.map((snapshot) =>
       this.normalizeSnapshot(snapshot, receivedAt)
@@ -209,7 +278,7 @@ export class AgentsService {
          WHERE id = ? AND revoked_at IS NULL`,
         latestSnapshot.platform.slice(0, 100),
         latestSnapshot.version.slice(0, 40),
-        JSON.stringify([...new Set(input.capabilities.map((value) => value.slice(0, 50)))]),
+        JSON.stringify(capabilities),
         receivedAt,
         receivedAt,
         agent.id
@@ -227,7 +296,9 @@ export class AgentsService {
         await this.technologies.observeAgent(agent.id, snapshot.technologies, snapshot.observedAt);
       }
       for (const result of input.results) {
-        if (await this.acceptResult(agent.id, result, receivedAt)) acceptedResults += 1;
+        if (await this.acceptResult(agent.id, result, receivedAt, capabilities)) {
+          acceptedResults += 1;
+        }
       }
     });
 
@@ -266,16 +337,17 @@ export class AgentsService {
   private async acceptResult(
     agentId: string,
     input: AgentTaskResultDto,
-    receivedAt: string
+    receivedAt: string,
+    capabilities: CollectorCapability[]
   ): Promise<boolean> {
-    const task = await this.database.get<TaskRow>(
-      `SELECT at.* FROM agent_tasks at JOIN checks c ON c.id = at.check_id
+    const task = await this.database.get<TaskRow & { type: CheckType }>(
+      `SELECT at.*, c.type FROM agent_tasks at JOIN checks c ON c.id = at.check_id
        WHERE at.id = ? AND at.agent_id = ? AND at.status IN ('pending', 'claimed')
        AND c.enabled = 1`,
       input.taskId,
       agentId
     );
-    if (!task) return false;
+    if (!task || !capabilities.includes(task.type)) return false;
     const checkedAt = this.safeObservedAt(input.checkedAt, receivedAt);
     await this.results.record(task.check_id, {
       status: input.status,
@@ -327,27 +399,45 @@ export class AgentsService {
     return row;
   }
 
-  private map(row: AgentRow): AgentSummary {
+  private map(row: AgentRow, deviceStatus: MobileDeviceStatus | null): AgentSummary {
     const lastSeen = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
     const age = Date.now() - lastSeen;
+    const mobileInterval = row.collection_interval_seconds * 1_000;
+    const onlineThreshold =
+      row.kind === "mobile" ? Math.max(30 * 60_000, mobileInterval * 2) : 90_000;
+    const staleThreshold =
+      row.kind === "mobile" ? Math.max(2 * 60 * 60_000, mobileInterval * 4) : 300_000;
     const status = !lastSeen
       ? "never"
-      : age <= 90_000
+      : age <= onlineThreshold
         ? "online"
-        : age <= 300_000
+        : age <= staleThreshold
           ? "stale"
           : "offline";
     return {
       id: row.id,
       teamId: row.team_id,
       name: row.name,
+      kind: row.kind,
       collectionIntervalSeconds: row.collection_interval_seconds,
       status,
       platform: row.platform,
       version: row.version,
       lastSeenAt: row.last_seen_at,
-      capabilities: JSON.parse(row.capabilities_json) as string[],
+      capabilities: JSON.parse(row.capabilities_json) as CollectorCapability[],
+      deviceStatus,
       createdAt: row.created_at,
     };
+  }
+
+  private collectionInterval(kind: CollectorKind, requested?: number): number {
+    const limits = kind === "mobile" ? mobileAgentCollectionInterval : agentCollectionInterval;
+    const interval = requested ?? limits.defaultSeconds;
+    if (interval < limits.minimumSeconds || interval > limits.maximumSeconds) {
+      throw new BadRequestException(
+        `Collection interval must be between ${limits.minimumSeconds} and ${limits.maximumSeconds} seconds`
+      );
+    }
+    return interval;
   }
 }

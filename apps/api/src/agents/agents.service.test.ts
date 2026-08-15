@@ -7,13 +7,21 @@ import type { TechnologiesService } from "../technologies/technologies.service.j
 import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { AgentHeartbeatDto, HostSnapshotDto } from "./agents.dto.js";
 import { AgentsService } from "./agents.service.js";
+import type { MobileDeviceStatusService } from "./mobile-device-status.service.js";
 
 const agent: AuthenticatedAgent = {
   id: "agent-1",
   teamId: "team-1",
   name: "Relay",
+  kind: "desktop",
+  capabilities: ["http", "tcp", "dns", "host", "disk"],
   collectionIntervalSeconds: 45,
 };
+
+const mobileDeviceStatuses = {
+  latestByAgentIds: vi.fn(async () => new Map()),
+  latest: vi.fn(async () => null),
+} as unknown as MobileDeviceStatusService;
 
 function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
   return {
@@ -37,6 +45,58 @@ function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
 }
 
 describe("AgentsService transport", () => {
+  it("rejects active-check polling from mobile collectors", async () => {
+    const service = new AgentsService(
+      {} as DatabaseService,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    await expect(
+      service.poll({ ...agent, kind: "mobile", capabilities: ["device-status"] })
+    ).rejects.toThrow("Collector does not support active checks");
+  });
+
+  it("uses the mobile collection cadence when calculating freshness", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+    try {
+      const service = new AgentsService(
+        {
+          all: vi.fn(async () => [
+            {
+              id: "mobile-1",
+              team_id: "team-1",
+              name: "Phone",
+              kind: "mobile",
+              collection_interval_seconds: 3_600,
+              platform: "Android 16",
+              version: "0.1.0",
+              capabilities_json: '["device-status"]',
+              last_seen_at: "2026-08-15T10:30:00.000Z",
+              revoked_at: null,
+              created_at: "2026-08-15T09:00:00.000Z",
+            },
+          ]),
+        } as unknown as DatabaseService,
+        { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+        {} as AuditService,
+        {} as ResultsService,
+        {} as TechnologiesService,
+        mobileDeviceStatuses
+      );
+
+      const response = await service.list("user-1", "team-1");
+
+      expect(response[0]?.status).toBe("online");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns the Mimorii collection interval with queued triggers", async () => {
     const all = vi.fn(async () => [
       {
@@ -60,7 +120,8 @@ describe("AgentsService transport", () => {
       {} as TeamAccessService,
       {} as AuditService,
       {} as ResultsService,
-      {} as TechnologiesService
+      {} as TechnologiesService,
+      mobileDeviceStatuses
     );
 
     const response = await service.poll(agent);
@@ -87,7 +148,8 @@ describe("AgentsService transport", () => {
       {} as TeamAccessService,
       {} as AuditService,
       {} as ResultsService,
-      { observeAgent } as unknown as TechnologiesService
+      { observeAgent } as unknown as TechnologiesService,
+      mobileDeviceStatuses
     );
     const input: AgentHeartbeatDto = {
       snapshots: [

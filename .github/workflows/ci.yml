@@ -94,7 +94,9 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/agent -> target
+          workspaces: |
+            apps/agent-deskopt -> target
+            apps/agent-mobile -> target
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -108,7 +110,7 @@ jobs:
       - name: Build release artifacts
         run: pnpm build
 
-  windows-agent:
+  windows-agent-deskopt:
     name: Test Windows collector
     runs-on: windows-latest
     timeout-minutes: 20
@@ -123,10 +125,10 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/agent -> target
+          workspaces: apps/agent-deskopt -> target
 
       - name: Test collector
-        run: cargo test --locked --manifest-path apps/agent/Cargo.toml
+        run: cargo test --locked --manifest-path apps/agent-deskopt/Cargo.toml
 
   container:
     name: Validate container deployment

@@ -64,6 +64,7 @@ describe("development seed", () => {
     expect(run).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE agents SET key_hash"),
       expect.any(String),
+      JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
       developmentSeedDefaults.agentIntervalSeconds,
       expect.any(String),
       "agent-local",

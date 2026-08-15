@@ -26,29 +26,29 @@ RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
-COPY apps/web/package.json apps/web/package.json
+COPY apps/client/package.json apps/client/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY apps/api apps/api
-COPY apps/web apps/web
+COPY apps/client apps/client
 COPY packages/contracts packages/contracts
 RUN pnpm --filter @mimorii/contracts build \
     && pnpm --filter @mimorii/api build \
-    && pnpm --filter @mimorii/web build
+    && pnpm --filter @mimorii/client build
 
 FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 ENV MIMORII_API_PORT=4310
-ENV MIMORII_WEB_DIST=/app/apps/web/dist
+ENV MIMORII_CLIENT_DIST=/app/apps/client/dist
 
 WORKDIR /app
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/apps/api/node_modules apps/api/node_modules
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist apps/api/dist
-COPY --from=build /app/apps/web/dist apps/web/dist
+COPY --from=build /app/apps/client/dist apps/client/dist
 COPY --from=build /app/packages/contracts packages/contracts
 
 WORKDIR /app/apps/api

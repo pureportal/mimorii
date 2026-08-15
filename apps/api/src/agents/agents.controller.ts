@@ -68,6 +68,15 @@ export class AgentsController {
     return this.agents.snapshots(user.id, teamId, id, limit ? Number(limit) : undefined);
   }
 
+  @Get(":id/device-status")
+  deviceStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Param("id") id: string
+  ) {
+    return this.agents.deviceStatus(user.id, teamId, id);
+  }
+
   @Delete(":id")
   @HttpCode(204)
   revoke(

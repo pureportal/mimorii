@@ -48,6 +48,10 @@ export class RetentionService implements OnModuleInit {
         cutoffs.snapshots
       );
       await this.database.run(
+        "DELETE FROM mobile_device_statuses WHERE observed_at < ?",
+        cutoffs.snapshots
+      );
+      await this.database.run(
         "DELETE FROM notification_deliveries WHERE created_at < ?",
         cutoffs.deliveries
       );

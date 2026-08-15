@@ -6,5 +6,8 @@ target
 *.db
 *.db-shm
 *.db-wal
-apps/web/src-tauri/gen
-apps/web/src-tauri/target
+apps/client/src-tauri/gen
+apps/client/src-tauri/target
+apps/agent-mobile/target
+apps/agent-mobile/android/.tauri
+apps/agent-mobile/android/build

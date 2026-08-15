@@ -1,0 +1,27 @@
+[package]
+name = "mimorii-client"
+version = "0.1.0"
+description = "Mimorii desktop and mobile client"
+authors = ["Mimorii contributors"]
+edition = "2024"
+
+[lib]
+name = "mimorii_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11", features = [] }
+tauri-plugin-agent-mobile = { path = "../../agent-mobile" }
+tauri-plugin-push = { path = "plugins/push" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

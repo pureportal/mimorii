@@ -3,7 +3,7 @@
 [![CI](https://github.com/pureportal/mimorii/actions/workflows/ci.yml/badge.svg)](https://github.com/pureportal/mimorii/actions/workflows/ci.yml)
 [![Container](https://github.com/pureportal/mimorii/actions/workflows/release.yml/badge.svg)](https://github.com/pureportal/mimorii/actions/workflows/release.yml)
 
-![Mimorii monitoring websites, services, and servers](apps/web/public/art/mimorii-hero.png)
+![Mimorii monitoring websites, services, and servers](apps/client/public/art/mimorii-hero.png)
 
 Mimorii is a self-hosted home for uptime, server health, incidents, and reliability. It watches public services directly and uses outbound-only collectors for private networks, so you can see what is healthy without opening inbound access to your servers.
 
@@ -14,6 +14,7 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 - CPU, memory, load, disks, and discovered server technologies
 - Scheduled jobs and backups through heartbeat URLs
 - Services inside private networks through Linux and Windows collectors
+- Android device availability, battery, memory, storage, connectivity, power, and thermal state
 
 ## From signal to response
 
@@ -88,12 +89,16 @@ PostgreSQL data stays in a Docker volume. Back it up regularly, and do not use `
 Create a collector in Mimorii and copy its one-time enrollment key. On the Linux or Windows machine where the Mimorii agent is installed, run:
 
 ```bash
-mimorii-agent enroll --server https://mimorii.example.com/api --key <one-time-key>
-mimorii-agent service install
-mimorii-agent doctor
+mimorii-agent-deskopt enroll --server https://mimorii.example.com/api --key <one-time-key>
+mimorii-agent-deskopt service install
+mimorii-agent-deskopt doctor
 ```
 
 The collector sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
+
+## Monitor an Android device
+
+Open Mimorii on Android, add an Android device collector, and connect it from the creation dialog. Android reports device status on a best-effort WorkManager schedule. It does not run active monitoring checks.
 
 ## Monitor a scheduled job
 
@@ -114,6 +119,10 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 - Review the privacy, email, analytics, and retention settings before opening a public deployment.
 
 For optional email, push notification, analytics, retention, and advanced monitoring settings, use the values documented in [`.env.example`](.env.example).
+
+## Native clients
+
+Mimorii ships a signed universal Android APK plus signed Windows x64 NSIS and MSI installers. Build prerequisites, signing secrets, release commands, and artifact paths are documented in [Client distribution](docs/client-distribution.md).
 
 ## Help
 

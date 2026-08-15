@@ -71,9 +71,26 @@ export type DashboardIncidentLimit = (typeof dashboardIncidentLimits)[number];
 export const agentStatuses = ["online", "stale", "offline", "never"] as const;
 export type AgentStatus = (typeof agentStatuses)[number];
 
+export const collectorKinds = ["desktop", "mobile"] as const;
+export type CollectorKind = (typeof collectorKinds)[number];
+
+export const collectorCapabilities = [...checkTypes, "device-status"] as const;
+export type CollectorCapability = (typeof collectorCapabilities)[number];
+
+export const collectorCapabilitiesByKind = {
+  desktop: checkTypes,
+  mobile: ["device-status"],
+} as const satisfies Record<CollectorKind, readonly CollectorCapability[]>;
+
 export const agentCollectionInterval = {
   defaultSeconds: 30,
   minimumSeconds: 15,
+  maximumSeconds: 3_600,
+} as const;
+
+export const mobileAgentCollectionInterval = {
+  defaultSeconds: 900,
+  minimumSeconds: 900,
   maximumSeconds: 3_600,
 } as const;
 
@@ -728,13 +745,110 @@ export interface AgentSummary {
   id: string;
   teamId: string;
   name: string;
+  kind: CollectorKind;
   collectionIntervalSeconds: number;
   status: AgentStatus;
   platform: string | null;
   version: string | null;
   lastSeenAt: string | null;
-  capabilities: string[];
+  capabilities: CollectorCapability[];
+  deviceStatus: MobileDeviceStatus | null;
   createdAt: string;
+}
+
+export const mobileBatteryPowerSources = [
+  "none",
+  "ac",
+  "usb",
+  "wireless",
+  "dock",
+  "unknown",
+] as const;
+export type MobileBatteryPowerSource = (typeof mobileBatteryPowerSources)[number];
+
+export const mobileBatteryHealthValues = [
+  "good",
+  "overheat",
+  "dead",
+  "over-voltage",
+  "failure",
+  "cold",
+  "unknown",
+] as const;
+export type MobileBatteryHealth = (typeof mobileBatteryHealthValues)[number];
+
+export const mobileNetworkTransports = [
+  "none",
+  "wifi",
+  "cellular",
+  "ethernet",
+  "bluetooth",
+  "vpn",
+  "other",
+] as const;
+export type MobileNetworkTransport = (typeof mobileNetworkTransports)[number];
+
+export const mobileThermalStatuses = [
+  "none",
+  "light",
+  "moderate",
+  "severe",
+  "critical",
+  "emergency",
+  "shutdown",
+] as const;
+export type MobileThermalStatus = (typeof mobileThermalStatuses)[number];
+
+export interface MobileDeviceStatus {
+  schemaVersion: 1;
+  observedAt: string;
+  device: {
+    manufacturer: string;
+    model: string;
+    androidRelease: string;
+    apiLevel: number;
+    securityPatch: string | null;
+  };
+  collector: {
+    appVersion: string;
+    buildNumber: number;
+  };
+  uptimeSeconds: number;
+  battery: {
+    percent: number | null;
+    charging: boolean | null;
+    powerSource: MobileBatteryPowerSource;
+    health: MobileBatteryHealth | null;
+    temperatureCelsius: number | null;
+  };
+  memory: {
+    totalBytes: number;
+    availableBytes: number;
+    lowMemory: boolean;
+  };
+  storage: {
+    totalBytes: number;
+    availableBytes: number;
+  };
+  connectivity: {
+    connected: boolean;
+    internetValidated: boolean;
+    metered: boolean;
+    roaming: boolean | null;
+    vpn: boolean;
+    transport: MobileNetworkTransport;
+  };
+  power: {
+    batterySaver: boolean;
+    deviceIdle: boolean;
+    backgroundRestricted: boolean | null;
+  };
+  thermalStatus: MobileThermalStatus | null;
+}
+
+export interface MobileDeviceStatusResponse {
+  acceptedAt: string;
+  collectionIntervalSeconds: number;
 }
 
 export interface HostSnapshot {

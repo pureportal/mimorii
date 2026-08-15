@@ -42,19 +42,19 @@ export async function createApplication(): Promise<INestApplication> {
     maxAge: 86_400,
   });
   setupSwagger(app);
-  configureWebApplication(app);
+  configureClientApplication(app);
   return app;
 }
 
-function configureWebApplication(app: INestApplication): void {
-  const configuredPath = process.env.MIMORII_WEB_DIST;
+function configureClientApplication(app: INestApplication): void {
+  const configuredPath = process.env.MIMORII_CLIENT_DIST;
   if (!configuredPath) return;
 
-  const webRoot = resolve(configuredPath);
-  const indexPath = join(webRoot, "index.html");
-  if (!existsSync(indexPath)) throw new Error(`Web application not found at ${webRoot}`);
+  const clientRoot = resolve(configuredPath);
+  const indexPath = join(clientRoot, "index.html");
+  if (!existsSync(indexPath)) throw new Error(`Client application not found at ${clientRoot}`);
 
-  app.use(serveStatic(webRoot, { index: false }));
+  app.use(serveStatic(clientRoot, { index: false }));
   const expressApplication: Express = app.getHttpAdapter().getInstance();
   expressApplication.get("/{*path}", (request: Request, response: Response, next: NextFunction) => {
     if (request.path.startsWith("/api") || request.path.startsWith("/docs")) {

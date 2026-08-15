@@ -97,6 +97,36 @@
         ]
       }
     },
+    "/api/auth/profile/tour-acknowledgements/{tourId}": {
+      "put": {
+        "operationId": "acknowledgeTour",
+        "parameters": [
+          {
+            "name": "tourId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maxLength": 100,
+              "example": "overview",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/api/auth/password": {
       "post": {
         "operationId": "changePassword",
@@ -3402,6 +3432,42 @@
         ]
       }
     },
+    "/api/teams/{teamId}/agents/{id}/device-status": {
+      "get": {
+        "operationId": "deviceStatus",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
     "/api/agent/tasks": {
       "get": {
         "operationId": "poll",
@@ -3440,6 +3506,35 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AgentHeartbeatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "agent-key": []
+          }
+        ],
+        "tags": [
+          "Agent transport"
+        ]
+      }
+    },
+    "/api/agent/device-status": {
+      "post": {
+        "operationId": "deviceStatus",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileDeviceStatusDto"
               }
             }
           }
@@ -5532,15 +5627,23 @@
             "minLength": 1,
             "maxLength": 100
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ]
+          },
           "collectionIntervalSeconds": {
             "type": "number",
-            "default": 30,
             "minimum": 15,
-            "maximum": 3600
+            "maximum": 3600,
+            "description": "Defaults to 30 seconds for desktop collectors and 900 seconds for mobile collectors."
           }
         },
         "required": [
-          "name"
+          "name",
+          "kind"
         ]
       },
       "UpdateAgentDto": {
@@ -5697,15 +5800,15 @@
             ]
           },
           "latencyMs": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "statusCode": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "message": {
-            "type": "object",
+            "type": "string",
             "nullable": true,
             "maxLength": 500
           },
@@ -5751,6 +5854,265 @@
           "snapshots",
           "results",
           "capabilities"
+        ]
+      },
+      "MobileDeviceIdentityDto": {
+        "type": "object",
+        "properties": {
+          "manufacturer": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "androidRelease": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "apiLevel": {
+            "type": "number",
+            "minimum": 24,
+            "maximum": 100
+          },
+          "securityPatch": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "manufacturer",
+          "model",
+          "androidRelease",
+          "apiLevel"
+        ]
+      },
+      "MobileCollectorBuildDto": {
+        "type": "object",
+        "properties": {
+          "appVersion": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "buildNumber": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "appVersion",
+          "buildNumber"
+        ]
+      },
+      "MobileBatteryStatusDto": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "charging": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "powerSource": {
+            "type": "string",
+            "enum": [
+              "none",
+              "ac",
+              "usb",
+              "wireless",
+              "dock",
+              "unknown"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "good",
+              "overheat",
+              "dead",
+              "over-voltage",
+              "failure",
+              "cold",
+              "unknown"
+            ]
+          },
+          "temperatureCelsius": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -100,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "powerSource"
+        ]
+      },
+      "MobileMemoryStatusDto": {
+        "type": "object",
+        "properties": {
+          "totalBytes": {
+            "type": "number",
+            "minimum": 0
+          },
+          "availableBytes": {
+            "type": "number",
+            "minimum": 0
+          },
+          "lowMemory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "totalBytes",
+          "availableBytes",
+          "lowMemory"
+        ]
+      },
+      "MobileStorageStatusDto": {
+        "type": "object",
+        "properties": {
+          "totalBytes": {
+            "type": "number",
+            "minimum": 0
+          },
+          "availableBytes": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "totalBytes",
+          "availableBytes"
+        ]
+      },
+      "MobileConnectivityStatusDto": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "internetValidated": {
+            "type": "boolean"
+          },
+          "metered": {
+            "type": "boolean"
+          },
+          "roaming": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "vpn": {
+            "type": "boolean"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "none",
+              "wifi",
+              "cellular",
+              "ethernet",
+              "bluetooth",
+              "vpn",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "connected",
+          "internetValidated",
+          "metered",
+          "vpn",
+          "transport"
+        ]
+      },
+      "MobilePowerStatusDto": {
+        "type": "object",
+        "properties": {
+          "batterySaver": {
+            "type": "boolean"
+          },
+          "deviceIdle": {
+            "type": "boolean"
+          },
+          "backgroundRestricted": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "required": [
+          "batterySaver",
+          "deviceIdle"
+        ]
+      },
+      "MobileDeviceStatusDto": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "observedAt": {
+            "type": "string"
+          },
+          "device": {
+            "$ref": "#/components/schemas/MobileDeviceIdentityDto"
+          },
+          "collector": {
+            "$ref": "#/components/schemas/MobileCollectorBuildDto"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery": {
+            "$ref": "#/components/schemas/MobileBatteryStatusDto"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/MobileMemoryStatusDto"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/MobileStorageStatusDto"
+          },
+          "connectivity": {
+            "$ref": "#/components/schemas/MobileConnectivityStatusDto"
+          },
+          "power": {
+            "$ref": "#/components/schemas/MobilePowerStatusDto"
+          },
+          "thermalStatus": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "none",
+              "light",
+              "moderate",
+              "severe",
+              "critical",
+              "emergency",
+              "shutdown"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "observedAt",
+          "device",
+          "collector",
+          "uptimeSeconds",
+          "battery",
+          "memory",
+          "storage",
+          "connectivity",
+          "power"
         ]
       },
       "CreateObjectiveDto": {

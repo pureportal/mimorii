@@ -1,0 +1,13 @@
+[package]
+name = "tauri-plugin-agent-mobile"
+version = "0.1.0"
+description = "Mimorii Android device status collector"
+edition = "2024"
+links = "tauri-plugin-agent-mobile"
+
+[build-dependencies]
+tauri-plugin = { version = "2.6.3", features = ["build"] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2.11", features = [] }

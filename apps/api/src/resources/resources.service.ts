@@ -1,5 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { CheckStatus, ResourceKind, ResourceSummary } from "@mimorii/contracts";
+import type {
+  CheckStatus,
+  CheckType,
+  CollectorCapability,
+  CollectorKind,
+  ResourceKind,
+  ResourceSummary,
+} from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -54,6 +61,7 @@ export class ResourcesService {
 
   async create(userId: string, teamId: string, input: CreateResourceDto): Promise<ResourceSummary> {
     await this.access.require(userId, teamId, "member");
+    if (input.agentId) await this.access.require(userId, teamId, "admin");
     const count = (await this.database.get<{ count: number }>(
       "SELECT COUNT(*) AS count FROM resources WHERE team_id = ?",
       teamId
@@ -105,7 +113,10 @@ export class ResourcesService {
       agent_id: string | null;
     }>("SELECT * FROM resources WHERE team_id = ? AND id = ?", teamId, id);
     if (!current) throw new NotFoundException("Resource not found");
-    await this.requireAgent(teamId, input.agentId);
+    if (input.agentId !== undefined && input.agentId !== current.agent_id) {
+      await this.access.require(userId, teamId, "admin");
+    }
+    await this.requireAgent(teamId, input.agentId, id);
 
     await this.database.run(
       `UPDATE resources SET name = ?, kind = ?, target = ?, description = ?, tags_json = ?,
@@ -204,13 +215,35 @@ export class ResourcesService {
     );
   }
 
-  private async requireAgent(teamId: string, agentId: string | null | undefined): Promise<void> {
+  private async requireAgent(
+    teamId: string,
+    agentId: string | null | undefined,
+    resourceId?: string
+  ): Promise<void> {
     if (!agentId) return;
-    const agent = await this.database.get(
-      "SELECT id FROM agents WHERE id = ? AND team_id = ? AND revoked_at IS NULL",
+    const agent = await this.database.get<{
+      kind: CollectorKind;
+      capabilities_json: string;
+    }>(
+      `SELECT kind, capabilities_json FROM agents
+       WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
       agentId,
       teamId
     );
     if (!agent) throw new BadRequestException("Agent is unavailable");
+    if (agent.kind !== "desktop") {
+      throw new BadRequestException("Mobile collectors cannot be assigned to resources");
+    }
+    if (!resourceId) return;
+    const capabilities = JSON.parse(agent.capabilities_json) as CollectorCapability[];
+    const checks = await this.database.all<{ type: CheckType }>(
+      "SELECT type FROM checks WHERE resource_id = ? AND team_id = ?",
+      resourceId,
+      teamId
+    );
+    const unsupported = checks.find((check) => !capabilities.includes(check.type));
+    if (unsupported) {
+      throw new BadRequestException(`Collector does not support ${unsupported.type} checks`);
+    }
   }
 }

@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import type { AgentTask, CheckConfig } from "@mimorii/contracts";
+import type {
+  AgentTask,
+  CheckConfig,
+  CollectorCapability,
+  CollectorKind,
+} from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
@@ -10,6 +15,8 @@ import { ResultsService } from "./results.service.js";
 
 interface ScheduledCheckRow extends CheckRow {
   agent_id: string | null;
+  agent_kind: CollectorKind | null;
+  agent_capabilities_json: string | null;
 }
 
 @Injectable()
@@ -31,13 +38,17 @@ export class CheckOrchestratorService {
     try {
       await this.expireAgentTasks();
       const due = await this.database.all<ScheduledCheckRow>(
-        `SELECT c.*, r.agent_id FROM checks c JOIN resources r ON r.id = c.resource_id
+        `SELECT c.*, r.agent_id, a.kind AS agent_kind,
+          a.capabilities_json AS agent_capabilities_json
+         FROM checks c JOIN resources r ON r.id = c.resource_id
+         LEFT JOIN agents a ON a.id = r.agent_id AND a.revoked_at IS NULL
          WHERE c.enabled = 1 AND c.next_check_at IS NOT NULL AND c.next_check_at <= ?
          ORDER BY c.next_check_at LIMIT 50`,
         new Date().toISOString()
       );
       for (const check of due) {
-        if (check.agent_id) await this.queueAgentTask(check);
+        if (check.agent_id && this.supportsAssignedCheck(check)) await this.queueAgentTask(check);
+        else if (check.agent_id) await this.scheduleNext(check);
         else if (this.running.size < 8) void this.executeDirect(check);
       }
     } finally {
@@ -48,13 +59,19 @@ export class CheckOrchestratorService {
   async runNow(userId: string, teamId: string, checkId: string) {
     await this.access.require(userId, teamId, "member");
     const check = await this.database.get<ScheduledCheckRow>(
-      `SELECT c.*, r.agent_id FROM checks c JOIN resources r ON r.id = c.resource_id
+      `SELECT c.*, r.agent_id, a.kind AS agent_kind,
+        a.capabilities_json AS agent_capabilities_json
+       FROM checks c JOIN resources r ON r.id = c.resource_id
+       LEFT JOIN agents a ON a.id = r.agent_id AND a.revoked_at IS NULL
        WHERE c.id = ? AND c.team_id = ?`,
       checkId,
       teamId
     );
     if (!check) throw new NotFoundException("Check not found");
     if (check.agent_id) {
+      if (!this.supportsAssignedCheck(check)) {
+        throw new BadRequestException("Assigned collector does not support this check");
+      }
       const task = await this.queueAgentTask(check, true);
       return { queued: true, taskId: task?.id ?? null };
     }
@@ -83,7 +100,7 @@ export class CheckOrchestratorService {
     check: ScheduledCheckRow,
     force = false
   ): Promise<Pick<AgentTask, "id"> | undefined> {
-    if (!check.agent_id) return undefined;
+    if (!check.agent_id || !this.supportsAssignedCheck(check)) return undefined;
     const existing = await this.database.get<{ id: string }>(
       `SELECT id FROM agent_tasks WHERE check_id = ? AND agent_id = ? AND status IN ('pending', 'claimed')`,
       check.id,
@@ -119,6 +136,12 @@ export class CheckOrchestratorService {
   private async scheduleNext(check: CheckRow): Promise<void> {
     const next = new Date(Date.now() + check.interval_seconds * 1000).toISOString();
     await this.database.run("UPDATE checks SET next_check_at = ? WHERE id = ?", next, check.id);
+  }
+
+  private supportsAssignedCheck(check: ScheduledCheckRow): boolean {
+    if (check.agent_kind !== "desktop" || !check.agent_capabilities_json) return false;
+    const capabilities = JSON.parse(check.agent_capabilities_json) as CollectorCapability[];
+    return capabilities.includes(check.type);
   }
 
   private async expireAgentTasks(): Promise<void> {

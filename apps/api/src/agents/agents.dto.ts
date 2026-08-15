@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { agentCollectionInterval } from "@mimorii/contracts";
+import {
+  agentCollectionInterval,
+  collectorCapabilities,
+  collectorKinds,
+  type CollectorKind,
+} from "@mimorii/contracts";
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
@@ -24,10 +29,15 @@ export class CreateAgentDto {
   @Length(1, 100)
   name!: string;
 
+  @ApiProperty({ enum: collectorKinds })
+  @IsIn(collectorKinds)
+  kind!: CollectorKind;
+
   @ApiPropertyOptional({
-    default: agentCollectionInterval.defaultSeconds,
     minimum: agentCollectionInterval.minimumSeconds,
     maximum: agentCollectionInterval.maximumSeconds,
+    description:
+      "Defaults to 30 seconds for desktop collectors and 900 seconds for mobile collectors.",
   })
   @IsOptional()
   @IsInt()
@@ -179,20 +189,20 @@ export class AgentTaskResultDto {
   @IsIn(["up", "degraded", "down"])
   status!: "up" | "degraded" | "down";
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(0)
   latencyMs?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(100)
   @Max(599)
   statusCode?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 500 })
   @IsOptional()
   @IsString()
   @Length(0, 500)
@@ -225,6 +235,6 @@ export class AgentHeartbeatDto {
   @ApiProperty({ type: [String], maxItems: 20 })
   @IsArray()
   @ArrayMaxSize(20)
-  @IsString({ each: true })
+  @IsIn(collectorCapabilities, { each: true })
   capabilities!: string[];
 }

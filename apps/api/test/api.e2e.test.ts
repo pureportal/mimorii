@@ -458,8 +458,9 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const createdAgent = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/agents`)
       .set("authorization", authorization)
-      .send({ name: "Private network", collectionIntervalSeconds: 45 })
+      .send({ name: "Private network", kind: "desktop", collectionIntervalSeconds: 45 })
       .expect(201);
+    expect(createdAgent.body.kind).toBe("desktop");
     expect(createdAgent.body.collectionIntervalSeconds).toBe(45);
     await request(app.getHttpServer())
       .patch(`/api/teams/${teamId}/agents/${createdAgent.body.id}`)
@@ -575,6 +576,99 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(
       snapshots.body.some((snapshot: { cpuPercent: number }) => snapshot.cpuPercent === 20)
     ).toBe(true);
+  });
+
+  it("ingests typed mobile status without assigning active checks", async () => {
+    const account = await register("mobile-agent@example.com", "Mobile Agent");
+    const teamId = account.teams[0]!.id;
+    const authorization = `Bearer ${account.accessToken}`;
+    const createdAgent = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .send({ name: "Field phone", kind: "mobile", collectionIntervalSeconds: 900 })
+      .expect(201);
+    expect(createdAgent.body).toMatchObject({
+      kind: "mobile",
+      capabilities: ["device-status"],
+      collectionIntervalSeconds: 900,
+    });
+
+    const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
+    const observedAt = new Date().toISOString();
+    const status = {
+      schemaVersion: 1,
+      observedAt,
+      device: {
+        manufacturer: "Google",
+        model: "Pixel",
+        androidRelease: "16",
+        apiLevel: 36,
+        securityPatch: "2026-08-05",
+      },
+      collector: { appVersion: "0.1.0", buildNumber: 1 },
+      uptimeSeconds: 7_200,
+      battery: {
+        percent: 72,
+        charging: false,
+        powerSource: "none",
+        health: "good",
+        temperatureCelsius: 31.2,
+      },
+      memory: { totalBytes: 8_000_000_000, availableBytes: 3_000_000_000, lowMemory: false },
+      storage: { totalBytes: 128_000_000_000, availableBytes: 64_000_000_000 },
+      connectivity: {
+        connected: true,
+        internetValidated: true,
+        metered: false,
+        roaming: false,
+        vpn: false,
+        transport: "wifi",
+      },
+      power: { batterySaver: false, deviceIdle: false, backgroundRestricted: false },
+      thermalStatus: "none",
+    };
+
+    await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send(status)
+      .expect(200)
+      .expect(({ body }) => expect(body.collectionIntervalSeconds).toBe(900));
+
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/agents/${createdAgent.body.id}/device-status`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ device: { model: "Pixel" } }));
+
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body[0]).toMatchObject({
+          kind: "mobile",
+          status: "online",
+          platform: "Android 16",
+          deviceStatus: { battery: { percent: 72 } },
+        })
+      );
+
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .send({
+        name: "Mobile-routed resource",
+        kind: "server",
+        target: "device.internal",
+        agentId: createdAgent.body.id,
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get("/api/agent/tasks")
+      .set("authorization", agentAuthorization)
+      .expect(403);
   });
 
   it("manages incidents, maintenance, status pages, objectives, and analytics", async () => {

@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { CheckConfig, CheckSummary, CheckType } from "@mimorii/contracts";
+import type {
+  CheckConfig,
+  CheckSummary,
+  CheckType,
+  CollectorCapability,
+  CollectorKind,
+} from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -233,11 +239,23 @@ export class ChecksService {
   }
 
   private async validateExecution(type: CheckType, config: CheckConfig, agentId: string | null) {
+    if (agentId) {
+      const agent = await this.database.get<{
+        kind: CollectorKind;
+        capabilities_json: string;
+      }>("SELECT kind, capabilities_json FROM agents WHERE id = ? AND revoked_at IS NULL", agentId);
+      const capabilities = agent
+        ? (JSON.parse(agent.capabilities_json) as CollectorCapability[])
+        : [];
+      if (agent?.kind !== "desktop" || !capabilities.includes(type)) {
+        throw new BadRequestException(`Assigned collector does not support ${type} checks`);
+      }
+      return;
+    }
     if (type === "host" || type === "disk") {
       if (!agentId) throw new BadRequestException("Host and disk checks require an agent");
       return;
     }
-    if (agentId) return;
     if (type === "http") {
       const url = this.targets.validateHttpUrl((config as { url: string }).url);
       await this.targets.resolvePublicHost(url.hostname);
