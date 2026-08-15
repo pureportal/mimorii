@@ -16,7 +16,7 @@ export class HealthController {
       database,
       scheduler: process.env.MIMORII_SCHEDULER_ENABLED !== "false",
       time: new Date().toISOString(),
-      version: "0.1.0",
+      version: "1.0.0",
     };
   }
 }

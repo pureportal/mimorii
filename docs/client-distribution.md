@@ -60,7 +60,7 @@ Client versions must match in:
 - `apps/client/src-tauri/tauri.conf.json`
 - `apps/client/src-tauri/Cargo.toml`
 
-Push a tag matching that version, such as `v0.1.0`, to build, verify, attest, and publish both clients. A mismatched tag fails before either platform build.
+Push a tag matching that version, such as `v1.0.0`, to build, verify, attest, and publish both clients. A mismatched tag fails before either platform build.
 
 Run the same distribution checks locally after changing client metadata or scripts:
 
