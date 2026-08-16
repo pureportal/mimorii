@@ -98,6 +98,11 @@ jobs:
             apps/agent-deskopt -> target
             apps/agent-mobile -> target
 
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libwebkit2gtk-4.1-dev
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
