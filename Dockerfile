@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 ARG PNPM_VERSION=10.33.2
 FROM node:24-bookworm-slim AS build
 
@@ -28,30 +28,27 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/client/package.json apps/client/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile
 
 COPY apps/api apps/api
 COPY apps/client apps/client
 COPY packages/contracts packages/contracts
 RUN pnpm --filter @mimorii/contracts build \
     && pnpm --filter @mimorii/api build \
-    && pnpm --filter @mimorii/client build
+    && pnpm --filter @mimorii/client build \
+    && pnpm --filter @mimorii/api --prod deploy /prod/mimorii
 
 FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 ENV MIMORII_API_PORT=4310
-ENV MIMORII_CLIENT_DIST=/app/apps/client/dist
+ENV MIMORII_CLIENT_DIST=/app/client
 
 WORKDIR /app
-COPY --from=build /app/node_modules node_modules
-COPY --from=build /app/apps/api/node_modules apps/api/node_modules
-COPY --from=build /app/apps/api/package.json apps/api/package.json
-COPY --from=build /app/apps/api/dist apps/api/dist
-COPY --from=build /app/apps/client/dist apps/client/dist
-COPY --from=build /app/packages/contracts packages/contracts
+COPY --from=build --chown=node:node /prod/mimorii ./
+COPY --from=build --chown=node:node /app/apps/client/dist ./client
 
-WORKDIR /app/apps/api
 EXPOSE 4310
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["node", "--eval", "fetch('http://127.0.0.1:4310/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"]

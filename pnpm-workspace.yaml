@@ -3,6 +3,11 @@ packages:
   - apps/client
   - packages/*
 
+injectWorkspacePackages: true
+
 onlyBuiltDependencies:
   - "@parcel/watcher"
   - esbuild
+
+syncInjectedDepsAfterScripts:
+  - build

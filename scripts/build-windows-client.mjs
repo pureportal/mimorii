@@ -57,6 +57,8 @@ if (certificateThumbprint) {
       join(repoRoot, "scripts/sign-windows-executable.ps1"),
       "-CertificateThumbprint",
       certificateThumbprint,
+      "-Path",
+      join(repoRoot, "apps/client/src-tauri/target/release/Mimorii.exe"),
     ],
     {
       cwd: repoRoot,

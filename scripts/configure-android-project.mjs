@@ -57,10 +57,15 @@ const configuredBuild = build.replace(
   /classpath\("org\.jetbrains\.kotlin:kotlin-gradle-plugin:[^"]+"\)/,
   'classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")'
 );
-const configuredAppBuild = appBuild.replace(
-  /implementation\("androidx\.activity:activity-ktx:[^"]+"\)/,
-  'implementation("androidx.activity:activity-ktx:1.12.4")'
-);
+const configuredAppBuild = appBuild
+  .replace(
+    /implementation\("androidx\.activity:activity-ktx:[^"]+"\)/,
+    'implementation("androidx.activity:activity-ktx:1.12.4")'
+  )
+  .replace(
+    /isMinifyEnabled = true\r?\n(?!\s*isShrinkResources = true)/,
+    "isMinifyEnabled = true\n            isShrinkResources = true\n"
+  );
 
 if (/leanback/i.test(configuredManifest)) {
   throw new Error("Generated Android manifest still declares Leanback TV support");
@@ -70,6 +75,9 @@ if (!configuredBuild.includes("kotlin-gradle-plugin:2.1.20")) {
 }
 if (!configuredAppBuild.includes("androidx.activity:activity-ktx:1.12.4")) {
   throw new Error("Generated Android project does not use AndroidX Activity 1.12.4");
+}
+if (!configuredAppBuild.includes("isShrinkResources = true")) {
+  throw new Error("Generated Android release does not shrink unused resources");
 }
 if (
   !configuredMainActivity.includes("enableEdgeToEdge()") ||

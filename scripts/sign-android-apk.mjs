@@ -51,7 +51,7 @@ verifyBuildMetadata(unsignedApks[0]);
 const artifactDirectory = resolve(
   process.env.MIMORII_ARTIFACT_DIR?.trim() || join(repoRoot, "dist/clients/android")
 );
-const artifactName = `mimorii-v${version}-android-universal-release-signed.apk`;
+const artifactName = `mimorii-client-agent-v${version}-android-universal.apk`;
 const artifactPath = join(artifactDirectory, artifactName);
 const alignedPath = join(artifactDirectory, `.${artifactName}.aligned`);
 const incrementalSignaturePath = `${artifactPath}.idsig`;
@@ -127,6 +127,12 @@ function verifyArchitectures(apkPath) {
   const entries = new Set(
     execFileSync("jar", ["tf", apkPath], { encoding: "utf8" }).split(/\r?\n/).filter(Boolean)
   );
+  const expectedArchitectures = ["arm64-v8a", "armeabi-v7a", "x86_64"];
+  const architectures = new Set(
+    [...entries]
+      .map((entry) => entry.match(/^lib\/([^/]+)\/[^/]+\.so$/)?.[1])
+      .filter((architecture) => architecture !== undefined)
+  );
   const expectedLibraries = [
     "lib/arm64-v8a/libmimorii_client_lib.so",
     "lib/armeabi-v7a/libmimorii_client_lib.so",
@@ -135,6 +141,14 @@ function verifyArchitectures(apkPath) {
   const missingLibraries = expectedLibraries.filter((library) => !entries.has(library));
   if (missingLibraries.length > 0) {
     throw new Error(`Signed APK is missing native libraries: ${missingLibraries.join(", ")}`);
+  }
+  if (
+    architectures.size !== expectedArchitectures.length ||
+    expectedArchitectures.some((architecture) => !architectures.has(architecture))
+  ) {
+    throw new Error(
+      `Signed APK contains unexpected native architectures: ${[...architectures].toSorted().join(", ")}`
+    );
   }
 }
 
