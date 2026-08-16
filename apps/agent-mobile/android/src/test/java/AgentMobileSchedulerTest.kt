@@ -3,6 +3,7 @@ package app.mimorii.agentmobile
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
+import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.SynchronousExecutor
@@ -34,6 +35,7 @@ class AgentMobileSchedulerTest {
 
     assertEquals(firstCollection.id, repeatedCollection.id)
     assertTrue(firstCollection.tags.contains(DeviceStatusWorker::class.java.name))
+    assertEquals(NetworkType.CONNECTED, firstCollection.constraints.requiredNetworkType)
 
     AgentMobileScheduler.collectNow(context)
     val manualCollection = workManager.activeCollection()
@@ -46,6 +48,7 @@ class AgentMobileSchedulerTest {
     AgentMobileScheduler.ensurePeriodic(context, TimeUnit.MINUTES.toSeconds(15))
     val periodicWork = workManager.periodicWork().single()
     assertTrue(periodicWork.tags.contains(DeviceStatusScheduleWorker::class.java.name))
+    assertEquals(NetworkType.NOT_REQUIRED, periodicWork.constraints.requiredNetworkType)
 
     AgentMobileScheduler.cancel(context)
     assertTrue(workManager.collectionWork().all { it.state == WorkInfo.State.CANCELLED })

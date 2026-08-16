@@ -16,15 +16,11 @@ object AgentMobileScheduler {
 
   fun ensurePeriodic(context: Context, intervalSeconds: Long) {
     require(intervalSeconds in 900L..3_600L) { "Mobile collection interval is invalid" }
-    val constraints = Constraints.Builder()
-      .setRequiredNetworkType(NetworkType.CONNECTED)
-      .build()
     val request = PeriodicWorkRequestBuilder<DeviceStatusScheduleWorker>(
       intervalSeconds,
       TimeUnit.SECONDS
     )
       .setInitialDelay(intervalSeconds, TimeUnit.SECONDS)
-      .setConstraints(constraints)
       .build()
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
       PERIODIC_WORK,
