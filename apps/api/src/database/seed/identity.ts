@@ -1,4 +1,5 @@
 import { hashSecret } from "../../common/crypto.js";
+import { applicationVersion } from "../../version.js";
 import { termsVersion } from "@mimorii/contracts";
 import { at, days, hours, minutes, seedId, seedSecret, type SeedContext } from "./context.js";
 
@@ -118,7 +119,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
     `UPDATE agents SET kind = 'desktop', platform = ?, version = ?, capabilities_json = ?, last_seen_at = ?,
      revoked_at = NULL, updated_at = ? WHERE id = ? AND team_id = ?`,
     "Local development",
-    "2.0.1",
+    applicationVersion,
     JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
     context.now.toISOString(),
     context.now.toISOString(),
@@ -131,7 +132,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
       key: "stale",
       name: "Branch relay",
       platform: "Linux 6.12",
-      version: "2.0.1",
+      version: applicationVersion,
       capabilities: ["http", "tcp", "dns"],
       lastSeenAt: at(context, -minutes(3)),
       revokedAt: null,
@@ -141,7 +142,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
       key: "offline",
       name: "Warehouse relay",
       platform: "Windows Server 2025",
-      version: "2.0.1",
+      version: applicationVersion,
       capabilities: ["http", "tcp", "dns", "host", "disk"],
       lastSeenAt: at(context, -hours(2)),
       revokedAt: null,
@@ -161,7 +162,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
       key: "revoked",
       name: "Retired relay",
       platform: "Linux 6.6",
-      version: "2.0.1",
+      version: applicationVersion,
       capabilities: ["host"],
       lastSeenAt: at(context, -days(30)),
       revokedAt: at(context, -days(20)),

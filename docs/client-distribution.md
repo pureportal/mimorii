@@ -1,19 +1,54 @@
-# Client distribution
+# Release distribution
 
-The `Build client releases` workflow builds these x64 Windows and universal Android artifacts from a clean checkout:
+## Published artifacts
 
-- `mimorii-v<version>-android-universal-release-signed.apk`
+A version release publishes these files:
+
+- `mimorii-client-agent-v<version>-android-universal.apk`
+- `mimorii-agent-v<version>-linux-x64.tar.gz`
+- `mimorii-agent-v<version>-windows-x64.zip`
 - `mimorii-v<version>-windows-x64-setup.exe`
 - `mimorii-v<version>-windows-x64.msi`
-- SHA-256 checksum files for both platforms
+- SHA-256 checksum files for each platform
 
-The Android APK contains `arm64-v8a`, `armeabi-v7a`, and `x86_64` Mimorii native libraries plus the mobile device-status collector in `apps/agent-mobile`. The collector uses Android WorkManager and is packaged through the Tauri client in `apps/client`. The NSIS setup executable is the standard Windows download; the MSI is available for managed deployment. Tagged builds attach all five files to the matching GitHub release. Manual workflow runs keep the files as GitHub Actions artifacts for 30 days.
+The Android APK is the Mimorii client and Android device-status agent in one application. `apps/agent-mobile` is a Tauri plugin loaded by `apps/client`, not a separately installable application. A second agent APK would duplicate the client, resources, runtime, and signing identity without adding an independently useful deployment.
 
-The Windows job also uploads an SPDX JSON SBOM as a separate workflow artifact. Public repositories receive GitHub build-provenance attestations for the APK and installers plus an SBOM attestation for the Windows installers.
+The universal APK includes `arm64-v8a`, `armeabi-v7a`, and `x86_64` native libraries. These cover current phones and tablets, supported older 32-bit ARM devices, and x64 Android environments. The unused 32-bit x86 target is omitted. One universal APK keeps the total GitHub Release size lower than three ABI APKs because shared web assets and Android resources appear once.
+
+The desktop agent supports automatic service installation on Linux and Windows. Release automation ships the x64 targets already built and tested by CI. The Windows executable and both client installers are Authenticode-signed and timestamped. The Android APK is aligned for 16 KiB pages before it is signed and verified.
+
+## Version releases
+
+`package.json` is the canonical project version. `pnpm release:validate` requires the API, contracts, agents, Tauri client, plugins, and generated OpenAPI metadata to match it.
+
+The `Release` workflow runs on every push to `main`. It compares the canonical version at the pushed commit with the pre-push commit:
+
+- An increased semantic version builds and publishes the release.
+- An unchanged version exits after metadata validation.
+- A downgrade, invalid version, inconsistent metadata, or conflicting existing tag fails without publishing.
+
+The release reuses the `CI` workflow as a required publish gate. After CI and every platform build succeed, it publishes the container image, creates `v<version>` at the exact bump commit, and creates the corresponding GitHub Release with generated notes and all nine files. Re-running the same workflow is idempotent: the tag must still identify the same commit and release assets are replaced by name.
+
+Ordinary pushes continue through `CI`, including release metadata validation, tests, release builds, workflow linting, and the container smoke test. They do not publish images, tags, workflow artifacts, or GitHub Releases.
+
+## Container architecture
+
+Mimorii has one deployable application image: `ghcr.io/pureportal/mimorii`. The Nest API serves the compiled web client from `MIMORII_CLIENT_DIST`, and Compose exposes one Mimorii service and one PostgreSQL service. The web frontend has no separate server process, runtime configuration, health check, or scaling boundary, so a second frontend image would duplicate the static files and require a new deployment architecture without providing an independently useful service.
+
+Each stable version publishes these image tags:
+
+- `<version>`
+- `sha-<full-commit-sha>`
+- `main`
+- `latest`
+
+Prereleases publish the version, commit, and branch tags but do not replace `latest`. The package is a multi-platform manifest for `linux/amd64` and `linux/arm64`, with an SBOM and build provenance.
+
+GitHub Packages showed only one image because the previous workflow used `${{ github.repository }}` as its only image name and built the repository's only Dockerfile. That package count matches the deployment architecture.
 
 ## GitHub configuration
 
-Configure these Actions secrets before running `.github/workflows/clients.yml`:
+Configure these Actions secrets:
 
 | Secret                         | Content                                                          |
 | ------------------------------ | ---------------------------------------------------------------- |
@@ -24,16 +59,18 @@ Configure these Actions secrets before running `.github/workflows/clients.yml`:
 | `WINDOWS_CERTIFICATE_BASE64`   | Base64-encoded PFX code-signing certificate with its private key |
 | `WINDOWS_CERTIFICATE_PASSWORD` | PFX password                                                     |
 
-The Windows certificate must contain a private key, include the Code Signing enhanced key usage, be currently valid, and chain to a CA trusted by Windows. The workflow imports it only into the ephemeral runner certificate store, signs and timestamps the application executable plus both installers, verifies all three signatures, and then removes the imported certificates.
+The Android release key must remain unchanged for updates to `app.mimorii.monitor`. Keep an offline backup outside GitHub. The Windows certificate must contain a private key, include the Code Signing enhanced key usage, be currently valid, and chain to a CA trusted by Windows. Signing files are decoded only on ephemeral runners and removed after use.
 
-The Android release key must remain the same for every update of `app.mimorii.monitor`. Store an offline backup separately from GitHub.
-
-To enable Android push in release builds, configure all four of these Actions variables. A partially configured set fails the build; leaving all four unset builds the client without Firebase push.
+Android push is optional. Configure all four Actions variables or leave all four unset:
 
 - `MIMORII_FIREBASE_API_KEY`
 - `MIMORII_FIREBASE_APPLICATION_ID`
 - `MIMORII_FIREBASE_PROJECT_ID`
 - `MIMORII_FIREBASE_SENDER_ID`
+
+No publishing token secret is required. Jobs use the repository `GITHUB_TOKEN` with job-specific `contents`, `packages`, `attestations`, and `id-token` permissions.
+
+The existing `mimorii` package must grant this repository write access under **Package settings > Manage Actions access** if it is not already linked. Its current private visibility is independent of the public repository. Change the package to public manually only when anonymous pulls are intended; the workflow does not change package visibility.
 
 Create one-line base64 values in PowerShell with:
 
@@ -49,87 +86,63 @@ base64 -w 0 release.keystore
 base64 -w 0 code-signing.pfx
 ```
 
-Do not add keystores, PFX files, passwords, or encoded credentials to the repository.
+Do not add keystores, certificates, passwords, or encoded credentials to the repository.
 
-## Release workflow
+## Size and retention
 
-Client versions must match in:
+Release builds use Rust LTO, size optimization, panic aborts, and symbol stripping. Android also uses R8 code shrinking, resource shrinking, and one universal package for the three supported ABIs. Production web source maps are disabled.
 
-- `package.json`
-- `apps/client/package.json`
-- `apps/client/src-tauri/tauri.conf.json`
-- `apps/client/src-tauri/Cargo.toml`
+The container uses a multi-stage build and `pnpm deploy --prod` so the runtime contains only the API's production dependency closure, compiled API, and compiled web client. The Docker context excludes native clients, generated output, tests, documentation, local tooling, and workspace metadata. BuildKit caches dependency and image layers without placing cache contents in the runtime image.
 
-Push a tag matching that version, such as `v2.0.1`, to build, verify, attest, and publish both clients. A mismatched tag fails before either platform build.
+Intermediate Actions artifacts use zero recompression for already compressed installers and expire after seven days. GitHub Release assets remain available with the release.
 
-Run the same distribution checks locally after changing client metadata or scripts:
+## Local validation
+
+Install Node.js 24, pnpm 10.33.2, and Rust stable, then run:
 
 ```bash
-pnpm clients:validate
+pnpm install --frozen-lockfile
+pnpm release:validate
+pnpm check
+pnpm test
 ```
 
-The Android job installs its pinned SDK, build tools, NDK, JDK, and Rust targets. It then runs `tauri android init` in the clean checkout, tests the mobile collector, builds one universal release APK, aligns it for 16 KiB pages, signs it, verifies the signer, checks all supported native ABIs, and lints the generated release app and Android plugins. Nothing under the ignored `apps/client/src-tauri/gen/` directory is required from source control.
+### Android
 
-The Windows job imports the PFX into `Cert:\CurrentUser\My` and passes its thumbprint to the canonical build script. The script supplies an explicit ephemeral Tauri config for installer signing and signs the final application executable after bundling. Stable installer metadata, the fixed MSI upgrade code, WebView2 bootstrapper behavior, and timestamp settings live in `apps/client/src-tauri/tauri.windows.conf.json`.
-
-## Local Android build
-
-Install Node.js 24, pnpm 10.33.2, Rust stable, JDK 21, Android SDK platform 36, Android build tools 36.1.0, and Android NDK 30.0.14904198. Add these Rust targets:
+Install JDK 21, Android SDK platform 36, build tools 36.1.0, Android NDK 30.0.14904198, and these Rust targets:
 
 ```bash
 rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
 ```
 
-Set `ANDROID_HOME`, `NDK_HOME`, and `ANDROID_BUILD_TOOLS_VERSION`, install dependencies, and initialize a new checkout once:
+Set `ANDROID_HOME`, `NDK_HOME`, and `ANDROID_BUILD_TOOLS_VERSION`, then initialize a clean generated project and build an unsigned release:
 
 ```bash
-pnpm install --frozen-lockfile
 pnpm tauri:android:init
-```
-
-An unsigned universal release build is available with:
-
-```bash
 pnpm tauri:android:build
 ```
 
-The unsigned APK is written to `apps/client/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk`.
-
-For a signed local artifact, set these environment variables and run the canonical release command:
-
-- `ANDROID_SIGNING_STORE_FILE`
-- `ANDROID_SIGNING_STORE_PASSWORD`
-- `ANDROID_SIGNING_KEY_ALIAS`
-- `ANDROID_SIGNING_KEY_PASSWORD`
+For a signed local APK, set `ANDROID_SIGNING_STORE_FILE`, `ANDROID_SIGNING_STORE_PASSWORD`, `ANDROID_SIGNING_KEY_ALIAS`, and `ANDROID_SIGNING_KEY_PASSWORD`, then run:
 
 ```bash
 pnpm tauri:android:release
 ```
 
-The signed APK and checksum are written to `dist/clients/android/`.
+### Windows client
 
-## Local Windows build
-
-Use Windows x64 with Node.js 24, pnpm 10.33.2, Rust stable using the MSVC toolchain, Microsoft C++ Build Tools, and the Windows SDK. Tauri downloads its pinned WiX and NSIS tools when needed.
-
-An unsigned installer validation build is available with:
+Use Windows x64 with Microsoft C++ Build Tools and the Windows SDK. An unsigned validation build is available with:
 
 ```powershell
-pnpm install --frozen-lockfile
 pnpm tauri:windows:build
 pnpm tauri:windows:stage
 ```
 
-The generated application is x64. The staging command rejects missing, duplicate, or non-x64 outputs and writes versioned installers plus a SHA-256 checksum file to `dist/clients/windows/`.
+For local signing, import the PFX into `Cert:\CurrentUser\My`, set `WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT`, and run `pnpm tauri:windows:release`. Remove the imported certificate afterward.
 
-For a signed build, set `WINDOWS_CERTIFICATE_PATH` and `WINDOWS_CERTIFICATE_PASSWORD`, then import the certificate and expose only its thumbprint to the build script:
+### Desktop agent
 
-```powershell
-$password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-$certificates = @(Import-PfxCertificate -FilePath $env:WINDOWS_CERTIFICATE_PATH -CertStoreLocation Cert:\CurrentUser\My -Password $password)
-$certificate = $certificates | Where-Object HasPrivateKey | Select-Object -First 1
-$env:WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT = $certificate.Thumbprint
-pnpm tauri:windows:release
+Build the current platform's size-optimized executable with:
+
+```bash
+cargo build --locked --release --manifest-path apps/agent-deskopt/Cargo.toml
 ```
-
-Verify `Get-AuthenticodeSignature` reports `Valid` for `apps/client/src-tauri/target/release/Mimorii.exe`, the generated MSI, and the NSIS setup executable. Remove the locally imported certificate when it is no longer needed. Staged installers and their checksum are written to `dist/clients/windows/`.

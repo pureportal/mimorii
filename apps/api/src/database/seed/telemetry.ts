@@ -1,4 +1,5 @@
 import { hashSecret } from "../../common/crypto.js";
+import { applicationVersion } from "../../version.js";
 import { at, days, hours, minutes, seedId, seedSecret, type SeedContext } from "./context.js";
 import type { SeedIdentityIds } from "./identity.js";
 import type { SeedMonitoringIds } from "./monitoring.js";
@@ -62,7 +63,7 @@ async function seedSnapshots(context: SeedContext, identity: SeedIdentityIds): P
     const value = {
       hostname: snapshot.key.startsWith("local") ? "app-01" : snapshot.key,
       platform: snapshot.key === "warehouse" ? "Windows Server 2025" : "Linux 6.12",
-      version: "2.0.1",
+      version: applicationVersion,
       uptimeSeconds: Math.max(3_600, Math.round((days(30) + snapshot.offset) / 1_000)),
       cpuPercent: snapshot.cpu,
       loadAverage: snapshot.cpu / 25,

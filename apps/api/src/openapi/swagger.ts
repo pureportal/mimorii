@@ -1,11 +1,12 @@
 import type { INestApplication } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { applicationVersion } from "../version.js";
 
 export function createOpenApiDocument(app: INestApplication) {
   const configuration = new DocumentBuilder()
     .setTitle("Mimorii API")
     .setDescription("Self-hosted uptime, server analytics, and relay-agent API.")
-    .setVersion("2.0.1")
+    .setVersion(applicationVersion)
     .addBearerAuth(
       { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "User access token" },
       "bearer"

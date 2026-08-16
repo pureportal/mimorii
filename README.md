@@ -1,7 +1,7 @@
 # Mimorii
 
 [![CI](https://github.com/pureportal/mimorii/actions/workflows/ci.yml/badge.svg)](https://github.com/pureportal/mimorii/actions/workflows/ci.yml)
-[![Container](https://github.com/pureportal/mimorii/actions/workflows/release.yml/badge.svg)](https://github.com/pureportal/mimorii/actions/workflows/release.yml)
+[![Release](https://github.com/pureportal/mimorii/actions/workflows/release.yml/badge.svg)](https://github.com/pureportal/mimorii/actions/workflows/release.yml)
 
 ![Mimorii monitoring websites, services, and servers](apps/client/public/art/mimorii-hero.png)
 
@@ -120,9 +120,9 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 
 For optional email, push notification, analytics, retention, and advanced monitoring settings, use the values documented in [`.env.example`](.env.example).
 
-## Native clients
+## Native releases
 
-Mimorii ships a signed universal Android APK plus signed Windows x64 NSIS and MSI installers. Build prerequisites, signing secrets, release commands, and artifact paths are documented in [Client distribution](docs/client-distribution.md).
+Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, and signed Windows x64 client installers. Release behavior, signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
 
 ## Help
 
