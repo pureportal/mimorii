@@ -1,8 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+rmSync(join(repoRoot, "apps/client/src-tauri/target/release/bundle"), {
+  recursive: true,
+  force: true,
+});
 const certificateThumbprint = process.env.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT?.trim();
 const args = [
   "--filter",
