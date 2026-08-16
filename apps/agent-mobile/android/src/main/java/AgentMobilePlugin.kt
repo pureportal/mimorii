@@ -51,7 +51,7 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
     try {
       val args = invoke.parseArgs(EnrollArgs::class.java)
       val enrollment = AgentMobileEnrollment(
-        serverUrl = normalizeServerUrl(args.serverUrl),
+        serverUrl = normalizeMobileServerUrl(args.serverUrl),
         enrollmentKey = validateEnrollmentKey(args.enrollmentKey),
         collectorId = UUID.fromString(args.collectorId).toString(),
         collectionIntervalSeconds = validateInterval(args.collectionIntervalSeconds),
@@ -119,22 +119,6 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
-  private fun normalizeServerUrl(value: String): String {
-    val uri = URI(value.trim())
-    require(uri.scheme == "https" || uri.scheme == "http") { "Server must use HTTP or HTTPS" }
-    require(uri.host != null) { "Server URL is invalid" }
-    if (uri.scheme == "http") {
-      require(uri.host in setOf("localhost", "127.0.0.1", "::1")) {
-        "HTTP exposes the collector key; use HTTPS"
-      }
-    }
-    require(uri.query == null && uri.fragment == null && uri.userInfo == null) {
-      "Server URL is invalid"
-    }
-    val path = uri.path.trimEnd('/').let { if (it.endsWith("/api")) it else "$it/api" }
-    return URI(uri.scheme, null, uri.host, uri.port, path, null, null).toString().trimEnd('/')
-  }
-
   private fun validateEnrollmentKey(value: String): String = value.trim().also {
     require(it.startsWith("mim_agent_") && it.length >= 40) { "Collector key is invalid" }
   }
@@ -142,4 +126,20 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
   private fun validateInterval(value: Long): Long = value.also {
     require(it in 900L..3_600L) { "Collection interval must be between 900 and 3600 seconds" }
   }
+}
+
+internal fun normalizeMobileServerUrl(value: String): String {
+  val uri = URI(value.trim())
+  require(uri.scheme == "https" || uri.scheme == "http") { "Server must use HTTP or HTTPS" }
+  require(uri.host != null) { "Server URL is invalid" }
+  if (uri.scheme == "http") {
+    require(uri.host in setOf("localhost", "127.0.0.1", "::1", "[::1]")) {
+      "HTTP exposes the collector key; use HTTPS"
+    }
+  }
+  require(uri.query == null && uri.fragment == null && uri.userInfo == null) {
+    "Server URL is invalid"
+  }
+  val path = uri.path.trimEnd('/').let { if (it.endsWith("/api")) it else "$it/api" }
+  return URI(uri.scheme, null, uri.host, uri.port, path, null, null).toString().trimEnd('/')
 }
