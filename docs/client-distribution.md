@@ -68,7 +68,7 @@ Run the same distribution checks locally after changing client metadata or scrip
 pnpm clients:validate
 ```
 
-The Android job installs its pinned SDK, build tools, NDK, JDK, and Rust targets. It then runs `tauri android init` in the clean checkout, tests the mobile collector, builds one universal release APK, aligns it for 16 KiB pages, signs it, verifies the signer, checks all supported native ABIs, and lints the generated release app and mobile plugin. Nothing under the ignored `apps/client/src-tauri/gen/` directory is required from source control.
+The Android job installs its pinned SDK, build tools, NDK, JDK, and Rust targets. It then runs `tauri android init` in the clean checkout, tests the mobile collector, builds one universal release APK, aligns it for 16 KiB pages, signs it, verifies the signer, checks all supported native ABIs, and lints the generated release app and Android plugins. Nothing under the ignored `apps/client/src-tauri/gen/` directory is required from source control.
 
 The Windows job imports the PFX into `Cert:\CurrentUser\My` and passes its thumbprint to the canonical build script. The script supplies an explicit ephemeral Tauri config for installer signing and signs the final application executable after bundling. Stable installer metadata, the fixed MSI upgrade code, WebView2 bootstrapper behavior, and timestamp settings live in `apps/client/src-tauri/tauri.windows.conf.json`.
 

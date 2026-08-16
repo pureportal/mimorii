@@ -204,6 +204,7 @@ jobs:
         run: >-
           ./gradlew
           :tauri-plugin-agent-mobile:lintRelease
+          :tauri-plugin-push:lintRelease
           :app:lintUniversalRelease
           --no-daemon
           --console=plain
