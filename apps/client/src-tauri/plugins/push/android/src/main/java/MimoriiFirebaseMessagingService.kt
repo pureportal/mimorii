@@ -1,6 +1,7 @@
 package app.mimorii.push
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +12,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
+@SuppressLint("MissingFirebaseInstanceTokenRefresh")
 class MimoriiFirebaseMessagingService : FirebaseMessagingService() {
   override fun onRegistered(installationId: String) {
     PushStorage.saveInstallationId(this, installationId)
@@ -23,7 +25,14 @@ class MimoriiFirebaseMessagingService : FirebaseMessagingService() {
   }
 
   override fun onMessageReceived(message: RemoteMessage) {
-    if (!PushStorage.enabled(this) || !permissionGranted()) return
+    if (!PushStorage.enabled(this)) return
+    if (
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+      ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+      PackageManager.PERMISSION_GRANTED
+    ) return
+    val notificationManager = NotificationManagerCompat.from(this)
+    if (!notificationManager.areNotificationsEnabled()) return
     val title = message.notification?.title ?: message.data["title"] ?: "Mimorii"
     val body = message.notification?.body ?: message.data["body"] ?: ""
     val warning = message.data["severity"] != "info"
@@ -53,11 +62,6 @@ class MimoriiFirebaseMessagingService : FirebaseMessagingService() {
         if (warning) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
       )
       .build()
-    NotificationManagerCompat.from(this).notify(tag, 0, notification)
+    notificationManager.notify(tag, 0, notification)
   }
-
-  private fun permissionGranted(): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-      ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-      PackageManager.PERMISSION_GRANTED
 }

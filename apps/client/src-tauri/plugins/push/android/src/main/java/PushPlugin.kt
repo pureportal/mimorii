@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.webkit.WebView
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.Permission
@@ -127,7 +128,9 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun permissionGranted(): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-      ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) ==
-      PackageManager.PERMISSION_GRANTED
+    (
+      Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+    ) && NotificationManagerCompat.from(activity).areNotificationsEnabled()
 }

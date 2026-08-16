@@ -54,6 +54,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-installations")
-    implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation(project(":tauri-android"))
 }
