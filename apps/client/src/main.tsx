@@ -25,7 +25,21 @@ createRoot(document.getElementById("root")!).render(
           <AuthProvider>
             <App />
             <PushEndpointSync />
-            <Toaster position="top-right" theme="dark" richColors closeButton />
+            <Toaster
+              position="top-right"
+              theme="dark"
+              richColors
+              closeButton
+              offset={{
+                top: "calc(1rem + var(--safe-area-top))",
+                right: "calc(1rem + var(--safe-area-right))",
+              }}
+              mobileOffset={{
+                top: "calc(0.75rem + var(--safe-area-top))",
+                right: "calc(0.75rem + var(--safe-area-right))",
+                left: "calc(0.75rem + var(--safe-area-left))",
+              }}
+            />
             <PrivacyControls />
           </AuthProvider>
         </PrivacyProvider>

@@ -8,6 +8,7 @@ import {
   type Step,
   type TooltipRenderProps,
 } from "react-joyride";
+import { useAndroidBackHandler } from "../../lib/android-back";
 import { Button } from "../ui/button";
 import { GuideArtwork } from "./guide-artwork";
 
@@ -30,6 +31,8 @@ export function GuideTour({
   steps: Step[];
   onEnd: (outcome: GuideTourOutcome) => void;
 }) {
+  useAndroidBackHandler(() => onEnd(STATUS.SKIPPED), run);
+
   function handleEvent(event: EventData) {
     if (
       event.type === EVENTS.TOUR_END &&
@@ -101,7 +104,7 @@ function MimoTourTooltip({
       {...tooltipProps}
       aria-labelledby="mimo-tour-title"
       aria-describedby="mimo-tour-description"
-      className="relative grid max-h-[calc(100dvh-1.5rem)] w-[390px] max-w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-3xl border border-lavender/50 bg-surface shadow-2xl"
+      className="safe-tour-tooltip relative grid max-h-[calc(100dvh-1.5rem)] w-[390px] max-w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-3xl border border-lavender/50 bg-surface shadow-2xl"
     >
       <Button
         {...closeProps}

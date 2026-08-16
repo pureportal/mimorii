@@ -74,7 +74,7 @@ export function ProtectedLayout() {
       return <Navigate to={appRoutes.team} replace />;
     }
     return (
-      <div className="min-h-dvh bg-canvas">
+      <div className="safe-page safe-page-footer min-h-dvh bg-canvas">
         <header className="flex h-16 items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
           <Brand />
           <div className="flex items-center gap-1">
@@ -117,8 +117,8 @@ export function ProtectedLayout() {
   const context = navigationContext(location.pathname);
 
   return (
-    <div className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[272px] border-r border-line bg-surface/94 px-3 py-4 backdrop-blur-xl lg:flex lg:flex-col">
+    <div className="safe-page min-h-dvh bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
+      <aside className="safe-fixed-side fixed z-40 hidden w-[272px] border-r border-line bg-surface/94 px-3 py-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand className="px-3" />
         <div data-guide="workspace-switcher" className="relative mt-5 px-1">
           <Select
@@ -182,7 +182,7 @@ export function ProtectedLayout() {
       </aside>
 
       <div className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-line bg-canvas/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="safe-sticky-top sticky z-30 flex h-[68px] items-center justify-between border-b border-line bg-canvas/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Brand compact className="shrink-0 lg:hidden" />
             <div data-guide="page-heading" className="min-w-0">
@@ -205,7 +205,7 @@ export function ProtectedLayout() {
         </header>
         <main
           data-guide="page-content"
-          className="mx-auto w-full max-w-[1500px] px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8"
+          className="safe-app-content mx-auto w-full max-w-[1500px] px-4 pt-6 sm:px-6 lg:px-8 lg:pt-8"
         >
           <Outlet />
         </main>
@@ -359,7 +359,7 @@ function MobileNavigation({
       <nav
         aria-label="Mobile navigation"
         data-guide="mobile-navigation"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/96 px-1 pt-1 backdrop-blur-xl lg:hidden"
+        className="safe-mobile-nav fixed bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/96 pt-1 backdrop-blur-xl lg:hidden"
       >
         {primary.map((item) => {
           const Icon = navigationIcons[item.id];
@@ -402,7 +402,7 @@ function MobileNavigation({
       </nav>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bottom-3 top-auto max-h-[calc(100dvh-1.5rem)] max-w-md translate-y-0 rounded-[1.75rem] p-5 lg:hidden">
+        <DialogContent className="safe-dialog-bottom max-w-md rounded-[1.75rem] p-5 lg:hidden">
           <DialogHeader title="Navigation" />
           <div className="relative mb-5">
             <Select

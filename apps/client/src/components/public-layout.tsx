@@ -2,6 +2,7 @@ import { Menu, Moon, Sun, X } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Suspense, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
+import { useAndroidBackHandler } from "../lib/android-back";
 import { usePublicTheme, type PublicTheme } from "../lib/public-theme";
 import { Brand } from "./brand";
 import { LoadingState } from "./page-state";
@@ -15,7 +16,7 @@ export function PublicLayout() {
   return (
     <MotionConfig reducedMotion="user">
       <div
-        className="public-shell flex min-h-dvh flex-col overflow-x-clip bg-canvas text-ink"
+        className="public-shell safe-page safe-page-footer flex min-h-dvh flex-col overflow-x-clip bg-canvas text-ink"
         data-theme={theme}
         style={{ colorScheme: theme }}
       >
@@ -34,9 +35,10 @@ export function PublicLayout() {
 
 function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeToggle: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  useAndroidBackHandler(() => setMenuOpen(false), menuOpen);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line/70 bg-canvas/86 backdrop-blur-xl">
+    <header className="safe-sticky-top sticky z-50 border-b border-line/70 bg-canvas/86 backdrop-blur-xl">
       <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 lg:px-8">
         <Brand />
         <nav

@@ -35,7 +35,7 @@ export function PrivacyControls() {
         <section
           aria-labelledby="privacy-consent-title"
           aria-describedby="privacy-consent-description"
-          className="safe-bottom fixed inset-x-3 bottom-0 z-40 isolate mx-auto mb-3 max-h-[calc(100dvh-1.5rem)] max-w-5xl animate-fade-in overflow-y-auto rounded-3xl border border-line/90 bg-surface/95 p-4 shadow-[0_28px_80px_-32px_rgba(23,21,47,.78)] backdrop-blur-xl motion-reduce:animate-none sm:inset-x-6 sm:mb-6 sm:p-6"
+          className="safe-floating-bottom fixed z-40 isolate mx-auto max-w-5xl animate-fade-in overflow-y-auto rounded-3xl border border-line/90 bg-surface/95 p-4 shadow-[0_28px_80px_-32px_rgba(23,21,47,.78)] backdrop-blur-xl motion-reduce:animate-none sm:p-6"
         >
           <div
             aria-hidden="true"

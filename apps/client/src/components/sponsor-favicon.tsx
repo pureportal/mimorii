@@ -45,7 +45,7 @@ export function SponsorFavicon({ placement = "viewport" }: SponsorFaviconProps) 
       aria-label="Sponsor"
       className={cn(
         "pointer-events-none size-11 shrink-0",
-        placement === "viewport" && "fixed bottom-3 right-3 z-20 sm:bottom-4 sm:right-4"
+        placement === "viewport" && "safe-viewport-corner fixed z-20"
       )}
       onBlurCapture={resumeAfterFocus}
       onFocusCapture={() => setPaused(true)}

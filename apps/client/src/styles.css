@@ -37,6 +37,13 @@
   --animate-fade-in: fade-in 160ms ease-out;
 }
 
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+}
+
 .public-shell {
   background:
     radial-gradient(circle at 5% 4%, rgba(255, 125, 142, 0.1), transparent 26rem),
@@ -106,7 +113,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at 5% 3%, rgba(255, 125, 142, 0.08), transparent 24rem),
     radial-gradient(circle at 95% 6%, rgba(168, 146, 255, 0.1), transparent 28rem),
@@ -150,8 +157,74 @@ a {
   background: rgba(255, 125, 142, 0.28);
 }
 
-.safe-bottom {
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+.safe-page {
+  padding-top: var(--safe-area-top);
+  padding-right: var(--safe-area-right);
+  padding-left: var(--safe-area-left);
+}
+
+.safe-page-footer {
+  padding-bottom: var(--safe-area-bottom);
+}
+
+.safe-sticky-top {
+  top: var(--safe-area-top);
+}
+
+.safe-fixed-side {
+  top: var(--safe-area-top);
+  bottom: var(--safe-area-bottom);
+  left: var(--safe-area-left);
+}
+
+.safe-app-content {
+  padding-bottom: calc(7rem + var(--safe-area-bottom));
+}
+
+.safe-mobile-nav {
+  right: 0;
+  left: 0;
+  padding-right: max(0.25rem, var(--safe-area-right));
+  padding-bottom: max(1rem, var(--safe-area-bottom));
+  padding-left: max(0.25rem, var(--safe-area-left));
+}
+
+.safe-dialog {
+  width: calc(
+    100% - 2rem - max(var(--safe-area-left), var(--safe-area-right)) -
+      max(var(--safe-area-left), var(--safe-area-right))
+  );
+  max-height: min(
+    760px,
+    calc(
+      100dvh - 2rem - max(var(--safe-area-top), var(--safe-area-bottom)) -
+        max(var(--safe-area-top), var(--safe-area-bottom))
+    )
+  );
+}
+
+.safe-dialog-bottom {
+  top: auto;
+  bottom: calc(0.75rem + var(--safe-area-bottom));
+  max-height: calc(100dvh - 1.5rem - var(--safe-area-top) - var(--safe-area-bottom));
+  transform: translateX(-50%);
+}
+
+.safe-floating-bottom {
+  right: calc(0.75rem + var(--safe-area-right));
+  bottom: calc(0.75rem + var(--safe-area-bottom));
+  left: calc(0.75rem + var(--safe-area-left));
+  max-height: calc(100dvh - 1.5rem - var(--safe-area-top) - var(--safe-area-bottom));
+}
+
+.safe-viewport-corner {
+  right: calc(0.75rem + var(--safe-area-right));
+  bottom: calc(0.75rem + var(--safe-area-bottom));
+}
+
+.safe-tour-tooltip {
+  max-width: calc(100vw - 1.5rem - var(--safe-area-left) - var(--safe-area-right));
+  max-height: calc(100dvh - 1.5rem - var(--safe-area-top) - var(--safe-area-bottom));
 }
 
 .grid-dots {
@@ -312,12 +385,28 @@ a {
 }
 
 @media (min-width: 640px) {
+  .safe-floating-bottom {
+    right: calc(1.5rem + var(--safe-area-right));
+    bottom: calc(1.5rem + var(--safe-area-bottom));
+    left: calc(1.5rem + var(--safe-area-left));
+    max-height: calc(100dvh - 3rem - var(--safe-area-top) - var(--safe-area-bottom));
+  }
+
+  .safe-viewport-corner {
+    right: calc(1rem + var(--safe-area-right));
+    bottom: calc(1rem + var(--safe-area-bottom));
+  }
+
   .hero-frame {
     aspect-ratio: 1 / 1.04;
   }
 }
 
 @media (min-width: 1024px) {
+  .safe-app-content {
+    padding-bottom: calc(2.5rem + var(--safe-area-bottom));
+  }
+
   .hero-frame {
     aspect-ratio: 1.04 / 1;
   }
