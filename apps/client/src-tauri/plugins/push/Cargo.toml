@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-push"
-version = "2.0.0"
+version = "2.0.1"
 description = "Mimorii Android push integration"
 edition = "2024"
 links = "tauri-plugin-push"
