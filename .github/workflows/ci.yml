@@ -182,7 +182,8 @@ jobs:
           test "$(docker run --rm mimorii-agent:local --version)" = "mimorii-agent-desktop $version"
           test "$(docker image inspect --format '{{.Config.User}}' mimorii-agent:local)" = "10001:10001"
           test "$(docker image inspect --format '{{json .Config.Cmd}}' mimorii-agent:local)" = '["check-runner"]'
-          docker run --rm mimorii-agent:local --help | grep --quiet check-runner
+          help="$(docker run --rm mimorii-agent:local --help)"
+          [[ "$help" == *check-runner* ]]
 
   container:
     name: Validate container deployment
