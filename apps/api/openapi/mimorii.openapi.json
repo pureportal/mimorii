@@ -5830,6 +5830,11 @@
       "AgentHeartbeatDto": {
         "type": "object",
         "properties": {
+          "agentVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
           "snapshots": {
             "type": "array",
             "items": {
@@ -5851,6 +5856,7 @@
           }
         },
         "required": [
+          "agentVersion",
           "snapshots",
           "results",
           "capabilities"

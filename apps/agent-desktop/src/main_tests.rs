@@ -1,17 +1,21 @@
 use std::cell::Cell;
 use std::fs;
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
 use serde_json::{Value, json};
 
-use super::{Cli, CollectionWorker, Command, ServiceAction, cycle, run_configured_cycle, time_now};
+use super::{
+    Cli, CollectionWorker, Command, ServiceAction, check_runner_cycle, cycle, run_configured_cycle,
+    time_now,
+};
 use crate::config::AgentConfig;
 use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
 use crate::snapshot_store::SnapshotStore;
 use crate::target_policy::TargetPolicy;
-use crate::test_support::{MockResponse, http_server, temporary_path};
+use crate::test_support::{MockResponse, http_server, tcp_listener, temporary_path};
 
 fn valid_key() -> String {
     format!("mim_agent_{}", "a".repeat(32))
@@ -82,7 +86,7 @@ fn triggered_poll(interval_seconds: u64) -> String {
 fn parses_enrollment_and_configuration_options() {
     for command_name in ["enroll", "configure"] {
         let cli = Cli::try_parse_from([
-            "mimorii-agent-deskopt",
+            "mimorii-agent-desktop",
             command_name,
             "--server",
             "http://localhost:4310",
@@ -113,31 +117,55 @@ fn parses_enrollment_and_configuration_options() {
 #[test]
 fn parses_all_runtime_and_service_commands() {
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "run"])
+        Cli::try_parse_from([
+            "mimorii-agent-desktop",
+            "check-runner",
+            "--server",
+            "https://observe.example.com",
+            "--key",
+            &valid_key(),
+            "--allowed-cidrs",
+            "10.20.0.0/16,192.168.50.0/24",
+            "--once",
+        ])
+        .unwrap()
+        .command,
+        Command::CheckRunner {
+            server,
+            key,
+            allow_insecure_http: false,
+            allowed_cidrs,
+            once: true,
+        } if server == "https://observe.example.com"
+            && key == valid_key()
+            && allowed_cidrs == "10.20.0.0/16,192.168.50.0/24"
+    ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "run"])
             .unwrap()
             .command,
         Command::Run
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "once"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "once"])
             .unwrap()
             .command,
         Command::Once
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "doctor"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "doctor"])
             .unwrap()
             .command,
         Command::Doctor
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "status"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "status"])
             .unwrap()
             .command,
         Command::Status
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "service", "install"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "service", "install"])
             .unwrap()
             .command,
         Command::Service {
@@ -145,7 +173,7 @@ fn parses_all_runtime_and_service_commands() {
         }
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-deskopt", "service", "uninstall"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "service", "uninstall"])
             .unwrap()
             .command,
         Command::Service {
@@ -156,10 +184,10 @@ fn parses_all_runtime_and_service_commands() {
 
 #[test]
 fn rejects_missing_arguments_and_local_interval_configuration() {
-    assert!(Cli::try_parse_from(["mimorii-agent-deskopt"]).is_err());
+    assert!(Cli::try_parse_from(["mimorii-agent-desktop"]).is_err());
     assert!(
         Cli::try_parse_from([
-            "mimorii-agent-deskopt",
+            "mimorii-agent-desktop",
             "enroll",
             "--server",
             "https://observe.example.com"
@@ -168,7 +196,7 @@ fn rejects_missing_arguments_and_local_interval_configuration() {
     );
     assert!(
         Cli::try_parse_from([
-            "mimorii-agent-deskopt",
+            "mimorii-agent-desktop",
             "configure",
             "--server",
             "https://observe.example.com",
@@ -259,6 +287,75 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     );
 
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn check_runner_registers_network_capabilities_and_never_sends_host_snapshots() {
+    let (listener, port) = tcp_listener();
+    let listener_handle = thread::spawn(move || listener.accept().unwrap());
+    let server = http_server(vec![
+        MockResponse::new(
+            200,
+            r#"{"acceptedAt":"2026-08-13T10:00:29Z","acceptedSnapshots":0,"acceptedResults":0}"#,
+        ),
+        MockResponse::new(
+            200,
+            json!({
+                "collectionIntervalSeconds": 30,
+                "tasks": [{
+                    "id": "task-1",
+                    "checkId": "check-1",
+                    "type": "tcp",
+                    "timeoutMs": 2_000,
+                    "config": { "host": "127.0.0.1", "port": port },
+                    "issuedAt": "2026-08-13T10:00:30Z"
+                }]
+            })
+            .to_string(),
+        ),
+        MockResponse::new(
+            200,
+            r#"{"acceptedAt":"2026-08-13T10:00:31Z","acceptedSnapshots":0,"acceptedResults":1}"#,
+        ),
+    ]);
+    let mut agent_config = config(&server.url, valid_key());
+    agent_config.target_policy.allowed_cidrs = vec!["127.0.0.0/8".parse().unwrap()];
+
+    let response = check_runner_cycle(&agent_config).unwrap().unwrap();
+
+    assert_eq!(response.accepted_snapshots, 0);
+    assert_eq!(response.accepted_results, 1);
+    listener_handle.join().unwrap();
+    let registration = server
+        .requests
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    let poll = server
+        .requests
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    let heartbeat = server
+        .requests
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    let registration_payload: Value =
+        serde_json::from_str(registration.split_once("\r\n\r\n").unwrap().1).unwrap();
+    let heartbeat_payload: Value =
+        serde_json::from_str(heartbeat.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(registration_payload["snapshots"], json!([]));
+    assert_eq!(
+        registration_payload["capabilities"],
+        json!(["http", "tcp", "dns"])
+    );
+    assert_eq!(
+        registration_payload["agentVersion"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert!(poll.starts_with("GET /api/agent/tasks?limit=100 HTTP/1.1"));
+    assert_eq!(heartbeat_payload["snapshots"], json!([]));
+    assert_eq!(heartbeat_payload["results"][0]["taskId"], "task-1");
+    assert_eq!(heartbeat_payload["results"][0]["status"], "up");
+    assert!(heartbeat_payload.get("hostname").is_none());
 }
 
 #[test]
@@ -373,7 +470,7 @@ fn configured_cycles_reload_the_agent_key_and_server_interval() {
         MockResponse::new(200, r#"{"collectionIntervalSeconds":30,"tasks":[]}"#),
         MockResponse::new(200, r#"{"collectionIntervalSeconds":45,"tasks":[]}"#),
     ]);
-    let path = temporary_path("agent-deskopt.json");
+    let path = temporary_path("agent-desktop.json");
     let store = SnapshotStore::new(temporary_path("collected"));
     let first_key = valid_key();
     let second_key = format!("mim_agent_{}", "b".repeat(32));

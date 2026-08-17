@@ -117,6 +117,7 @@ fn heartbeat_serializes_every_snapshot_and_result_field() {
     )]);
     let client = ApiClient::new(config(server.url)).unwrap();
     let heartbeat = HeartbeatRequest {
+        agent_version: env!("CARGO_PKG_VERSION"),
         snapshots: vec![snapshot()],
         results: vec![TaskResult {
             task_id: "task-1".to_owned(),
@@ -170,6 +171,7 @@ fn task_and_heartbeat_authentication_failures_are_specific() {
     let heartbeat_error = ApiClient::new(config(heartbeat_server.url))
         .unwrap()
         .heartbeat(&HeartbeatRequest {
+            agent_version: env!("CARGO_PKG_VERSION"),
             snapshots: vec![snapshot()],
             results: Vec::new(),
             capabilities: Vec::new(),
@@ -198,6 +200,7 @@ fn transport_status_and_payload_errors_are_reported() {
     let heartbeat_error = ApiClient::new(config(heartbeat_server.url))
         .unwrap()
         .heartbeat(&HeartbeatRequest {
+            agent_version: env!("CARGO_PKG_VERSION"),
             snapshots: vec![snapshot()],
             results: Vec::new(),
             capabilities: Vec::new(),
@@ -219,6 +222,7 @@ fn unreachable_servers_preserve_operation_context() {
 
     let heartbeat_error = client
         .heartbeat(&HeartbeatRequest {
+            agent_version: env!("CARGO_PKG_VERSION"),
             snapshots: vec![snapshot()],
             results: Vec::new(),
             capabilities: Vec::new(),

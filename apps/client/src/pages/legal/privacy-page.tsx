@@ -81,13 +81,15 @@ export function PrivacyPage() {
             address and a Mimorii user agent to the target selected by the team.
           </p>
           <p>
-            Desktop collectors report their name, hostname, operating system and version, collector
-            version, capabilities, last-seen time, CPU and load, memory and swap use, process count,
-            network byte totals, mounted-volume names and capacity, uptime, and recognized
-            technology names. Android collectors report the device manufacturer and model, Android
-            version and security patch, client version, uptime, battery state and temperature,
-            memory, private storage, connectivity, power restrictions, and thermal state. Neither
-            sends a complete process list or executes remote shell commands.
+            Native desktop collectors report their name, hostname, operating system and version,
+            collector version, capabilities, last-seen time, CPU and load, memory and swap use,
+            process count, network byte totals, mounted-volume names and capacity, uptime, and
+            recognized technology names. Docker check runners report their collector version,
+            capabilities, last-seen time, and check results without host snapshots. Android
+            collectors report the device manufacturer and model, Android version and security patch,
+            client version, uptime, battery state and temperature, memory, private storage,
+            connectivity, power restrictions, and thermal state. None sends a complete process list
+            or executes remote shell commands.
           </p>
           <p>
             Email notifications disclose the recipient address and notification content to the SMTP

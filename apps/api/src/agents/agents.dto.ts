@@ -218,9 +218,13 @@ export class AgentTaskResultDto {
 }
 
 export class AgentHeartbeatDto {
+  @ApiProperty({ minLength: 1, maxLength: 40 })
+  @IsString()
+  @Length(1, 40)
+  agentVersion!: string;
+
   @ApiProperty({ type: [HostSnapshotDto] })
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => HostSnapshotDto)
   snapshots!: HostSnapshotDto[];
@@ -234,6 +238,7 @@ export class AgentHeartbeatDto {
 
   @ApiProperty({ type: [String], maxItems: 20 })
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(20)
   @IsIn(collectorCapabilities, { each: true })
   capabilities!: string[];

@@ -30,10 +30,13 @@ const DEFAULT_COLLECTION_INTERVAL_SECONDS: u64 = 30;
 const MINIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 15;
 const MAXIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 3_600;
 const TRIGGER_POLL_INTERVAL: Duration = Duration::from_secs(30);
+const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const NATIVE_CAPABILITIES: &[&str] = &["http", "tcp", "dns", "host", "disk"];
+const CHECK_RUNNER_CAPABILITIES: &[&str] = &["http", "tcp", "dns"];
 
 #[derive(Parser)]
 #[command(
-    name = "mimorii-agent-deskopt",
+    name = "mimorii-agent-desktop",
     version,
     about = "Mimorii read-only monitoring agent"
 )]
@@ -59,6 +62,22 @@ enum Command {
         key: String,
         #[arg(long)]
         allow_insecure_http: bool,
+    },
+    CheckRunner {
+        #[arg(long, env = "MIMORII_AGENT_SERVER")]
+        server: String,
+        #[arg(long, env = "MIMORII_AGENT_KEY", hide_env_values = true)]
+        key: String,
+        #[arg(
+            long,
+            env = "MIMORII_AGENT_ALLOW_INSECURE_HTTP",
+            default_value_t = false
+        )]
+        allow_insecure_http: bool,
+        #[arg(long, env = "MIMORII_AGENT_ALLOWED_CIDRS", default_value = "")]
+        allowed_cidrs: String,
+        #[arg(long)]
+        once: bool,
     },
     Run,
     Once,
@@ -89,6 +108,21 @@ fn main() -> Result<()> {
             key,
             allow_insecure_http,
         } => configure(&server, &key, allow_insecure_http),
+        Command::CheckRunner {
+            server,
+            key,
+            allow_insecure_http,
+            allowed_cidrs,
+            once,
+        } => {
+            let config =
+                AgentConfig::new_check_runner(&server, &key, allow_insecure_http, &allowed_cidrs)?;
+            if once {
+                run_check_runner_once(&config)
+            } else {
+                run_check_runner_loop(config)
+            }
+        }
         Command::Run => run_loop(),
         Command::Once => run_once().map(|_| ()),
         Command::Doctor => doctor(),
@@ -163,6 +197,63 @@ fn run_once() -> Result<()> {
     Ok(())
 }
 
+fn run_check_runner_loop(config: AgentConfig) -> Result<()> {
+    println!("Mimorii check runner started");
+    loop {
+        match check_runner_cycle(&config) {
+            Ok(Some(response)) => println!(
+                "trigger accepted at {} with {} result(s)",
+                response.accepted_at, response.accepted_results
+            ),
+            Ok(None) => {}
+            Err(error) => eprintln!("check runner cycle failed: {error}"),
+        }
+        sleep(TRIGGER_POLL_INTERVAL);
+    }
+}
+
+fn run_check_runner_once(config: &AgentConfig) -> Result<()> {
+    match check_runner_cycle(config)? {
+        Some(response) => println!(
+            "trigger accepted at {} with {} result(s)",
+            response.accepted_at, response.accepted_results
+        ),
+        None => println!("no trigger"),
+    }
+    Ok(())
+}
+
+fn check_runner_cycle(config: &AgentConfig) -> Result<Option<HeartbeatResponse>> {
+    let client = ApiClient::new(config.clone())?;
+    let registration = client.heartbeat(&HeartbeatRequest {
+        agent_version: AGENT_VERSION,
+        snapshots: Vec::new(),
+        results: Vec::new(),
+        capabilities: CHECK_RUNNER_CAPABILITIES.to_vec(),
+    })?;
+    if registration.accepted_snapshots != 0 || registration.accepted_results != 0 {
+        bail!("Mimorii returned an invalid check runner registration response");
+    }
+    let poll = client.poll(100)?;
+    validate_collection_interval(poll.collection_interval_seconds)?;
+    if poll.tasks.is_empty() {
+        return Ok(None);
+    }
+    let results = poll
+        .tasks
+        .iter()
+        .map(|task| checks::execute_network(task, &config.target_policy))
+        .collect::<Result<Vec<_>>>()?;
+    client
+        .heartbeat(&HeartbeatRequest {
+            agent_version: AGENT_VERSION,
+            snapshots: Vec::new(),
+            results,
+            capabilities: CHECK_RUNNER_CAPABILITIES.to_vec(),
+        })
+        .map(Some)
+}
+
 fn cycle(
     config: &AgentConfig,
     store: &SnapshotStore,
@@ -198,9 +289,10 @@ fn transfer_trigger(
         .map(|task| checks::execute(task, latest_snapshot, target_policy))
         .collect();
     let response = client.heartbeat(&HeartbeatRequest {
+        agent_version: AGENT_VERSION,
         snapshots: batch.snapshots().to_vec(),
         results,
-        capabilities: vec!["http", "tcp", "dns", "host", "disk"],
+        capabilities: NATIVE_CAPABILITIES.to_vec(),
     })?;
     if response.accepted_snapshots != batch.snapshots().len() {
         bail!(

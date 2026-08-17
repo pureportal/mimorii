@@ -109,6 +109,22 @@ pub fn execute(
         CheckType::Host => host(task, snapshot),
         CheckType::Disk => disk(task, snapshot),
     };
+    result_or_down(task, result)
+}
+
+pub fn execute_network(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
+    let result = match task.check_type {
+        CheckType::Http => http(task, target_policy),
+        CheckType::Tcp => tcp(task, target_policy),
+        CheckType::Dns => dns(task),
+        CheckType::Host | CheckType::Disk => {
+            bail!("check runner received an unsupported host telemetry task")
+        }
+    };
+    Ok(result_or_down(task, result))
+}
+
+fn result_or_down(task: &AgentTask, result: Result<TaskResult>) -> TaskResult {
     result.unwrap_or_else(|error| down(&task.id, safe_error(&error), None, None, BTreeMap::new()))
 }
 
@@ -151,7 +167,7 @@ fn http_with_resolver(
             .request(method.clone(), url.clone())
             .header(
                 "user-agent",
-                format!("mimorii-agent-deskopt/{}", env!("CARGO_PKG_VERSION")),
+                format!("mimorii-agent-desktop/{}", env!("CARGO_PKG_VERSION")),
             )
             .send()?;
         let status = response.status().as_u16();
@@ -413,7 +429,8 @@ fn tcp_success(task_id: &str, port: u16, latency: Option<f64>, timeout_ms: u64) 
 }
 
 fn dns(task: &AgentTask) -> Result<TaskResult> {
-    dns_with_config(task, ResolverConfig::default())
+    let (resolver_config, _) = hickory_resolver::system_conf::read_system_conf()?;
+    dns_with_config(task, resolver_config)
 }
 
 fn dns_with_config(task: &AgentTask, resolver_config: ResolverConfig) -> Result<TaskResult> {

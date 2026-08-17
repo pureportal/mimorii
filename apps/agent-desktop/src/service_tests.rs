@@ -27,8 +27,8 @@ fn windows_startup_task_quotes_the_executable_and_runs_the_agent() {
 
     assert_eq!(
         super::windows_startup_task(Path::new(
-            r"C:\Program Files\Mimorii\mimorii-agent-deskopt.exe"
+            r"C:\Program Files\Mimorii\mimorii-agent-desktop.exe"
         )),
-        r#""C:\Program Files\Mimorii\mimorii-agent-deskopt.exe" run"#
+        r#""C:\Program Files\Mimorii\mimorii-agent-desktop.exe" run"#
     );
 }

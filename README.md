@@ -89,12 +89,14 @@ PostgreSQL data stays in a Docker volume. Back it up regularly, and do not use `
 Create a collector in Mimorii and copy its one-time enrollment key. On the Linux or Windows machine where the Mimorii agent is installed, run:
 
 ```bash
-mimorii-agent-deskopt enroll --server https://mimorii.example.com/api --key <one-time-key>
-mimorii-agent-deskopt service install
-mimorii-agent-deskopt doctor
+mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <one-time-key>
+mimorii-agent-desktop service install
+mimorii-agent-desktop doctor
 ```
 
 The collector sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
+
+For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). It runs HTTP, TCP, and DNS checks without reporting container or Docker VM telemetry as physical-host data. Use the native agent for host monitoring.
 
 ## Monitor an Android device
 
@@ -122,7 +124,7 @@ For optional email, push notification, analytics, retention, and advanced monito
 
 ## Native releases
 
-Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, and signed Windows x64 client installers. Release behavior, signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
+Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, and unsigned Windows x64 client installers. Release behavior, Android signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
 
 ## Help
 

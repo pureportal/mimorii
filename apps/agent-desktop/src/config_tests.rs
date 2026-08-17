@@ -79,8 +79,34 @@ fn validates_agent_keys() {
 }
 
 #[test]
+fn check_runner_configuration_accepts_explicit_private_networks() {
+    let config = AgentConfig::new_check_runner(
+        "https://observe.example.com",
+        &valid_key(),
+        false,
+        "10.20.0.0/16, 192.168.50.12/32",
+    )
+    .unwrap();
+
+    assert_eq!(config.target_policy.allowed_cidrs.len(), 2);
+    assert_eq!(
+        config.target_policy.allowed_cidrs[0].to_string(),
+        "10.20.0.0/16"
+    );
+    assert!(
+        AgentConfig::new_check_runner(
+            "https://observe.example.com",
+            &valid_key(),
+            false,
+            "private-network",
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn saves_and_loads_camel_case_configuration_without_exposing_the_key() {
-    let path = temporary_path("agent-deskopt.json");
+    let path = temporary_path("agent-desktop.json");
     let config = AgentConfig::new("https://observe.example.com", &valid_key(), false).unwrap();
     config.save_to(&path).unwrap();
 
@@ -130,7 +156,7 @@ fn load_reports_missing_and_invalid_configuration() {
 #[test]
 fn resolves_the_platform_configuration_path() {
     let path = config_path().unwrap();
-    assert_eq!(path.file_name().unwrap(), "agent-deskopt.json");
+    assert_eq!(path.file_name().unwrap(), "agent-desktop.json");
     assert!(path.parent().is_some());
     let collection = collection_path().unwrap();
     assert_eq!(collection.file_name().unwrap(), "collected-snapshots");
@@ -141,7 +167,7 @@ fn resolves_the_platform_configuration_path() {
 fn saved_configuration_is_owner_only() {
     use std::os::unix::fs::PermissionsExt;
 
-    let path = temporary_path("agent-deskopt.json");
+    let path = temporary_path("agent-desktop.json");
     AgentConfig::new("https://observe.example.com", &valid_key(), false)
         .unwrap()
         .save_to(&path)

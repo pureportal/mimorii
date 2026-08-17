@@ -74,6 +74,7 @@ describe("AgentsService transport", () => {
       service.heartbeat(
         { ...agent, kind: "mobile", capabilities: ["device-status"] },
         {
+          agentVersion: "2.1.0",
           snapshots: [snapshot(new Date().toISOString(), 10)],
           results: [],
           capabilities: ["device-status"],
@@ -174,6 +175,7 @@ describe("AgentsService transport", () => {
       mobileDeviceStatuses
     );
     const input: AgentHeartbeatDto = {
+      agentVersion: "2.1.0",
       snapshots: [
         snapshot("2026-08-13T08:00:00.000Z", 10),
         snapshot("2026-08-13T08:00:15.000Z", 20),
@@ -195,5 +197,104 @@ describe("AgentsService transport", () => {
     expect(inserts).toHaveLength(2);
     expect(inserts.map((call) => JSON.parse(String(call[3])).cpuPercent)).toEqual([10, 20]);
     expect(observeAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it("registers check-only capabilities without storing host telemetry", async () => {
+    const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+    const database = {
+      run,
+      transaction: async <T>(action: () => Promise<T>) => action(),
+    } as unknown as DatabaseService;
+    const observeAgent = vi.fn(async () => undefined);
+    const service = new AgentsService(
+      database,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      { observeAgent } as unknown as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    const response = await service.heartbeat(agent, {
+      agentVersion: "2.1.0",
+      snapshots: [],
+      results: [],
+      capabilities: ["http", "tcp", "dns"],
+    });
+
+    expect(response).toEqual({
+      acceptedAt: expect.any(String),
+      acceptedSnapshots: 0,
+      acceptedResults: 0,
+    });
+    expect(run).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE agents SET platform"),
+      null,
+      "2.1.0",
+      '["http","tcp","dns"]',
+      expect.any(String),
+      expect.any(String),
+      "agent-1"
+    );
+    expect(run.mock.calls.some(([sql]) => String(sql).includes("host_snapshots"))).toBe(false);
+    expect(observeAgent).not.toHaveBeenCalled();
+  });
+
+  it("rejects telemetry that conflicts with reported capabilities", async () => {
+    const service = new AgentsService(
+      {} as DatabaseService,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    await expect(
+      service.heartbeat(agent, {
+        agentVersion: "2.1.0",
+        snapshots: [snapshot(new Date().toISOString(), 10)],
+        results: [],
+        capabilities: ["http", "tcp", "dns"],
+      })
+    ).rejects.toThrow("Collector telemetry does not match its capabilities");
+    await expect(
+      service.heartbeat(agent, {
+        agentVersion: "2.1.0",
+        snapshots: [],
+        results: [],
+        capabilities: ["http", "tcp", "dns", "host", "disk"],
+      })
+    ).rejects.toThrow("Collector telemetry does not match its capabilities");
+  });
+
+  it("does not return historical snapshots for a check-only collector", async () => {
+    const all = vi.fn(async () => [{ snapshot_json: JSON.stringify(snapshot("now", 10)) }]);
+    const service = new AgentsService(
+      {
+        get: vi.fn(async () => ({
+          id: "agent-1",
+          team_id: "team-1",
+          name: "Runner",
+          kind: "desktop",
+          collection_interval_seconds: 30,
+          platform: null,
+          version: "2.1.0",
+          capabilities_json: '["http","tcp","dns"]',
+          last_seen_at: new Date().toISOString(),
+          revoked_at: null,
+          created_at: new Date().toISOString(),
+        })),
+        all,
+      } as unknown as DatabaseService,
+      { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    await expect(service.snapshots("user-1", "team-1", "agent-1")).resolves.toEqual([]);
+    expect(all).not.toHaveBeenCalled();
   });
 });

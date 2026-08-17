@@ -101,7 +101,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: |
-            apps/agent-deskopt -> target
+            apps/agent-desktop -> target
             apps/agent-mobile -> target
 
       - name: Install Linux dependencies
@@ -121,7 +121,7 @@ jobs:
       - name: Build release artifacts
         run: pnpm build
 
-  windows-agent-deskopt:
+  windows-agent-desktop:
     name: Test Windows collector
     runs-on: windows-latest
     timeout-minutes: 20
@@ -136,10 +136,53 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          workspaces: apps/agent-deskopt -> target
+          workspaces: apps/agent-desktop -> target
 
       - name: Test collector
-        run: cargo test --locked --manifest-path apps/agent-deskopt/Cargo.toml
+        run: cargo test --locked --manifest-path apps/agent-desktop/Cargo.toml
+
+  agent-container:
+    name: Validate agent container
+    needs:
+      - quality
+      - workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Validate agent Compose configuration
+        env:
+          MIMORII_AGENT_KEY: mim_agent_12345678901234567890123456789012
+          MIMORII_AGENT_SERVER: https://mimorii.example.com/api
+        run: docker compose -f apps/agent-desktop/compose.yaml config --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Build agent image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: ./apps/agent-desktop
+          file: ./apps/agent-desktop/Dockerfile
+          load: true
+          platforms: linux/amd64
+          pull: true
+          push: false
+          tags: mimorii-agent:local
+          cache-from: type=gha,scope=mimorii-agent
+
+      - name: Validate agent image
+        run: |
+          version="$(awk -F '"' '/^version = / { print $2; exit }' apps/agent-desktop/Cargo.toml)"
+          test "$(docker run --rm mimorii-agent:local --version)" = "mimorii-agent-desktop $version"
+          test "$(docker image inspect --format '{{.Config.User}}' mimorii-agent:local)" = "10001:10001"
+          test "$(docker image inspect --format '{{json .Config.Cmd}}' mimorii-agent:local)" = '["check-runner"]'
+          docker run --rm mimorii-agent:local --help | grep --quiet check-runner
 
   container:
     name: Validate container deployment

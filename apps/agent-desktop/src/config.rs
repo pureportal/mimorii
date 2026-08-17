@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use directories::ProjectDirs;
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -27,6 +28,26 @@ impl AgentConfig {
             agent_key: key.to_owned(),
             target_policy: TargetPolicy::default(),
         })
+    }
+
+    pub fn new_check_runner(
+        server: &str,
+        key: &str,
+        allow_insecure_http: bool,
+        allowed_cidrs: &str,
+    ) -> Result<Self> {
+        let mut config = Self::new(server, key, allow_insecure_http)?;
+        config.target_policy.allowed_cidrs = allowed_cidrs
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                value
+                    .parse::<IpNet>()
+                    .with_context(|| format!("allowed CIDR is invalid: {value}"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(config)
     }
 
     pub fn load() -> Result<Self> {
@@ -68,7 +89,7 @@ impl AgentConfig {
 
 pub fn config_path() -> Result<PathBuf> {
     let directories = project_directories()?;
-    Ok(directories.config_dir().join("agent-deskopt.json"))
+    Ok(directories.config_dir().join("agent-desktop.json"))
 }
 
 pub fn collection_path() -> Result<PathBuf> {
@@ -77,7 +98,7 @@ pub fn collection_path() -> Result<PathBuf> {
 }
 
 fn project_directories() -> Result<ProjectDirs> {
-    ProjectDirs::from("app", "mimorii", "agent-deskopt")
+    ProjectDirs::from("app", "mimorii", "agent-desktop")
         .context("could not determine the user configuration directory")
 }
 

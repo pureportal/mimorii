@@ -13,8 +13,8 @@
       "path": "apps/client"
     },
     {
-      "name": "agent-deskopt",
-      "path": "apps/agent-deskopt"
+      "name": "agent-desktop",
+      "path": "apps/agent-desktop"
     },
     {
       "name": "agent-mobile",
@@ -46,17 +46,17 @@
         "cwd": "${workspaceFolder:root}"
       },
       {
-        "name": "Mimorii: dev:agent-deskopt",
+        "name": "Mimorii: dev:agent-desktop",
         "type": "node-terminal",
         "request": "launch",
-        "command": "pnpm run dev:agent-deskopt",
+        "command": "pnpm run dev:agent-desktop",
         "cwd": "${workspaceFolder:root}"
       }
     ],
     "compounds": [
       {
         "name": "Mimorii: dev",
-        "configurations": ["Mimorii: dev:api", "Mimorii: dev:client", "Mimorii: dev:agent-deskopt"],
+        "configurations": ["Mimorii: dev:api", "Mimorii: dev:client", "Mimorii: dev:agent-desktop"],
         "stopAll": true
       }
     ]

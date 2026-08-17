@@ -20,7 +20,7 @@ fn install_platform(executable: &Path) -> Result<()> {
         .config_dir()
         .join("systemd/user");
     fs::create_dir_all(&directory)?;
-    let unit = directory.join("mimorii-agent-deskopt.service");
+    let unit = directory.join("mimorii-agent-desktop.service");
     let content = format!(
         "[Unit]\nDescription=Mimorii desktop monitoring agent\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart=\"{}\" run\nRestart=on-failure\nRestartSec=10\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=read-only\n\n[Install]\nWantedBy=default.target\n",
         executable.display()
@@ -29,7 +29,7 @@ fn install_platform(executable: &Path) -> Result<()> {
     command("systemctl", &["--user", "daemon-reload"])?;
     command(
         "systemctl",
-        &["--user", "enable", "--now", "mimorii-agent-deskopt.service"],
+        &["--user", "enable", "--now", "mimorii-agent-desktop.service"],
     )?;
     println!("installed {}", unit.display());
     Ok(())
@@ -43,14 +43,14 @@ fn uninstall_platform() -> Result<()> {
             "--user",
             "disable",
             "--now",
-            "mimorii-agent-deskopt.service",
+            "mimorii-agent-desktop.service",
         ],
     );
     let directory = directories::BaseDirs::new()
         .ok_or_else(|| anyhow::anyhow!("could not determine the user home directory"))?
         .config_dir()
         .join("systemd/user");
-    let unit = directory.join("mimorii-agent-deskopt.service");
+    let unit = directory.join("mimorii-agent-desktop.service");
     if unit.exists() {
         std::fs::remove_file(unit)?;
     }
@@ -69,15 +69,15 @@ fn install_platform(executable: &Path) -> Result<()> {
             "/SC",
             "ONLOGON",
             "/TN",
-            "Mimorii Agent Deskopt",
+            "Mimorii Agent Desktop",
             "/TR",
             &task,
             "/RL",
             "LIMITED",
         ],
     )?;
-    command("schtasks.exe", &["/Run", "/TN", "Mimorii Agent Deskopt"])?;
-    println!("installed Mimorii Agent Deskopt startup task");
+    command("schtasks.exe", &["/Run", "/TN", "Mimorii Agent Desktop"])?;
+    println!("installed Mimorii Agent Desktop startup task");
     Ok(())
 }
 
@@ -90,7 +90,7 @@ fn windows_startup_task(executable: &Path) -> String {
 fn uninstall_platform() -> Result<()> {
     command(
         "schtasks.exe",
-        &["/Delete", "/F", "/TN", "Mimorii Agent Deskopt"],
+        &["/Delete", "/F", "/TN", "Mimorii Agent Desktop"],
     )
 }
 

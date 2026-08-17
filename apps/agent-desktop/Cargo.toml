@@ -1,5 +1,5 @@
 [package]
-name = "mimorii-agent-deskopt"
+name = "mimorii-agent-desktop"
 version = "2.1.0"
 description = "Read-only Mimorii desktop relay and host metrics agent"
 edition = "2024"

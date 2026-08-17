@@ -96,6 +96,7 @@ fn deserializes_poll_configuration_and_trigger_tasks() {
 #[test]
 fn serializes_heartbeat_payloads_with_transport_field_names() {
     let heartbeat = HeartbeatRequest {
+        agent_version: env!("CARGO_PKG_VERSION"),
         snapshots: vec![snapshot()],
         results: vec![TaskResult {
             task_id: "task".to_owned(),
@@ -111,6 +112,7 @@ fn serializes_heartbeat_payloads_with_transport_field_names() {
 
     let value = serde_json::to_value(heartbeat).unwrap();
 
+    assert_eq!(value["agentVersion"], env!("CARGO_PKG_VERSION"));
     assert_eq!(value["snapshots"][0]["uptimeSeconds"], 120);
     assert_eq!(value["snapshots"][0]["memoryUsedBytes"], 5);
     assert_eq!(value["snapshots"][0]["disks"][0]["usedBytes"], 6);

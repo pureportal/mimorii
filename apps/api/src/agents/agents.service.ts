@@ -191,6 +191,8 @@ export class AgentsService {
     if (agent.kind !== "desktop") {
       throw new BadRequestException("Mobile collectors do not submit host snapshots");
     }
+    const capabilities = JSON.parse(agent.capabilities_json) as CollectorCapability[];
+    if (!capabilities.includes("host") && !capabilities.includes("disk")) return [];
     const rows = await this.database.all<{ snapshot_json: string }>(
       `SELECT snapshot_json FROM host_snapshots WHERE agent_id = ?
        ORDER BY observed_at DESC LIMIT ?`,
@@ -265,19 +267,24 @@ export class AgentsService {
     ) {
       throw new BadRequestException("Desktop collector capabilities are invalid");
     }
+    const reportsHostTelemetry = input.snapshots.length > 0;
+    const supportsHostTelemetry = capabilities.includes("host") || capabilities.includes("disk");
+    if (reportsHostTelemetry !== supportsHostTelemetry) {
+      throw new BadRequestException("Collector telemetry does not match its capabilities");
+    }
     const receivedAt = new Date().toISOString();
     const snapshots = input.snapshots.map((snapshot) =>
       this.normalizeSnapshot(snapshot, receivedAt)
     );
-    const latestSnapshot = snapshots.at(-1)!;
+    const latestSnapshot = snapshots.at(-1);
     let acceptedResults = 0;
 
     await this.database.transaction(async () => {
       await this.database.run(
         `UPDATE agents SET platform = ?, version = ?, capabilities_json = ?, last_seen_at = ?, updated_at = ?
          WHERE id = ? AND revoked_at IS NULL`,
-        latestSnapshot.platform.slice(0, 100),
-        latestSnapshot.version.slice(0, 40),
+        latestSnapshot?.platform.slice(0, 100) ?? null,
+        input.agentVersion.trim().slice(0, 40),
         JSON.stringify(capabilities),
         receivedAt,
         receivedAt,

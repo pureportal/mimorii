@@ -525,6 +525,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         .post("/api/agent/heartbeat")
         .set("authorization", agentAuthorization)
         .send({
+          agentVersion: "2.1.0",
           snapshots: [
             { ...snapshot, cpuPercent: 20, observedAt: previousTimestamp },
             { ...snapshot, observedAt: timestamp },
@@ -576,6 +577,138 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(
       snapshots.body.some((snapshot: { cpuPercent: number }) => snapshot.cpuPercent === 20)
     ).toBe(true);
+  });
+
+  it("registers a check-only collector without exposing host telemetry", async () => {
+    const account = await register("check-runner@example.com", "Check Runner");
+    const teamId = account.teams[0]!.id;
+    const authorization = `Bearer ${account.accessToken}`;
+    const createdAgent = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .send({ name: "Container probe", kind: "desktop" })
+      .expect(201);
+    const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
+
+    await request(app.getHttpServer())
+      .post("/api/agent/heartbeat")
+      .set("authorization", agentAuthorization)
+      .send({
+        agentVersion: "2.1.0",
+        snapshots: [],
+        results: [],
+        capabilities: ["http", "tcp", "dns"],
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.acceptedSnapshots).toBe(0);
+        expect(body.acceptedResults).toBe(0);
+      });
+
+    const agents = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(agents.body[0]).toMatchObject({
+      platform: null,
+      version: "2.1.0",
+      capabilities: ["http", "tcp", "dns"],
+    });
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/agents/${createdAgent.body.id}/snapshots`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect([]);
+
+    const resource = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .send({
+        name: "Container network target",
+        kind: "service",
+        target: "service.internal",
+        agentId: createdAgent.body.id,
+      })
+      .expect(201);
+    const checkDefinitions = [
+      ["HTTP", "http", { url: "https://example.com/health" }],
+      ["TCP", "tcp", { host: "database.internal", port: 5432 }],
+      ["DNS", "dns", { hostname: "service.internal", recordType: "A" }],
+    ] as const;
+    const createdChecks = await Promise.all(
+      checkDefinitions.map(async ([name, type, config]) => {
+        const response = await request(app.getHttpServer())
+          .post(`/api/teams/${teamId}/checks`)
+          .set("authorization", authorization)
+          .send({ resourceId: resource.body.id, name, type, config })
+          .expect(201);
+        const id = response.body.id;
+        if (typeof id !== "string") throw new Error("Created check ID is missing");
+        return { id, type };
+      })
+    );
+    const tcpCheck = createdChecks.find((check) => check.type === "tcp");
+    if (!tcpCheck) throw new Error("TCP check was not created");
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks/${tcpCheck.id}/run`)
+      .set("authorization", authorization)
+      .expect(200);
+    const taskResponse = await request(app.getHttpServer())
+      .get("/api/agent/tasks")
+      .set("authorization", agentAuthorization)
+      .expect(200);
+    expect(taskResponse.body.tasks).toHaveLength(1);
+    await request(app.getHttpServer())
+      .post("/api/agent/heartbeat")
+      .set("authorization", agentAuthorization)
+      .send({
+        agentVersion: "2.1.0",
+        snapshots: [],
+        results: [
+          {
+            taskId: taskResponse.body.tasks[0].id,
+            status: "up",
+            latencyMs: 3.2,
+            statusCode: null,
+            message: null,
+            metrics: { port: 5432 },
+            checkedAt: new Date().toISOString(),
+          },
+        ],
+        capabilities: ["http", "tcp", "dns"],
+      })
+      .expect(200)
+      .expect(({ body }) => expect(body.acceptedResults).toBe(1));
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks`)
+      .set("authorization", authorization)
+      .send({
+        resourceId: resource.body.id,
+        name: "Host",
+        type: "host",
+        config: {
+          cpuWarningPercent: 80,
+          cpuCriticalPercent: 90,
+          memoryWarningPercent: 80,
+          memoryCriticalPercent: 90,
+          loadWarning: 4,
+          loadCritical: 8,
+          swapWarningPercent: 80,
+          swapCriticalPercent: 90,
+        },
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post("/api/agent/heartbeat")
+      .set("authorization", agentAuthorization)
+      .send({
+        agentVersion: "2.1.0",
+        snapshots: [],
+        results: [],
+        capabilities: ["http", "tcp", "dns", "host", "disk"],
+      })
+      .expect(400);
   });
 
   it("ingests typed mobile status without assigning active checks", async () => {

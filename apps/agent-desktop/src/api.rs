@@ -63,7 +63,7 @@ impl ApiClient {
 }
 
 fn user_agent() -> String {
-    format!("mimorii-agent-deskopt/{}", env!("CARGO_PKG_VERSION"))
+    format!("mimorii-agent-desktop/{}", env!("CARGO_PKG_VERSION"))
 }
 
 #[cfg(test)]

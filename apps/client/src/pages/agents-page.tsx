@@ -36,6 +36,18 @@ interface AgentConfirmation {
   agent: AgentSummary;
 }
 
+function collectorPlatform(agent: AgentSummary): string {
+  if (agent.deviceStatus) return agent.deviceStatus.device.model;
+  if (agent.platform) return agent.platform;
+  const runsNetworkChecks = agent.capabilities.some((capability) =>
+    ["http", "tcp", "dns"].includes(capability)
+  );
+  const reportsHostTelemetry = agent.capabilities.some((capability) =>
+    ["host", "disk"].includes(capability)
+  );
+  return runsNetworkChecks && !reportsHostTelemetry ? "Check runner" : "Not connected";
+}
+
 async function enrollLocalMobileCollector(agent: AgentSummary, enrollmentKey: string) {
   const state = await enrollMobileCollector({
     serverUrl: getServerUrl(),
@@ -213,8 +225,7 @@ export function CollectorsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-display font-bold">{agent.name}</p>
                     <p className="mt-1 truncate text-xs text-muted">
-                      {agent.deviceStatus?.device.model ?? agent.platform ?? "Not connected"} ·{" "}
-                      {formatRelative(agent.lastSeenAt)}
+                      {collectorPlatform(agent)} · {formatRelative(agent.lastSeenAt)}
                     </p>
                   </div>
                   <StatusBadge status={agent.status} />
@@ -487,7 +498,7 @@ function CreateCollectorDialog({
   }
   const command =
     created?.kind === "desktop"
-      ? `mimorii-agent-deskopt enroll --server ${getServerUrl()} --key ${created.enrollmentKey}`
+      ? `mimorii-agent-desktop enroll --server ${getServerUrl()} --key ${created.enrollmentKey}`
       : "";
   const limits = kind === "mobile" ? mobileAgentCollectionInterval : agentCollectionInterval;
   return (

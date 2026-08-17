@@ -10,7 +10,7 @@ const tauriConfig = readJson("apps/client/src-tauri/tauri.conf.json");
 const windowsConfig = readJson("apps/client/src-tauri/tauri.windows.conf.json");
 const openApi = readJson("apps/api/openapi/mimorii.openapi.json");
 const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
-const agentCargo = readFile("apps/agent-deskopt/Cargo.toml");
+const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
 const mobileAgentCargo = readFile("apps/agent-mobile/Cargo.toml");
 const pushCargo = readFile("apps/client/src-tauri/plugins/push/Cargo.toml");
 const tauriEntryPoint = readFile("apps/client/src-tauri/src/lib.rs");
@@ -20,7 +20,7 @@ const versions = new Map([
   ["apps/api/package.json", readJson("apps/api/package.json").version],
   ["apps/client/package.json", clientPackage.version],
   ["packages/contracts/package.json", readJson("packages/contracts/package.json").version],
-  ["apps/agent-deskopt/Cargo.toml", cargoPackageValue(agentCargo, "version")],
+  ["apps/agent-desktop/Cargo.toml", cargoPackageValue(agentCargo, "version")],
   ["apps/agent-mobile/Cargo.toml", cargoPackageValue(mobileAgentCargo, "version")],
   ["apps/client/src-tauri/Cargo.toml", cargoPackageValue(clientCargo, "version")],
   ["apps/client/src-tauri/plugins/push/Cargo.toml", cargoPackageValue(pushCargo, "version")],

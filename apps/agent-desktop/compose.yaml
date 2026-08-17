@@ -1,0 +1,21 @@
+services:
+  agent:
+    image: mimorii-agent:local
+    init: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      MIMORII_AGENT_SERVER: ${MIMORII_AGENT_SERVER:?Set MIMORII_AGENT_SERVER}
+      MIMORII_AGENT_KEY: ${MIMORII_AGENT_KEY:?Set MIMORII_AGENT_KEY}
+      MIMORII_AGENT_ALLOW_INSECURE_HTTP: ${MIMORII_AGENT_ALLOW_INSECURE_HTTP:-false}
+      MIMORII_AGENT_ALLOWED_CIDRS: ${MIMORII_AGENT_ALLOWED_CIDRS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    cap_drop:
+      - ALL
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 20s

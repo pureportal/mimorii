@@ -100,7 +100,7 @@ pub fn tcp_listener() -> (TcpListener, u16) {
 pub fn temporary_path(name: &str) -> std::path::PathBuf {
     let id = TEMPORARY_PATH_ID.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir()
-        .join(format!("mimorii-agent-deskopt-{}-{id}", std::process::id()))
+        .join(format!("mimorii-agent-desktop-{}-{id}", std::process::id()))
         .join(name)
 }
 

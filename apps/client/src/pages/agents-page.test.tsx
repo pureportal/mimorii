@@ -108,6 +108,25 @@ describe("CollectorsPage confirmations", () => {
 
   afterEach(cleanup);
 
+  it("identifies a connected collector that only runs checks", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/teams/team-1/agents") {
+        return Promise.resolve([
+          {
+            ...warehouseRelay,
+            platform: null,
+            capabilities: ["http", "tcp", "dns"],
+          },
+        ]);
+      }
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+
+    expect(await screen.findByText(/Check runner/)).toBeVisible();
+  });
+
   it("confirms relay key rotation and locks the action while it runs", async () => {
     const rotation = deferred<{ enrollmentKey: string }>();
     apiMock.mockImplementation((path: string) => {

@@ -11,7 +11,7 @@ target
 *.db
 *.db-shm
 *.db-wal
-apps/agent-deskopt
+apps/agent-desktop
 apps/agent-mobile
 apps/api/openapi
 apps/api/test

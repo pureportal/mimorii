@@ -94,6 +94,7 @@ pub enum CheckState {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeartbeatRequest {
+    pub agent_version: &'static str,
     pub snapshots: Vec<HostSnapshot>,
     pub results: Vec<TaskResult>,
     pub capabilities: Vec<&'static str>,

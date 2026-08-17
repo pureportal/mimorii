@@ -47,7 +47,7 @@ fn http_check_exercises_assertions_and_collects_response_metrics() {
         .unwrap();
     assert!(request.starts_with("GET /health HTTP/1.1"));
     assert!(request.contains(&format!(
-        "user-agent: mimorii-agent-deskopt/{}",
+        "user-agent: mimorii-agent-desktop/{}",
         env!("CARGO_PKG_VERSION")
     )));
 }
