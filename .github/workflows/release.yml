@@ -296,15 +296,15 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          workspaces: apps/agent-deskopt -> target
+          workspaces: apps/agent-desktop -> target
 
       - name: Build Linux agent
-        run: cargo build --locked --release --manifest-path apps/agent-deskopt/Cargo.toml
+        run: cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
 
       - name: Verify Linux agent
         run: |
-          binary=apps/agent-deskopt/target/release/mimorii-agent-deskopt
-          test "$("$binary" --version)" = "mimorii-agent-deskopt ${{ needs.metadata.outputs.version }}"
+          binary=apps/agent-desktop/target/release/mimorii-agent-desktop
+          test "$("$binary" --version)" = "mimorii-agent-desktop ${{ needs.metadata.outputs.version }}"
           readelf --file-header "$binary" | grep --quiet 'Class:.*ELF64'
           readelf --file-header "$binary" | grep --quiet 'Machine:.*Advanced Micro Devices X86-64'
 
@@ -318,8 +318,8 @@ jobs:
           output_directory="$GITHUB_WORKSPACE/dist/release/linux-agent"
           mkdir -p "$package_directory" "$output_directory"
           install -m 0755 \
-            apps/agent-deskopt/target/release/mimorii-agent-deskopt \
-            "$package_directory/mimorii-agent-deskopt"
+            apps/agent-desktop/target/release/mimorii-agent-desktop \
+            "$package_directory/mimorii-agent-desktop"
           tar \
             --create \
             --file=- \
@@ -330,7 +330,7 @@ jobs:
             --owner=0 \
             --sort=name \
             --directory="$package_directory" \
-            mimorii-agent-deskopt | gzip -9n > "$output_directory/$artifact"
+            mimorii-agent-desktop | gzip -9n > "$output_directory/$artifact"
           sha256sum "$output_directory/$artifact" | sed "s#  .*#  $artifact#" > "$output_directory/$checksum"
           echo "artifact_path=$output_directory/$artifact" >> "$GITHUB_OUTPUT"
           echo "checksum_path=$output_directory/$checksum" >> "$GITHUB_OUTPUT"
@@ -370,8 +370,6 @@ jobs:
       artifact_name: ${{ steps.artifact.outputs.name }}
     env:
       MIMORII_ARTIFACT_DIR: ${{ github.workspace }}/dist/release/windows
-      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -397,85 +395,25 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: |
-            apps/agent-deskopt -> target
+            apps/agent-desktop -> target
             apps/client/src-tauri -> target
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Import Windows signing certificate
-        shell: pwsh
-        run: |
-          $missingNames = @()
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)) {
-            $missingNames += "WINDOWS_CERTIFICATE_BASE64"
-          }
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
-            $missingNames += "WINDOWS_CERTIFICATE_PASSWORD"
-          }
-          if ($missingNames.Count -gt 0) {
-            throw "Missing Windows signing secrets: $($missingNames -join ', ')"
-          }
-
-          $certificatePath = Join-Path $env:RUNNER_TEMP "mimorii-code-signing.pfx"
-          $certificateBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
-          [IO.File]::WriteAllBytes($certificatePath, $certificateBytes)
-          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-          $importOptions = @{
-            FilePath = $certificatePath
-            CertStoreLocation = "Cert:\CurrentUser\My"
-            Password = $password
-          }
-          $importedCertificates = @(Import-PfxCertificate @importOptions)
-          Remove-Item -LiteralPath $certificatePath -Force
-          "WINDOWS_IMPORTED_CERTIFICATES=$($importedCertificates.Thumbprint -join ',')" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
-          $codeSigningOid = "1.3.6.1.5.5.7.3.3"
-          $certificate = $importedCertificates | Where-Object {
-            $candidate = $_
-            $enhancedKeyUsageOids = @(
-              $candidate.Extensions |
-                Where-Object {
-                  $_ -is [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]
-                } |
-                ForEach-Object { $_.EnhancedKeyUsages } |
-                ForEach-Object { $_.Value }
-            )
-            $candidate.HasPrivateKey -and $enhancedKeyUsageOids -contains $codeSigningOid
-          } | Select-Object -First 1
-          if ($null -eq $certificate) {
-            throw "The Windows certificate archive does not contain a private key valid for code signing."
-          }
-          $now = Get-Date
-          if ($certificate.NotBefore -gt $now -or $certificate.NotAfter -lt $now) {
-            throw "The Windows code-signing certificate is not currently valid."
-          }
-
-          "WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Build Windows client
         run: pnpm tauri:windows:build
 
-      - name: Build and sign Windows agent
-        shell: pwsh
-        run: |
-          cargo build --locked --release --manifest-path apps/agent-deskopt/Cargo.toml
-          if ($LASTEXITCODE -ne 0) {
-            throw "Windows agent build failed with exit code $LASTEXITCODE."
-          }
-          & ./scripts/sign-windows-executable.ps1 `
-            -CertificateThumbprint $env:WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT `
-            -Path "apps/agent-deskopt/target/release/mimorii-agent-deskopt.exe"
+      - name: Build Windows agent
+        run: cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
 
-      - name: Verify Windows signatures
+      - name: Verify unsigned Windows outputs
         shell: pwsh
         run: |
           $bundleDirectory = "apps/client/src-tauri/target/release/bundle"
           $paths = @(
             "apps/client/src-tauri/target/release/Mimorii.exe",
-            "apps/agent-deskopt/target/release/mimorii-agent-deskopt.exe"
+            "apps/agent-desktop/target/release/mimorii-agent-desktop.exe"
           )
           $paths += @(Get-ChildItem -Path $bundleDirectory -Recurse -File -Filter "*.msi").FullName
           $paths += @(Get-ChildItem -Path $bundleDirectory -Recurse -File -Filter "*-setup.exe").FullName
@@ -484,18 +422,15 @@ jobs:
           }
           foreach ($path in $paths) {
             if (-not (Test-Path -LiteralPath $path)) {
-              throw "Expected signed file was not produced: $path"
+              throw "Expected Windows output was not produced: $path"
             }
             $signature = Get-AuthenticodeSignature -LiteralPath $path
-            if ($signature.Status -ne "Valid") {
-              throw "Invalid Authenticode signature for $path: $($signature.Status)"
-            }
-            if ($null -eq $signature.TimeStamperCertificate) {
-              throw "The Authenticode signature is not timestamped: $path"
+            if ($signature.Status -ne "NotSigned") {
+              throw "Expected unsigned Windows output, but Authenticode status is $($signature.Status): $path"
             }
           }
-          $actualVersion = & apps/agent-deskopt/target/release/mimorii-agent-deskopt.exe --version
-          $expectedVersion = "mimorii-agent-deskopt ${{ needs.metadata.outputs.version }}"
+          $actualVersion = & apps/agent-desktop/target/release/mimorii-agent-desktop.exe --version
+          $expectedVersion = "mimorii-agent-desktop ${{ needs.metadata.outputs.version }}"
           if ($actualVersion -ne $expectedVersion) {
             throw "Unexpected Windows agent version: $actualVersion"
           }
@@ -518,7 +453,7 @@ jobs:
           Remove-Item -LiteralPath $packageDirectory -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $packageDirectory, $outputDirectory -Force | Out-Null
           Copy-Item `
-            -LiteralPath "apps/agent-deskopt/target/release/mimorii-agent-deskopt.exe" `
+            -LiteralPath "apps/agent-desktop/target/release/mimorii-agent-desktop.exe" `
             -Destination $packageDirectory
           Compress-Archive -Path "$packageDirectory/*" -DestinationPath $artifactPath -CompressionLevel Optimal
           $digest = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -569,20 +504,8 @@ jobs:
             ${{ steps.windows_agent_artifacts.outputs.artifact_path }}
           sbom-path: ${{ runner.temp }}/mimorii-windows.spdx.json
 
-      - name: Remove imported Windows certificates
-        if: always()
-        shell: pwsh
-        run: |
-          foreach ($thumbprint in ($env:WINDOWS_IMPORTED_CERTIFICATES -split ',')) {
-            if (-not [string]::IsNullOrWhiteSpace($thumbprint)) {
-              Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force -ErrorAction SilentlyContinue
-            }
-          }
-          $certificatePath = Join-Path $env:RUNNER_TEMP "mimorii-code-signing.pfx"
-          Remove-Item -LiteralPath $certificatePath -Force -ErrorAction SilentlyContinue
-
   container:
-    name: Publish combined application image
+    name: Publish container images
     if: needs.metadata.outputs.release == 'true'
     needs:
       - metadata
@@ -591,7 +514,7 @@ jobs:
       - linux-agent
       - windows
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 75
     permissions:
       contents: read
       packages: write
@@ -632,7 +555,23 @@ jobs:
             org.opencontainers.image.revision=${{ needs.metadata.outputs.sha }}
             org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
 
-      - name: Build and publish image
+      - name: Prepare agent image metadata
+        id: agent-image
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-agent
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.metadata.outputs.version }},priority=1000
+            type=ref,event=branch
+            type=sha,format=long
+            type=raw,value=latest,enable=${{ needs.metadata.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.metadata.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
+
+      - name: Build and publish application image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
@@ -647,6 +586,24 @@ jobs:
           annotations: ${{ steps.image.outputs.annotations }}
           cache-from: type=gha,scope=mimorii
           cache-to: type=gha,mode=max,scope=mimorii
+          provenance: mode=max
+          sbom: true
+
+      - name: Build and publish agent image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: ./apps/agent-desktop
+          file: ./apps/agent-desktop/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: true
+          tags: ${{ steps.agent-image.outputs.tags }}
+          labels: ${{ steps.agent-image.outputs.labels }}
+          annotations: ${{ steps.agent-image.outputs.annotations }}
+          cache-from: type=gha,scope=mimorii-agent
+          cache-to: type=gha,mode=max,scope=mimorii-agent
           provenance: mode=max
           sbom: true
 

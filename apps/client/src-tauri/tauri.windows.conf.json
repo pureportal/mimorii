@@ -4,9 +4,6 @@
   "bundle": {
     "targets": ["nsis", "msi"],
     "windows": {
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "http://timestamp.digicert.com",
-      "tsp": false,
       "allowDowngrades": false,
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
