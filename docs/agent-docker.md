@@ -14,7 +14,7 @@ MIMORII_AGENT_KEY=mim_agent_replace_with_the_enrollment_key
 Run the published image. Authenticate to GHCR first when the package is private:
 
 ```bash
-docker run -d --name mimorii-agent --restart unless-stopped --read-only --cap-drop ALL --security-opt no-new-privileges --env-file .env.agent ghcr.io/pureportal/mimorii-agent:latest
+docker run -d --name mimorii-agent --restart unless-stopped --read-only --cap-drop ALL --security-opt no-new-privileges --env-file .env.agent ghcr.io/pureportal/mimorii-check-agent:latest
 ```
 
 To build from a checkout instead:

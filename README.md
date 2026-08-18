@@ -124,7 +124,7 @@ For optional email, push notification, analytics, retention, and advanced monito
 
 ## Native releases
 
-Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, and unsigned Windows x64 client installers. Release behavior, Android signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
+Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, an Ubuntu x64 Debian package, and unsigned Windows x64 client installers. Release behavior, Android signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
 
 ## Help
 
