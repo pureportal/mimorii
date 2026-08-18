@@ -65,14 +65,13 @@ jobs:
         run: node scripts/validate-release.mjs --base "$BASE_SHA"
 
   validation:
-    name: Validate release commit
-    if: needs.metadata.outputs.release == 'true'
+    name: Validate main commit
     needs: metadata
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
     with:
-      release_gate: true
+      delivery_gate: true
 
   android:
     name: Android client and mobile agent
@@ -273,22 +272,37 @@ jobs:
           rm -f "$RUNNER_TEMP/android-signing/release.keystore"
           rmdir "$RUNNER_TEMP/android-signing" 2>/dev/null || true
 
-  linux-agent:
-    name: Linux x64 agent
+  ubuntu:
+    name: Ubuntu x64 client and agent
     if: needs.metadata.outputs.release == 'true'
     needs: metadata
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
     permissions:
       attestations: write
       contents: read
       id-token: write
     outputs:
       artifact_name: ${{ steps.artifact.outputs.name }}
+    env:
+      MIMORII_ARTIFACT_DIR: ${{ github.workspace }}/dist/release/ubuntu
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -296,7 +310,38 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          workspaces: apps/agent-desktop -> target
+          workspaces: |
+            apps/agent-desktop -> target
+            apps/client/src-tauri -> target
+
+      - name: Install Ubuntu build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and stage Ubuntu client
+        id: ubuntu_client_artifacts
+        run: pnpm tauri:ubuntu:release
+
+      - name: Verify Ubuntu installer
+        run: |
+          installer="${{ steps.ubuntu_client_artifacts.outputs.artifact_path }}"
+          test "$(dpkg-deb --field "$installer" Architecture)" = "amd64"
+          test "$(dpkg-deb --field "$installer" Version)" = "${{ needs.metadata.outputs.version }}"
+          dpkg-deb --contents "$installer" > "$RUNNER_TEMP/mimorii-ubuntu-contents.txt"
+          grep --quiet '/Mimorii$' "$RUNNER_TEMP/mimorii-ubuntu-contents.txt"
 
       - name: Build Linux agent
         run: cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
@@ -335,26 +380,30 @@ jobs:
           echo "artifact_path=$output_directory/$artifact" >> "$GITHUB_OUTPUT"
           echo "checksum_path=$output_directory/$checksum" >> "$GITHUB_OUTPUT"
 
-      - name: Name Linux agent artifact
+      - name: Name Ubuntu artifact
         id: artifact
-        run: echo "name=mimorii-agent-linux-v${{ needs.metadata.outputs.version }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=mimorii-ubuntu-v${{ needs.metadata.outputs.version }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Linux agent artifacts
+      - name: Upload Ubuntu artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: |
+            ${{ steps.ubuntu_client_artifacts.outputs.artifact_path }}
+            ${{ steps.ubuntu_client_artifacts.outputs.checksum_path }}
             ${{ steps.agent_artifacts.outputs.artifact_path }}
             ${{ steps.agent_artifacts.outputs.checksum_path }}
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
 
-      - name: Attest Linux agent
+      - name: Attest Ubuntu artifacts
         if: github.event.repository.visibility == 'public'
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
         with:
-          subject-path: ${{ steps.agent_artifacts.outputs.artifact_path }}
+          subject-path: |
+            ${{ steps.ubuntu_client_artifacts.outputs.artifact_path }}
+            ${{ steps.agent_artifacts.outputs.artifact_path }}
 
   windows:
     name: Windows x64 client and agent
@@ -505,22 +554,51 @@ jobs:
           sbom-path: ${{ runner.temp }}/mimorii-windows.spdx.json
 
   container:
-    name: Publish container images
-    if: needs.metadata.outputs.release == 'true'
+    name: Publish ${{ matrix.component }} image
+    if: >-
+      ${{
+        always() &&
+        needs.metadata.result == 'success' &&
+        needs.validation.result == 'success' &&
+        (
+          needs.metadata.outputs.release != 'true' ||
+          (
+            needs.android.result == 'success' &&
+            needs.ubuntu.result == 'success' &&
+            needs.windows.result == 'success'
+          )
+        )
+      }}
     needs:
       - metadata
       - validation
       - android
-      - linux-agent
+      - ubuntu
       - windows
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
     concurrency:
-      group: mimorii-ghcr-publish
+      group: mimorii-ghcr-${{ matrix.package }}-publish
       cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: server
+            context: .
+            dockerfile: ./Dockerfile
+            package: server
+            title: Mimorii server
+            description: Mimorii API and web client
+          - component: check agent
+            context: ./apps/agent-desktop
+            dockerfile: ./apps/agent-desktop/Dockerfile
+            package: check-agent
+            title: Mimorii check agent
+            description: Mimorii HTTP, TCP, and DNS check runner
 
     steps:
       - name: Checkout repository
@@ -543,67 +621,35 @@ jobs:
         id: image
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.package }}
           flavor: latest=false
           tags: |
-            type=raw,value=${{ needs.metadata.outputs.version }},priority=1000
+            type=raw,value=${{ needs.metadata.outputs.version }},priority=1000,enable=${{ needs.metadata.outputs.release == 'true' }}
             type=ref,event=branch
             type=sha,format=long
-            type=raw,value=latest,enable=${{ needs.metadata.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.metadata.outputs.release == 'true' && needs.metadata.outputs.prerelease == 'false' }}
           labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.metadata.outputs.sha }}
             org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
 
-      - name: Prepare agent image metadata
-        id: agent-image
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-agent
-          flavor: latest=false
-          tags: |
-            type=raw,value=${{ needs.metadata.outputs.version }},priority=1000
-            type=ref,event=branch
-            type=sha,format=long
-            type=raw,value=latest,enable=${{ needs.metadata.outputs.prerelease == 'false' }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ needs.metadata.outputs.sha }}
-            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
-
-      - name: Build and publish application image
+      - name: Build and publish image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           pull: true
           push: true
           tags: ${{ steps.image.outputs.tags }}
           labels: ${{ steps.image.outputs.labels }}
           annotations: ${{ steps.image.outputs.annotations }}
-          cache-from: type=gha,scope=mimorii
-          cache-to: type=gha,mode=max,scope=mimorii
-          provenance: mode=max
-          sbom: true
-
-      - name: Build and publish agent image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: false
-        with:
-          context: ./apps/agent-desktop
-          file: ./apps/agent-desktop/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          pull: true
-          push: true
-          tags: ${{ steps.agent-image.outputs.tags }}
-          labels: ${{ steps.agent-image.outputs.labels }}
-          annotations: ${{ steps.agent-image.outputs.annotations }}
-          cache-from: type=gha,scope=mimorii-agent
-          cache-to: type=gha,mode=max,scope=mimorii-agent
+          cache-from: type=gha,scope=mimorii-${{ matrix.package }}
+          cache-to: type=gha,mode=max,scope=mimorii-${{ matrix.package }}
           provenance: mode=max
           sbom: true
 
@@ -613,7 +659,7 @@ jobs:
     needs:
       - metadata
       - android
-      - linux-agent
+      - ubuntu
       - windows
       - container
     runs-on: ubuntu-latest
@@ -636,10 +682,10 @@ jobs:
           name: ${{ needs.android.outputs.artifact_name }}
           path: release-assets
 
-      - name: Download Linux agent artifacts
+      - name: Download Ubuntu artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
-          name: ${{ needs.linux-agent.outputs.artifact_name }}
+          name: ${{ needs.ubuntu.outputs.artifact_name }}
           path: release-assets
 
       - name: Download Windows artifacts
@@ -658,6 +704,8 @@ jobs:
             "mimorii-agent-v${version}-windows-x64.zip"
             "mimorii-client-agent-v${version}-android-universal.apk"
             "mimorii-client-agent-v${version}-android-universal.apk.sha256"
+            "mimorii-v${version}-ubuntu-x64.deb"
+            "mimorii-v${version}-ubuntu-x64.deb.sha256"
             "mimorii-v${version}-windows-x64-setup.exe"
             "mimorii-v${version}-windows-x64.msi"
             "mimorii-v${version}-windows-x64.sha256"

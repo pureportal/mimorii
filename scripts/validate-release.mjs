@@ -13,6 +13,7 @@ const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
 const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
 const mobileAgentCargo = readFile("apps/agent-mobile/Cargo.toml");
 const pushCargo = readFile("apps/client/src-tauri/plugins/push/Cargo.toml");
+const ubuntuBuild = readFile("scripts/build-ubuntu-client.mjs");
 const tauriEntryPoint = readFile("apps/client/src-tauri/src/lib.rs");
 const defaultCapability = readJson("apps/client/src-tauri/capabilities/default.json");
 const versions = new Map([
@@ -75,6 +76,22 @@ for (const [label, command] of [
   if (!command.includes("node scripts/configure-android-project.mjs")) {
     throw new Error(`${label} must configure the generated Android project`);
   }
+}
+
+for (const [label, command, script] of [
+  ["Ubuntu build", rootPackage.scripts?.["tauri:ubuntu:build"] ?? "", "build-ubuntu-client.mjs"],
+  [
+    "Ubuntu staging",
+    rootPackage.scripts?.["tauri:ubuntu:stage"] ?? "",
+    "stage-ubuntu-installer.mjs",
+  ],
+]) {
+  if (!command.includes(`node scripts/${script}`)) {
+    throw new Error(`${label} must run scripts/${script}`);
+  }
+}
+if (!ubuntuBuild.includes('"--bundles", "deb"')) {
+  throw new Error("Ubuntu distribution must build the Debian bundle target");
 }
 
 if (!clientCargo.includes('tauri-plugin-agent-mobile = { path = "../../agent-mobile" }')) {

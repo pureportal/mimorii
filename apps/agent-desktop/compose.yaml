@@ -1,6 +1,6 @@
 services:
   agent:
-    image: mimorii-agent:local
+    image: mimorii-check-agent:local
     init: true
     build:
       context: .

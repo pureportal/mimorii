@@ -20,7 +20,7 @@ services:
       retries: 12
 
   mimorii:
-    image: mimorii:local
+    image: mimorii-server:local
     init: true
     build:
       context: .

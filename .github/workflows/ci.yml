@@ -3,16 +3,13 @@ name: CI
 run-name: CI / ${{ github.head_ref || github.ref_name }}
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
   workflow_dispatch:
   workflow_call:
     inputs:
-      release_gate:
+      delivery_gate:
         type: boolean
         required: false
         default: false
@@ -25,8 +22,8 @@ defaults:
     shell: bash
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ inputs.release_gate && github.sha || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ !inputs.release_gate }}
+  group: ci-${{ github.workflow }}-${{ inputs.delivery_gate && github.sha || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !inputs.delivery_gate }}
 
 env:
   NODE_VERSION: "24"
@@ -142,7 +139,7 @@ jobs:
         run: cargo test --locked --manifest-path apps/agent-desktop/Cargo.toml
 
   agent-container:
-    name: Validate agent container
+    name: Validate check agent container
     needs:
       - quality
       - workflow-lint
@@ -173,20 +170,20 @@ jobs:
           platforms: linux/amd64
           pull: true
           push: false
-          tags: mimorii-agent:local
-          cache-from: type=gha,scope=mimorii-agent
+          tags: mimorii-check-agent:local
+          cache-from: type=gha,scope=mimorii-check-agent
 
       - name: Validate agent image
         run: |
           version="$(awk -F '"' '/^version = / { print $2; exit }' apps/agent-desktop/Cargo.toml)"
-          test "$(docker run --rm mimorii-agent:local --version)" = "mimorii-agent-desktop $version"
-          test "$(docker image inspect --format '{{.Config.User}}' mimorii-agent:local)" = "10001:10001"
-          test "$(docker image inspect --format '{{json .Config.Cmd}}' mimorii-agent:local)" = '["check-runner"]'
-          help="$(docker run --rm mimorii-agent:local --help)"
+          test "$(docker run --rm mimorii-check-agent:local --version)" = "mimorii-agent-desktop $version"
+          test "$(docker image inspect --format '{{.Config.User}}' mimorii-check-agent:local)" = "10001:10001"
+          test "$(docker image inspect --format '{{json .Config.Cmd}}' mimorii-check-agent:local)" = '["check-runner"]'
+          help="$(docker run --rm mimorii-check-agent:local --help)"
           [[ "$help" == *check-runner* ]]
 
   container:
-    name: Validate container deployment
+    name: Validate server container
     needs:
       - quality
       - workflow-lint
@@ -214,8 +211,8 @@ jobs:
           platforms: linux/amd64
           pull: true
           push: false
-          tags: mimorii:local
-          cache-from: type=gha,scope=mimorii
+          tags: mimorii-server:local
+          cache-from: type=gha,scope=mimorii-server
 
       - name: Start Compose deployment
         run: docker compose --env-file .env.example up --detach --no-build --wait --wait-timeout 120

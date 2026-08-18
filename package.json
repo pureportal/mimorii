@@ -40,6 +40,9 @@
     "tauri:android:build": "pnpm run release:validate && node scripts/configure-android-project.mjs && pnpm --filter @mimorii/client tauri:android:build",
     "tauri:android:sign": "node scripts/sign-android-apk.mjs",
     "tauri:android:release": "pnpm run tauri:android:build && pnpm run tauri:android:sign",
+    "tauri:ubuntu:build": "pnpm run release:validate && node scripts/build-ubuntu-client.mjs",
+    "tauri:ubuntu:stage": "node scripts/stage-ubuntu-installer.mjs",
+    "tauri:ubuntu:release": "pnpm run tauri:ubuntu:build && pnpm run tauri:ubuntu:stage",
     "tauri:windows:build": "pnpm run release:validate && node scripts/build-windows-client.mjs",
     "tauri:windows:stage": "node scripts/stage-windows-installers.mjs",
     "tauri:windows:release": "pnpm run tauri:windows:build && pnpm run tauri:windows:stage"
