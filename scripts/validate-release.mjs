@@ -107,6 +107,13 @@ for (const [fragment, label] of [
     throw new Error(`Android project configuration must switch the ${label}`);
   }
 }
+for (const buildGeneratedFile of ["tauri.settings.gradle", "tauri.build.gradle.kts"]) {
+  if (androidProjectConfiguration.includes(buildGeneratedFile)) {
+    throw new Error(
+      `Android initialization must not depend on build-generated ${buildGeneratedFile}`
+    );
+  }
+}
 
 for (const [label, command, expected] of [
   [

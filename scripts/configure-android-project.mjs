@@ -14,12 +14,10 @@ const products = Object.freeze({
   client: {
     applicationId: "app.mimorii.monitor",
     displayName: "Mimorii",
-    mobileAgent: false,
   },
   agent: {
     applicationId: "app.mimorii.agent",
     displayName: "Mimorii Agent",
-    mobileAgent: true,
   },
 });
 const productKey = process.argv[2];
@@ -30,8 +28,6 @@ const androidDirectory = join(repoRoot, "apps/client/src-tauri/gen/android");
 const manifestPath = join(androidDirectory, "app/src/main/AndroidManifest.xml");
 const buildPath = join(androidDirectory, "build.gradle.kts");
 const appBuildPath = join(androidDirectory, "app/build.gradle.kts");
-const tauriBuildPath = join(androidDirectory, "app/tauri.build.gradle.kts");
-const tauriSettingsPath = join(androidDirectory, "tauri.settings.gradle");
 const stringsPath = join(androidDirectory, "app/src/main/res/values/strings.xml");
 const javaPackageDirectory = configureJavaPackage(
   join(androidDirectory, "app/src/main/java"),
@@ -42,8 +38,6 @@ const resourcesPath = join(androidDirectory, "app/src/main/res/xml");
 const manifest = readFileSync(manifestPath, "utf8");
 const build = readFileSync(buildPath, "utf8");
 const appBuild = readFileSync(appBuildPath, "utf8");
-const tauriBuild = readFileSync(tauriBuildPath, "utf8");
-const tauriSettings = readFileSync(tauriSettingsPath, "utf8");
 const strings = readFileSync(stringsPath, "utf8");
 const configuredMainActivity = `package ${product.applicationId}
 
@@ -95,8 +89,6 @@ const configuredAppBuild = appBuild
     "isMinifyEnabled = true\n            isShrinkResources = true\n"
   )
   .replace(/applicationId = "[^"]+"/, `applicationId = "${product.applicationId}"`);
-const configuredTauriBuild = configureAgentGradleDependency(tauriBuild, product.mobileAgent);
-const configuredTauriSettings = configureAgentGradleProject(tauriSettings, product.mobileAgent);
 const configuredStrings = strings
   .replace(
     /<string name="app_name">[\s\S]*?<\/string>/,
@@ -124,12 +116,6 @@ if (!configuredAppBuild.includes(`applicationId = "${product.applicationId}"`)) 
 }
 if (!configuredAppBuild.includes(`namespace = "${product.applicationId}"`)) {
   throw new Error(`Generated Android namespace is not ${product.applicationId}`);
-}
-if (
-  configuredTauriBuild.includes("tauri-plugin-agent-mobile") !== product.mobileAgent ||
-  configuredTauriSettings.includes("tauri-plugin-agent-mobile") !== product.mobileAgent
-) {
-  throw new Error(`Generated Android mobile agent dependency is invalid for ${productKey}`);
 }
 if (!configuredStrings.includes(`>${product.displayName}</string>`)) {
   throw new Error(`Generated Android application name is not ${product.displayName}`);
@@ -185,33 +171,6 @@ function kotlinFilesIn(directory) {
   });
 }
 
-function withoutAgentPlugin(value) {
-  const lineEnding = value.includes("\r\n") ? "\r\n" : "\n";
-  return `${value
-    .split(/\r?\n/)
-    .filter((line) => !line.includes("tauri-plugin-agent-mobile"))
-    .join(lineEnding)
-    .trimEnd()}${lineEnding}`;
-}
-
-function configureAgentGradleDependency(value, enabled) {
-  const base = withoutAgentPlugin(value);
-  if (!enabled) return base;
-  const lineEnding = base.includes("\r\n") ? "\r\n" : "\n";
-  return base.replace(
-    /\}\s*$/,
-    `  implementation(project(":tauri-plugin-agent-mobile"))${lineEnding}}${lineEnding}`
-  );
-}
-
-function configureAgentGradleProject(value, enabled) {
-  const base = withoutAgentPlugin(value);
-  if (!enabled) return base;
-  const lineEnding = base.includes("\r\n") ? "\r\n" : "\n";
-  const agentAndroidPath = join(repoRoot, "apps/agent-mobile/android").replaceAll("\\", "/");
-  return `${base.trimEnd()}${lineEnding}include ':tauri-plugin-agent-mobile'${lineEnding}project(':tauri-plugin-agent-mobile').projectDir = new File("${agentAndroidPath}")${lineEnding}`;
-}
-
 function writeIfChanged(path, value) {
   if (!existsSync(path) || readFileSync(path, "utf8") !== value) {
     writeFileSync(path, value);
@@ -262,8 +221,6 @@ const dataExtractionRules = `<?xml version="1.0" encoding="utf-8"?>
 writeIfChanged(manifestPath, configuredManifest);
 writeIfChanged(buildPath, configuredBuild);
 writeIfChanged(appBuildPath, configuredAppBuild);
-writeIfChanged(tauriBuildPath, configuredTauriBuild);
-writeIfChanged(tauriSettingsPath, configuredTauriSettings);
 writeIfChanged(stringsPath, configuredStrings);
 writeIfChanged(mainActivityPath, configuredMainActivity);
 mkdirSync(resourcesPath, { recursive: true });
