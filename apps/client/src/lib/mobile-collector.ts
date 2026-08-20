@@ -25,24 +25,32 @@ const unavailableState: MobileCollectorState = {
   lastError: null,
 };
 
+const mobileAgentEnabled = import.meta.env.VITE_MIMORII_ANDROID_PRODUCT === "agent";
+
 export async function mobileCollectorState(): Promise<MobileCollectorState> {
-  if (!isTauri()) return unavailableState;
+  if (!isTauri() || !mobileAgentEnabled) return unavailableState;
   return invoke<MobileCollectorState>("plugin:agent-mobile|status");
 }
 
 export async function enrollMobileCollector(
   enrollment: MobileCollectorEnrollment
 ): Promise<MobileCollectorState> {
-  if (!isTauri()) throw new Error("Mobile collection is available only on Android");
+  if (!isTauri() || !mobileAgentEnabled) {
+    throw new Error("Mobile collection is available only in Mimorii Agent for Android");
+  }
   return invoke<MobileCollectorState>("plugin:agent-mobile|enroll", { ...enrollment });
 }
 
 export async function collectMobileStatusNow(): Promise<MobileCollectorState> {
-  if (!isTauri()) throw new Error("Mobile collection is available only on Android");
+  if (!isTauri() || !mobileAgentEnabled) {
+    throw new Error("Mobile collection is available only in Mimorii Agent for Android");
+  }
   return invoke<MobileCollectorState>("plugin:agent-mobile|collect_now");
 }
 
 export async function unenrollMobileCollector(): Promise<MobileCollectorState> {
-  if (!isTauri()) throw new Error("Mobile collection is available only on Android");
+  if (!isTauri() || !mobileAgentEnabled) {
+    throw new Error("Mobile collection is available only in Mimorii Agent for Android");
+  }
   return invoke<MobileCollectorState>("plugin:agent-mobile|unenroll");
 }

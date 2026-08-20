@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Mimorii application window",
   "windows": ["main"],
-  "permissions": ["core:default", "agent-mobile:default", "push:default"]
+  "permissions": ["core:default", "push:default"]
 }

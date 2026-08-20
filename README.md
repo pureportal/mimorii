@@ -100,7 +100,7 @@ For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agen
 
 ## Monitor an Android device
 
-Open Mimorii on Android, add an Android device collector, and connect it from the creation dialog. Android reports device status on a best-effort WorkManager schedule. It does not run active monitoring checks.
+Open Mimorii Agent on Android, add an Android device collector, and connect it from the creation dialog. Android reports device status on a best-effort WorkManager schedule. It does not run active monitoring checks.
 
 ## Monitor a scheduled job
 
@@ -124,7 +124,7 @@ For optional email, push notification, analytics, retention, and advanced monito
 
 ## Native releases
 
-Mimorii ships Linux and Windows x64 agents, a signed universal Android client with the mobile collector built in, an Ubuntu x64 Debian package, and unsigned Windows x64 client installers. Release behavior, Android signing configuration, and local build commands are documented in [Release distribution](docs/client-distribution.md).
+Mimorii ships agents for Android, Ubuntu/Debian x64, and Windows x64, plus the web client packaged as a separate Android application. Release assets use stable filenames documented in [Release distribution](docs/release-distribution.md).
 
 ## Help
 

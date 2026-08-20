@@ -1,21 +1,30 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  releaseAssetNames,
+  releaseChecksum,
+  releasePackageNames,
+  releasePackages,
+} from "./release-assets.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const rootPackage = readJson("package.json");
 const clientPackage = readJson("apps/client/package.json");
 const tauriConfig = readJson("apps/client/src-tauri/tauri.conf.json");
-const windowsConfig = readJson("apps/client/src-tauri/tauri.windows.conf.json");
+const androidAgentConfig = readJson("apps/client/src-tauri/tauri.android-agent.conf.json");
 const openApi = readJson("apps/api/openapi/mimorii.openapi.json");
 const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
 const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
 const mobileAgentCargo = readFile("apps/agent-mobile/Cargo.toml");
 const pushCargo = readFile("apps/client/src-tauri/plugins/push/Cargo.toml");
-const ubuntuBuild = readFile("scripts/build-ubuntu-client.mjs");
 const tauriEntryPoint = readFile("apps/client/src-tauri/src/lib.rs");
 const defaultCapability = readJson("apps/client/src-tauri/capabilities/default.json");
+const androidBuild = readFile("scripts/build-android-app.mjs");
+const androidProjectConfiguration = readFile("scripts/configure-android-project.mjs");
+const releaseWorkflow = readFile(".github/workflows/release.yml");
+const distributionDocumentation = readFile("docs/release-distribution.md");
 const versions = new Map([
   ["package.json", rootPackage.version],
   ["apps/api/package.json", readJson("apps/api/package.json").version],
@@ -41,67 +50,180 @@ const parsedVersion = parseSemver(version);
 expectEqual(tauriConfig.productName, "Mimorii", "Tauri product name");
 expectEqual(tauriConfig.mainBinaryName, "Mimorii", "Tauri main binary name");
 expectEqual(tauriConfig.identifier, "app.mimorii.monitor", "Tauri application identifier");
-expectEqual(windowsConfig.identifier, tauriConfig.identifier, "Windows application identifier");
 expectEqual(tauriConfig.bundle?.android?.minSdkVersion, 24, "Android minimum SDK");
+expectEqual(androidAgentConfig.productName, "Mimorii Agent", "Android agent product name");
 expectEqual(
-  windowsConfig.bundle?.windows?.wix?.upgradeCode,
-  "9cf97636-ac39-526f-8bd9-82daef03c74a",
-  "Windows MSI upgrade code"
+  androidAgentConfig.identifier,
+  "app.mimorii.agent",
+  "Android agent application identifier"
+);
+expectArrayEqual(
+  tauriConfig.app?.security?.capabilities,
+  ["default"],
+  "Android client capabilities"
+);
+expectArrayEqual(
+  defaultCapability.permissions,
+  ["core:default", "push:default"],
+  "Android client permissions"
+);
+const androidAgentCapability = androidAgentConfig.app?.security?.capabilities?.[0];
+expectEqual(
+  androidAgentConfig.app?.security?.capabilities?.length,
+  1,
+  "Android agent capability count"
+);
+expectEqual(
+  androidAgentCapability?.identifier,
+  "android-agent",
+  "Android agent capability identifier"
+);
+expectArrayEqual(
+  androidAgentCapability.permissions,
+  ["core:default", "agent-mobile:default", "push:default"],
+  "Android agent permissions"
 );
 
-const windowsTargets = windowsConfig.bundle?.targets;
-if (
-  !Array.isArray(windowsTargets) ||
-  windowsTargets.length !== 2 ||
-  !windowsTargets.includes("msi") ||
-  !windowsTargets.includes("nsis")
-) {
-  throw new Error("Windows distribution must build exactly the MSI and NSIS bundle targets");
-}
-
-const androidBuildCommand = clientPackage.scripts?.["tauri:android:build"] ?? "";
 for (const target of ["aarch64", "armv7", "x86_64"]) {
-  if (!androidBuildCommand.split(/\s+/).includes(target)) {
+  if (!androidBuild.includes(`"${target}"`)) {
     throw new Error(`Android release command is missing the ${target} target`);
   }
 }
-if (androidBuildCommand.split(/\s+/).includes("i686")) {
+if (androidBuild.includes('"i686"')) {
   throw new Error("Android release command must not include the redundant i686 target");
 }
-
-for (const [label, command] of [
-  ["Android initialization", rootPackage.scripts?.["tauri:android:init"] ?? ""],
-  ["Android build", rootPackage.scripts?.["tauri:android:build"] ?? ""],
+if (!androidBuild.includes('"--features"') || !androidBuild.includes('"mobile-agent"')) {
+  throw new Error("Android agent build must enable the mobile-agent Cargo feature");
+}
+if (!androidBuild.includes("VITE_MIMORII_ANDROID_PRODUCT: product")) {
+  throw new Error("Android builds must identify the selected product to the web client");
+}
+for (const [fragment, label] of [
+  ['.replace(/namespace = "[^"]+"/', "Gradle namespace"],
+  ["configureJavaPackage(", "Java package"],
+  ["`package ${product.applicationId}", "main activity package"],
 ]) {
-  if (!command.includes("node scripts/configure-android-project.mjs")) {
-    throw new Error(`${label} must configure the generated Android project`);
+  if (!androidProjectConfiguration.includes(fragment)) {
+    throw new Error(`Android project configuration must switch the ${label}`);
   }
 }
 
-for (const [label, command, script] of [
-  ["Ubuntu build", rootPackage.scripts?.["tauri:ubuntu:build"] ?? "", "build-ubuntu-client.mjs"],
+for (const [label, command, expected] of [
   [
-    "Ubuntu staging",
-    rootPackage.scripts?.["tauri:ubuntu:stage"] ?? "",
-    "stage-ubuntu-installer.mjs",
+    "Android initialization",
+    rootPackage.scripts?.["tauri:android:init"] ?? "",
+    "node scripts/configure-android-project.mjs client",
+  ],
+  [
+    "Android client build",
+    rootPackage.scripts?.["tauri:android:client:build"] ?? "",
+    "node scripts/build-android-app.mjs client",
+  ],
+  [
+    "Android client signing",
+    rootPackage.scripts?.["tauri:android:client:sign"] ?? "",
+    "node scripts/sign-android-apk.mjs client",
+  ],
+  [
+    "Android agent build",
+    rootPackage.scripts?.["tauri:android:agent:build"] ?? "",
+    "node scripts/build-android-app.mjs agent",
+  ],
+  [
+    "Android agent signing",
+    rootPackage.scripts?.["tauri:android:agent:sign"] ?? "",
+    "node scripts/sign-android-apk.mjs agent",
   ],
 ]) {
-  if (!command.includes(`node scripts/${script}`)) {
-    throw new Error(`${label} must run scripts/${script}`);
+  if (!command.includes(expected)) {
+    throw new Error(`${label} must run ${expected}`);
   }
 }
-if (!ubuntuBuild.includes('"--bundles", "deb"')) {
-  throw new Error("Ubuntu distribution must build the Debian bundle target");
+
+for (const scriptName of Object.keys(rootPackage.scripts ?? {})) {
+  if (/^tauri:(?:ubuntu|windows)(?::|$)/.test(scriptName)) {
+    throw new Error(`Obsolete desktop client release script remains: ${scriptName}`);
+  }
+}
+for (const relativePath of [
+  "scripts/build-ubuntu-client.mjs",
+  "scripts/build-windows-client.mjs",
+  "scripts/stage-ubuntu-installer.mjs",
+  "scripts/stage-windows-installers.mjs",
+  "apps/client/src-tauri/tauri.windows.conf.json",
+]) {
+  if (existsSync(join(repoRoot, relativePath))) {
+    throw new Error(`Obsolete desktop client release path remains: ${relativePath}`);
+  }
 }
 
-if (!clientCargo.includes('tauri-plugin-agent-mobile = { path = "../../agent-mobile" }')) {
-  throw new Error("Tauri client must include the Android mobile collector plugin");
+if (
+  !clientCargo.includes(
+    'tauri-plugin-agent-mobile = { path = "../../agent-mobile", optional = true }'
+  ) ||
+  !clientCargo.includes('mobile-agent = ["dep:tauri-plugin-agent-mobile"]')
+) {
+  throw new Error("The Android mobile collector must be an agent-only Cargo feature");
 }
-if (!tauriEntryPoint.includes(".plugin(tauri_plugin_agent_mobile::init())")) {
-  throw new Error("Tauri client must initialize the Android mobile collector plugin");
+if (
+  !tauriEntryPoint.includes('#[cfg(feature = "mobile-agent")]') ||
+  !tauriEntryPoint.includes("builder.plugin(tauri_plugin_agent_mobile::init())")
+) {
+  throw new Error("Only the Android agent may initialize the mobile collector plugin");
 }
-if (!defaultCapability.permissions?.includes("agent-mobile:default")) {
-  throw new Error("Tauri client must grant the mobile collector permission set");
+
+if (new Set(releaseAssetNames).size !== releaseAssetNames.length) {
+  throw new Error("Release asset filenames must be unique");
+}
+for (const name of releaseAssetNames) {
+  if (/v?\d+\.\d+\.\d+/i.test(name)) {
+    throw new Error(`Release asset filename must be versionless: ${name}`);
+  }
+}
+if (releasePackages.androidAgent === releasePackages.androidClient) {
+  throw new Error("Android agent and client filenames must be distinct");
+}
+if (!releasePackages.linuxAgent.includes("ubuntu-debian")) {
+  throw new Error("Linux agent filename must identify Ubuntu and Debian support");
+}
+if (!releasePackageNames.every((name) => name.startsWith("mimorii-"))) {
+  throw new Error("Every release package must identify the Mimorii product");
+}
+if (!releaseChecksum.includes("sha256")) {
+  throw new Error("The release checksum manifest must identify its digest algorithm");
+}
+for (const command of ["name linuxAgent", "name windowsAgent", "prepare release-assets"]) {
+  if (!releaseWorkflow.includes(`release-assets.mjs ${command}`)) {
+    throw new Error(`Release workflow must run release-assets.mjs ${command}`);
+  }
+}
+if (!releaseWorkflow.includes('gh release delete-asset "$RELEASE_TAG"')) {
+  throw new Error("Release updates must remove obsolete GitHub assets");
+}
+for (const requirement of [
+  "musl-tools",
+  "--target x86_64-unknown-linux-musl",
+  "target/x86_64-unknown-linux-musl/release/mimorii-agent-desktop",
+]) {
+  if (!releaseWorkflow.includes(requirement)) {
+    throw new Error(`Ubuntu/Debian agent build is missing ${requirement}`);
+  }
+}
+for (const obsolete of [
+  ".msi",
+  "-setup.exe",
+  "ubuntu_client_artifacts",
+  "windows_client_artifacts",
+]) {
+  if (releaseWorkflow.includes(obsolete)) {
+    throw new Error(`Release workflow still references an obsolete client asset: ${obsolete}`);
+  }
+}
+const latestReleaseBase = "https://github.com/pureportal/mimorii/releases/latest/download";
+for (const name of releaseAssetNames) {
+  if (!distributionDocumentation.includes(`${latestReleaseBase}/${name}`)) {
+    throw new Error(`Release documentation is missing the stable download URL for ${name}`);
+  }
 }
 
 const trackedAndroidFiles = git(["ls-files", "--", "apps/client/src-tauri/gen/android"]);
@@ -113,6 +235,9 @@ if (!readFile(".gitignore").split(/\r?\n/).includes("apps/client/src-tauri/gen/"
 }
 
 const baseSha = argumentValue("--base");
+const headSha = git(["rev-parse", "HEAD"]);
+const tag = `v${version}`;
+const tagCommit = optionalGit(["rev-parse", "--verify", `refs/tags/${tag}^{commit}`]);
 let release = false;
 let previousVersion = null;
 
@@ -125,13 +250,10 @@ if (baseSha && !/^0{40}$/.test(baseSha)) {
   if (version !== previousVersion && comparison <= 0) {
     throw new Error(`Project version must increase from ${previousVersion}; received ${version}`);
   }
-  release = comparison > 0;
+  release = comparison > 0 || tagCommit === null;
 }
 
-const headSha = git(["rev-parse", "HEAD"]);
-const tag = `v${version}`;
 if (release) {
-  const tagCommit = optionalGit(["rev-parse", "--verify", `refs/tags/${tag}^{commit}`]);
   if (tagCommit && tagCommit !== headSha) {
     throw new Error(`Tag ${tag} already points to ${tagCommit}, not ${headSha}`);
   }
@@ -147,6 +269,8 @@ writeOutputs({
 
 if (previousVersion === null) {
   console.log(`Release configuration is valid for v${version}`);
+} else if (release && version === previousVersion) {
+  console.log(`Release v${version} remains untagged; publishing will be retried`);
 } else if (release) {
   console.log(`Release v${version} detected from v${previousVersion}`);
 } else {
@@ -245,6 +369,14 @@ function optionalGit(args) {
 
 function expectEqual(actual, expected, label) {
   if (actual !== expected) {
+    throw new Error(
+      `${label} must be ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`
+    );
+  }
+}
+
+function expectArrayEqual(actual, expected, label) {
+  if (!Array.isArray(actual) || JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
       `${label} must be ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`
     );

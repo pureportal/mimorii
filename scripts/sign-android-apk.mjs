@@ -1,5 +1,4 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -8,12 +7,25 @@ import {
   readdirSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { releasePackages } from "./release-assets.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const products = Object.freeze({
+  client: {
+    applicationId: "app.mimorii.monitor",
+    artifactName: releasePackages.androidClient,
+  },
+  agent: {
+    applicationId: "app.mimorii.agent",
+    artifactName: releasePackages.androidAgent,
+  },
+});
+const productKey = process.argv[2];
+const product = products[productKey];
+if (!product) throw new Error("Android product must be client or agent");
 const version = JSON.parse(
   readFileSync(join(repoRoot, "apps/client/package.json"), "utf8")
 ).version;
@@ -51,11 +63,10 @@ verifyBuildMetadata(unsignedApks[0]);
 const artifactDirectory = resolve(
   process.env.MIMORII_ARTIFACT_DIR?.trim() || join(repoRoot, "dist/clients/android")
 );
-const artifactName = `mimorii-client-agent-v${version}-android-universal.apk`;
+const artifactName = product.artifactName;
 const artifactPath = join(artifactDirectory, artifactName);
 const alignedPath = join(artifactDirectory, `.${artifactName}.aligned`);
 const incrementalSignaturePath = `${artifactPath}.idsig`;
-const checksumPath = join(artifactDirectory, `${artifactName}.sha256`);
 
 mkdirSync(artifactDirectory, { recursive: true });
 rmSync(alignedPath, { force: true });
@@ -85,8 +96,7 @@ try {
   run("java", ["-jar", apksigner, "verify", "--verbose", "--print-certs", artifactPath]);
   run(zipalign, ["-c", "-P", "16", "4", artifactPath]);
   verifyArchitectures(artifactPath);
-  writeChecksum(artifactPath, checksumPath);
-  writeOutputs({ artifact_path: artifactPath, checksum_path: checksumPath });
+  writeOutputs({ artifact_path: artifactPath });
   console.log(`Created ${artifactPath}`);
 } finally {
   rmSync(alignedPath, { force: true });
@@ -165,7 +175,7 @@ function verifyBuildMetadata(apkPath) {
   }
 
   const output = elements[0];
-  if (metadata.applicationId !== "app.mimorii.monitor") {
+  if (metadata.applicationId !== product.applicationId) {
     throw new Error(`Unexpected Android application ID: ${metadata.applicationId}`);
   }
   if (output.versionName !== version) {
@@ -181,11 +191,6 @@ function verifyBuildMetadata(apkPath) {
       `Android metadata output ${output.outputFile} does not match ${basename(apkPath)}`
     );
   }
-}
-
-function writeChecksum(path, outputPath) {
-  const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
-  writeFileSync(outputPath, `${digest}  ${artifactName}\n`);
 }
 
 function writeOutputs(outputs) {
