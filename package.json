@@ -1,6 +1,6 @@
 {
   "name": "mimorii",
-  "version": "5.0.1",
+  "version": "6.0.0",
   "private": true,
   "description": "Self-hosted uptime, infrastructure analytics, and observability.",
   "scripts": {
