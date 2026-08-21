@@ -29,6 +29,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "users",
           "teams",
           "resources",
+          "resource_images",
           "checks",
           "heartbeat_monitors",
           "incidents",
@@ -137,6 +138,20 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         { column_name: "favicon_updated_at", data_type: "timestamp with time zone" },
       ]);
 
+      const resourceImageColumns = await database.all<{
+        column_name: string;
+        data_type: string;
+      }>(
+        `SELECT column_name, data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'resource_images'
+         ORDER BY column_name`
+      );
+      expect(resourceImageColumns).toEqual([
+        { column_name: "image_data", data_type: "bytea" },
+        { column_name: "resource_id", data_type: "text" },
+        { column_name: "updated_at", data_type: "timestamp with time zone" },
+      ]);
+
       const privacyColumns = await database.all<{ table_name: string; column_name: string }>(
         `SELECT table_name, column_name FROM information_schema.columns
          WHERE table_schema = 'public'
@@ -191,10 +206,24 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       );
       expect(removedColumns).toEqual([]);
 
+      const notificationOccurrenceColumns = await database.all<{
+        table_name: string;
+        column_name: string;
+      }>(
+        `SELECT table_name, column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND column_name = 'occurrence_key'
+         AND table_name IN ('notification_deliveries', 'status_subscriber_deliveries')
+         ORDER BY table_name`
+      );
+      expect(notificationOccurrenceColumns).toEqual([
+        { table_name: "notification_deliveries", column_name: "occurrence_key" },
+        { table_name: "status_subscriber_deliveries", column_name: "occurrence_key" },
+      ]);
+
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260822000000");
+      expect(migration?.name).toBe("Migration20260824000000");
     } finally {
       await orm.close(true);
     }

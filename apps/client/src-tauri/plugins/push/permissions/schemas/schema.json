@@ -331,6 +331,18 @@
           "markdownDescription": "Denies the mark_permission_requested command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-settings",
+          "markdownDescription": "Enables the open_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-settings",
+          "markdownDescription": "Denies the open_settings command without any pre-configured scope."
+        },
+        {
           "description": "Enables the requestPermissions command without any pre-configured scope.",
           "type": "string",
           "const": "allow-requestPermissions",
@@ -355,10 +367,10 @@
           "markdownDescription": "Denies the status command without any pre-configured scope."
         },
         {
-          "description": "Mimorii push permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-mark-permission-requested`\n- `allow-requestPermissions`\n- `allow-enable`\n- `allow-disable`",
+          "description": "Mimorii push permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-mark-permission-requested`\n- `allow-requestPermissions`\n- `allow-enable`\n- `allow-disable`\n- `allow-open-settings`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Mimorii push permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-mark-permission-requested`\n- `allow-requestPermissions`\n- `allow-enable`\n- `allow-disable`"
+          "markdownDescription": "Mimorii push permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-mark-permission-requested`\n- `allow-requestPermissions`\n- `allow-enable`\n- `allow-disable`\n- `allow-open-settings`"
         }
       ]
     }

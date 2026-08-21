@@ -1,5 +1,6 @@
 import { appRoutes, type NotificationEvent } from "@mimorii/contracts";
 import { createHash } from "node:crypto";
+import { notificationOccurrenceKey } from "./notification-occurrence.js";
 
 const defaultBodies: Record<NotificationEvent, string> = {
   "incident.opened": "An incident was opened.",
@@ -29,14 +30,16 @@ export function notificationMessage(
   const body = text(payload.message, defaultBodies[event], 300);
   const severity = payload.severity === "info" ? "info" : "warning";
   const path = notificationPath(event, payload);
-  const tagSource = text(payload.dedupeKey, `${event}:${title}`, 200);
+  const tagSource =
+    notificationOccurrenceKey(event, payload) ?? `${event}:${text(payload.dedupeKey, title, 200)}`;
+  const tagHash = createHash("sha256").update(tagSource).digest();
   return {
     title,
     body,
     severity,
     path,
-    tag: createHash("sha256").update(tagSource).digest("hex").slice(0, 32),
-    topic: createHash("sha256").update(tagSource).digest("base64url").slice(0, 32),
+    tag: tagHash.toString("hex").slice(0, 32),
+    topic: tagHash.toString("base64url").slice(0, 32),
   };
 }
 

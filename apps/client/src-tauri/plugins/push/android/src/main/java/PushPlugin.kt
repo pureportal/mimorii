@@ -4,7 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.webkit.WebView
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +32,7 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
 
   override fun load(webView: WebView) {
     this.webView = webView
+    PushEvents.attach(this)
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -107,6 +110,21 @@ class PushPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(state())
       }
       .addOnFailureListener { error -> invoke.reject(error.message ?: "Firebase unregistration failed") }
+  }
+
+  @Command
+  fun open_settings(invoke: Invoke) {
+    activity.startActivity(
+      Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${activity.packageName}")
+      )
+    )
+    invoke.resolve()
+  }
+
+  fun registrationChanged() {
+    trigger("registrationChanged", JSObject())
   }
 
   private fun state(): JSObject {

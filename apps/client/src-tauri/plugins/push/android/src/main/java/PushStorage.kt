@@ -34,6 +34,7 @@ object PushStorage {
     context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
       .edit()
       .remove(INSTALLATION_ID)
+      .putBoolean(ENABLED, false)
       .apply()
   }
 

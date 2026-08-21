@@ -6,12 +6,13 @@ import { FirebasePushProvider } from "./firebase-push.provider.js";
 import { NotificationsController } from "./notifications.controller.js";
 import { NotificationsService } from "./notifications.service.js";
 import { PushDeliveryService } from "./push-delivery.service.js";
+import { PushEndpointsController } from "./push-endpoints.controller.js";
 import { PushEndpointsService } from "./push-endpoints.service.js";
 import { WebPushProvider } from "./web-push.provider.js";
 
 @Module({
   imports: [AuthModule, TeamsModule],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, PushEndpointsController],
   providers: [
     NotificationsService,
     NotificationPoliciesService,

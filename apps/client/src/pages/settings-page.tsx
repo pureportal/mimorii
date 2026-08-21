@@ -13,7 +13,7 @@ import { api, getServerUrl, jsonBody, setServerUrl } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 export function SettingsPage() {
-  const { session, activeTeam, refreshIdentity, logout } = useAuth();
+  const { session, refreshIdentity, logout } = useAuth();
   const [name, setName] = useState(session!.user.name);
   const [profileError, setProfileError] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -99,7 +99,7 @@ export function SettingsPage() {
 
       <ApiTokensCard />
 
-      <NotificationDeviceCard teamId={activeTeam!.id} />
+      <NotificationDeviceCard />
 
       <Card>
         <CardHeader>

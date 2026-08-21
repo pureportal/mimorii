@@ -1,0 +1,11 @@
+services:
+  mimorii:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+    secrets:
+      - source: firebase_service_account
+        target: /run/secrets/firebase-service-account.json
+
+secrets:
+  firebase_service_account:
+    file: ${MIMORII_FIREBASE_CREDENTIALS_FILE:?Set MIMORII_FIREBASE_CREDENTIALS_FILE in .env}

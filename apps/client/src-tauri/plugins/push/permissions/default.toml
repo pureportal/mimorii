@@ -6,4 +6,5 @@ permissions = [
   "allow-requestPermissions",
   "allow-enable",
   "allow-disable",
+  "allow-open-settings",
 ]

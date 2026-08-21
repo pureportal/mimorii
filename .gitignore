@@ -2,6 +2,9 @@ node_modules/
 dist/
 target/
 .machdoch/
+secrets/
+**/google-services.json
+**/firebase-service-account*.json
 .env
 .env.*
 !.env.example

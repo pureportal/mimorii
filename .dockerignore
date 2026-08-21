@@ -6,6 +6,7 @@ target
 .github
 .machdoch
 .env*
+secrets/
 *.md
 *.code-workspace
 *.db

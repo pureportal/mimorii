@@ -18,13 +18,10 @@ import { NotificationPoliciesService } from "./notification-policies.service.js"
 import {
   CreateNotificationChannelDto,
   CreateNotificationPolicyDto,
-  RegisterAndroidEndpointDto,
-  RegisterWebPushEndpointDto,
   UpdateNotificationChannelDto,
   UpdateNotificationPolicyDto,
 } from "./notifications.dto.js";
 import { NotificationsService } from "./notifications.service.js";
-import { PushEndpointsService } from "./push-endpoints.service.js";
 
 @ApiTags("Notifications")
 @ApiBearerAuth()
@@ -33,46 +30,12 @@ import { PushEndpointsService } from "./push-endpoints.service.js";
 export class NotificationsController {
   constructor(
     private readonly notifications: NotificationsService,
-    private readonly policyService: NotificationPoliciesService,
-    private readonly pushEndpoints: PushEndpointsService
+    private readonly policyService: NotificationPoliciesService
   ) {}
 
   @Get("channels")
   list(@CurrentUser() user: AuthenticatedUser, @Param("teamId") teamId: string) {
     return this.notifications.list(user.id, teamId);
-  }
-
-  @Get("push")
-  push(@CurrentUser() user: AuthenticatedUser, @Param("teamId") teamId: string) {
-    return this.pushEndpoints.capabilities(user.id, teamId);
-  }
-
-  @Post("endpoints/web")
-  registerWebEndpoint(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("teamId") teamId: string,
-    @Body() input: RegisterWebPushEndpointDto
-  ) {
-    return this.pushEndpoints.registerWeb(user.id, teamId, input);
-  }
-
-  @Post("endpoints/android")
-  registerAndroidEndpoint(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("teamId") teamId: string,
-    @Body() input: RegisterAndroidEndpointDto
-  ) {
-    return this.pushEndpoints.registerAndroid(user.id, teamId, input);
-  }
-
-  @Delete("endpoints/:id")
-  @HttpCode(204)
-  removeEndpoint(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("teamId") teamId: string,
-    @Param("id") id: string
-  ) {
-    return this.pushEndpoints.remove(user.id, teamId, id);
   }
 
   @Post("channels")

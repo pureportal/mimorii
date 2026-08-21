@@ -1,15 +1,24 @@
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
-import { listenForPushSubscriptionChanges, syncPushEndpoint } from "../lib/push-notifications";
+import { listenForPushRegistrationChanges, syncPushEndpoint } from "../lib/push-notifications";
 
 export function PushEndpointSync() {
-  const { session, activeTeam } = useAuth();
+  const { session } = useAuth();
 
   useEffect(() => {
-    if (!session || !activeTeam) return undefined;
-    void syncPushEndpoint(activeTeam.id).catch(() => undefined);
-    return listenForPushSubscriptionChanges(activeTeam.id);
-  }, [activeTeam, session]);
+    if (!session) return undefined;
+    let disposed = false;
+    let stop: () => void = () => undefined;
+    void syncPushEndpoint().catch(() => undefined);
+    void listenForPushRegistrationChanges().then((listener) => {
+      if (disposed) listener();
+      else stop = listener;
+    });
+    return () => {
+      disposed = true;
+      stop();
+    };
+  }, [session]);
 
   return null;
 }

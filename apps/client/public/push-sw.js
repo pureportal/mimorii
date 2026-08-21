@@ -20,7 +20,6 @@ self.addEventListener("push", (event) => {
         icon: "/mimorii-app-icon.png",
         badge: "/mimorii-app-icon.png",
         tag: typeof payload.tag === "string" ? payload.tag : undefined,
-        renotify: payload.severity === "warning",
         data: { path },
       });
     })()

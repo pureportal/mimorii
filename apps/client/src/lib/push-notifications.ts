@@ -1,8 +1,9 @@
 import type { NotificationEndpointSummary, NotificationPushCapabilities } from "@mimorii/contracts";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { addPluginListener, invoke, isTauri } from "@tauri-apps/api/core";
 import { api, getServerUrl, jsonBody } from "./api";
 
 const WEB_DEVICE_KEY = "mimorii.push.web-device";
+type PushPlatform = "web" | "android";
 
 interface NativePushState {
   configured: boolean;
@@ -90,7 +91,6 @@ export async function devicePushState(
 }
 
 export async function enablePush(
-  teamId: string,
   capabilities: NotificationPushCapabilities
 ): Promise<NotificationEndpointSummary> {
   if (isTauri()) {
@@ -109,7 +109,7 @@ export async function enablePush(
     const state = await invoke<NativePushState>("plugin:push|enable");
     if (state.permission !== "granted") throw new Error("Notification permission was denied");
     if (!state.installationId) throw new Error("Firebase registration is unavailable");
-    return registerAndroid(teamId, state);
+    return registerAndroid(state);
   }
   if (!capabilities.web.available || !capabilities.web.vapidPublicKey) {
     throw new Error("Web Push is not configured");
@@ -135,32 +135,31 @@ export async function enablePush(
       userVisibleOnly: true,
       applicationServerKey: decodeVapidKey(capabilities.web.vapidPublicKey),
     }));
-  return registerWeb(teamId, subscription);
+  return registerWeb(subscription);
 }
 
-export async function syncPushEndpoint(
-  teamId: string,
-  capabilities?: NotificationPushCapabilities
-): Promise<void> {
-  const current =
-    capabilities ??
-    (await api<NotificationPushCapabilities>(`/teams/${teamId}/notifications/push`));
+export async function syncPushEndpoint(capabilities?: NotificationPushCapabilities): Promise<void> {
+  const current = capabilities ?? (await api<NotificationPushCapabilities>("/notifications/push"));
   if (isTauri()) {
     if (!current.android.available) return;
     try {
       const state = await nativePushState();
-      if (state.permission === "denied" && storedEndpointId("android")) {
-        await disablePush(teamId);
+      if (
+        state.permission === "denied" &&
+        (state.enabled || state.installationId || storedEndpointId("android"))
+      ) {
+        await disablePush();
         return;
       }
-      if (endpointRegistration(current, "android") === "invalid") return;
+      const registration = endpointRegistration(current, "android");
       if (
-        state.enabled &&
-        storedEndpointId("android") &&
-        state.permission === "granted" &&
-        state.installationId
+        registration === "invalid" &&
+        !registrationIdentifierChanged("android", state.installationId)
       ) {
-        await registerAndroid(teamId, state);
+        return;
+      }
+      if (state.enabled && state.permission === "granted" && state.installationId) {
+        await registerAndroid(state);
       }
     } catch {
       return;
@@ -170,28 +169,32 @@ export async function syncPushEndpoint(
   if (!current.web.available || !("Notification" in window) || !("serviceWorker" in navigator)) {
     return;
   }
-  if (Notification.permission === "denied" && storedEndpointId("web")) {
-    await disablePush(teamId);
+  const subscription = await existingWebSubscription();
+  if (Notification.permission === "denied" && (subscription || storedEndpointId("web"))) {
+    await disablePush();
     return;
   }
   if (Notification.permission !== "granted") return;
-  if (endpointRegistration(current, "web") === "invalid") return;
-  if (!storedEndpointId("web")) return;
-  const subscription = await existingWebSubscription();
+  if (
+    endpointRegistration(current, "web") === "invalid" &&
+    !registrationIdentifierChanged("web", subscription?.endpoint ?? null)
+  ) {
+    return;
+  }
   if (
     subscription &&
     current.web.vapidPublicKey &&
     subscriptionUsesKey(subscription, current.web.vapidPublicKey)
   ) {
-    await registerWeb(teamId, subscription);
+    await registerWeb(subscription);
   }
 }
 
-export async function disablePush(teamId: string): Promise<void> {
-  const platform = isTauri() ? "android" : "web";
+export async function disablePush(): Promise<void> {
+  const platform: PushPlatform = isTauri() ? "android" : "web";
   const endpointId = storedEndpointId(platform);
   const removal = endpointId
-    ? api<void>(`/teams/${teamId}/notifications/endpoints/${endpointId}`, {
+    ? api<void>(`/notifications/endpoints/${endpointId}`, {
         method: "DELETE",
       }).then(
         () => null,
@@ -215,47 +218,48 @@ export async function disablePush(teamId: string): Promise<void> {
   if (clientError) throw clientError;
 }
 
-export function revokePushOnLogout(teamId: string): void {
-  void disablePush(teamId).catch(() => undefined);
+export function revokePushOnLogout(): void {
+  void disablePush().catch(() => undefined);
 }
 
-export function listenForPushSubscriptionChanges(teamId: string): () => void {
+export async function listenForPushRegistrationChanges(): Promise<() => void> {
+  if (isTauri()) {
+    const listener = await addPluginListener("push", "registrationChanged", () => {
+      void syncPushEndpoint().catch(() => undefined);
+    });
+    return () => {
+      void listener.unregister();
+    };
+  }
   const listener = (event: MessageEvent) => {
     if (event.data?.type === "mimorii:push-subscription-changed") {
-      void syncPushEndpoint(teamId).catch(() => undefined);
+      void syncPushEndpoint().catch(() => undefined);
     }
   };
   navigator.serviceWorker?.addEventListener("message", listener);
   return () => navigator.serviceWorker?.removeEventListener("message", listener);
 }
 
-async function registerWeb(
-  teamId: string,
-  subscription: PushSubscription
-): Promise<NotificationEndpointSummary> {
-  const endpoint = await api<NotificationEndpointSummary>(
-    `/teams/${teamId}/notifications/endpoints/web`,
-    {
-      method: "POST",
-      ...jsonBody({ deviceKey: webDeviceKey(), subscription: subscription.toJSON() }),
-    }
-  );
-  storeEndpointId("web", endpoint.id);
+export async function openNotificationSettings(): Promise<void> {
+  if (!isTauri()) throw new Error("Notification settings are unavailable");
+  await invoke("plugin:push|open_settings");
+}
+
+async function registerWeb(subscription: PushSubscription): Promise<NotificationEndpointSummary> {
+  const endpoint = await api<NotificationEndpointSummary>("/notifications/endpoints/web", {
+    method: "POST",
+    ...jsonBody({ deviceKey: webDeviceKey(), subscription: subscription.toJSON() }),
+  });
+  storeEndpoint("web", endpoint.id, subscription.endpoint);
   return endpoint;
 }
 
-async function registerAndroid(
-  teamId: string,
-  state: NativePushState
-): Promise<NotificationEndpointSummary> {
-  const endpoint = await api<NotificationEndpointSummary>(
-    `/teams/${teamId}/notifications/endpoints/android`,
-    {
-      method: "POST",
-      ...jsonBody({ deviceKey: state.deviceKey, installationId: state.installationId }),
-    }
-  );
-  storeEndpointId("android", endpoint.id);
+async function registerAndroid(state: NativePushState): Promise<NotificationEndpointSummary> {
+  const endpoint = await api<NotificationEndpointSummary>("/notifications/endpoints/android", {
+    method: "POST",
+    ...jsonBody({ deviceKey: state.deviceKey, installationId: state.installationId }),
+  });
+  storeEndpoint("android", endpoint.id, state.installationId!);
   return endpoint;
 }
 
@@ -273,25 +277,39 @@ function webDeviceKey(): string {
   return value;
 }
 
-function endpointStorageKey(platform: "web" | "android"): string {
+function endpointStorageKey(platform: PushPlatform): string {
   return `mimorii.push.endpoint:${getServerUrl()}:${platform}`;
 }
 
-function storedEndpointId(platform: "web" | "android"): string | null {
+function registrationStorageKey(platform: PushPlatform): string {
+  return `mimorii.push.registration:${getServerUrl()}:${platform}`;
+}
+
+function storedEndpointId(platform: PushPlatform): string | null {
   return localStorage.getItem(endpointStorageKey(platform));
 }
 
-function storeEndpointId(platform: "web" | "android", id: string): void {
+function storeEndpoint(platform: PushPlatform, id: string, registrationIdentifier: string): void {
   localStorage.setItem(endpointStorageKey(platform), id);
+  localStorage.setItem(registrationStorageKey(platform), registrationIdentifier);
 }
 
-function clearStoredEndpointId(platform: "web" | "android"): void {
+function clearStoredEndpointId(platform: PushPlatform): void {
   localStorage.removeItem(endpointStorageKey(platform));
+  localStorage.removeItem(registrationStorageKey(platform));
+}
+
+function registrationIdentifierChanged(
+  platform: PushPlatform,
+  registrationIdentifier: string | null
+): boolean {
+  const stored = localStorage.getItem(registrationStorageKey(platform));
+  return Boolean(stored && registrationIdentifier && stored !== registrationIdentifier);
 }
 
 function endpointRegistration(
   capabilities: NotificationPushCapabilities,
-  platform: "web" | "android"
+  platform: PushPlatform
 ): DevicePushState["registration"] {
   const id = storedEndpointId(platform);
   if (!id) return "missing";

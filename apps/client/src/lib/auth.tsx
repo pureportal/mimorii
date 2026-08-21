@@ -135,15 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    const teamId = activeTeamId ?? session?.teams[0]?.id;
-    if (teamId) revokePushOnLogout(teamId);
+    revokePushOnLogout();
     trackSwetrixEvent({ ev: "ACCOUNT_SIGNED_OUT" });
     resetSwetrixUser();
     storeSession(null);
     setProfileStatus("ready");
     localStorage.removeItem(TEAM_KEY);
     setActiveTeamIdState(null);
-  }, [activeTeamId, session, storeSession]);
+  }, [storeSession]);
 
   const refreshIdentity = useCallback(async () => {
     if (!session) {

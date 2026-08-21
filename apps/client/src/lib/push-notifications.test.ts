@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({
+  addPluginListener: vi.fn(),
   invoke: vi.fn(),
   isTauri: () => false,
 }));
@@ -57,7 +58,7 @@ describe("browser push lifecycle", () => {
       subscribe
     );
 
-    await enablePush("team-1", capabilities);
+    await enablePush(capabilities);
 
     expect(sequence).toEqual(["permission", "subscribe"]);
     expect(subscribe).toHaveBeenCalledWith({
@@ -65,7 +66,7 @@ describe("browser push lifecycle", () => {
       applicationServerKey: new Uint8Array([1, 2, 3]),
     });
     expect(mocks.api).toHaveBeenCalledWith(
-      "/teams/team-1/notifications/endpoints/web",
+      "/notifications/endpoints/web",
       expect.objectContaining({ method: "POST" })
     );
   });
@@ -77,7 +78,7 @@ describe("browser push lifecycle", () => {
     const subscribe = vi.fn().mockResolvedValue(nextSubscription);
     installBrowserPush("granted", vi.fn().mockResolvedValue("granted"), oldSubscription, subscribe);
 
-    await enablePush("team-1", capabilities);
+    await enablePush(capabilities);
 
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(subscribe).toHaveBeenCalledOnce();
@@ -89,12 +90,48 @@ describe("browser push lifecycle", () => {
     installBrowserPush("denied", vi.fn().mockResolvedValue("denied"), subscription, vi.fn());
     localStorage.setItem("mimorii.push.endpoint:https://mimorii.example.test/api:web", endpoint.id);
 
-    await syncPushEndpoint("team-1", capabilities);
+    await syncPushEndpoint(capabilities);
 
     expect(unsubscribe).toHaveBeenCalledOnce();
-    expect(mocks.api).toHaveBeenCalledWith(`/teams/team-1/notifications/endpoints/${endpoint.id}`, {
+    expect(mocks.api).toHaveBeenCalledWith(`/notifications/endpoints/${endpoint.id}`, {
       method: "DELETE",
     });
+  });
+
+  it("repairs a missing server registration from the current subscription", async () => {
+    const subscription = pushSubscription(new Uint8Array([1, 2, 3]));
+    installBrowserPush("granted", vi.fn().mockResolvedValue("granted"), subscription, vi.fn());
+
+    await syncPushEndpoint({ ...capabilities, endpoints: [] });
+
+    expect(mocks.api).toHaveBeenCalledWith(
+      "/notifications/endpoints/web",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("repairs an invalid registration after the browser rotates its subscription", async () => {
+    const subscription = pushSubscription(
+      new Uint8Array([1, 2, 3]),
+      vi.fn().mockResolvedValue(true),
+      "https://push.example.test/replacement"
+    );
+    installBrowserPush("granted", vi.fn().mockResolvedValue("granted"), subscription, vi.fn());
+    localStorage.setItem("mimorii.push.endpoint:https://mimorii.example.test/api:web", endpoint.id);
+    localStorage.setItem(
+      "mimorii.push.registration:https://mimorii.example.test/api:web",
+      "https://push.example.test/expired"
+    );
+
+    await syncPushEndpoint({
+      ...capabilities,
+      endpoints: [{ ...endpoint, status: "invalid" }],
+    });
+
+    expect(mocks.api).toHaveBeenCalledWith(
+      "/notifications/endpoints/web",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 });
 
@@ -136,16 +173,17 @@ function installBrowserPush(
 
 function pushSubscription(
   key: Uint8Array,
-  unsubscribe = vi.fn().mockResolvedValue(true)
+  unsubscribe = vi.fn().mockResolvedValue(true),
+  subscriptionEndpoint = "https://push.example.test/subscription"
 ): PushSubscription {
   const applicationServerKey = Uint8Array.from(key).buffer;
   return {
-    endpoint: "https://push.example.test/subscription",
+    endpoint: subscriptionEndpoint,
     expirationTime: null,
     options: { applicationServerKey, userVisibleOnly: true },
     getKey: vi.fn(),
     toJSON: () => ({
-      endpoint: "https://push.example.test/subscription",
+      endpoint: subscriptionEndpoint,
       keys: { p256dh: "p256dh-key-value", auth: "authentication-key" },
     }),
     unsubscribe,

@@ -6,8 +6,18 @@ plugins {
 }
 
 fun environmentString(name: String): String {
-    val value = System.getenv(name) ?: ""
+    val value = (System.getenv(name) ?: "").trim()
     return "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+val firebaseValues = listOf(
+    "MIMORII_FIREBASE_API_KEY",
+    "MIMORII_FIREBASE_APPLICATION_ID",
+    "MIMORII_FIREBASE_PROJECT_ID",
+    "MIMORII_FIREBASE_SENDER_ID"
+).map { (System.getenv(it) ?: "").trim() }
+require(firebaseValues.count { it.isNotEmpty() } in setOf(0, firebaseValues.size)) {
+    "Configure all four MIMORII_FIREBASE_* values or leave all four unset"
 }
 
 android {
@@ -42,6 +52,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 kotlin {
@@ -56,4 +70,7 @@ dependencies {
     implementation("com.google.firebase:firebase-installations")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation(project(":tauri-android"))
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
 }

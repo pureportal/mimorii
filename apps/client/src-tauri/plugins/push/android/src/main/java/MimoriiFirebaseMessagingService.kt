@@ -16,11 +16,13 @@ import com.google.firebase.messaging.RemoteMessage
 class MimoriiFirebaseMessagingService : FirebaseMessagingService() {
   override fun onRegistered(installationId: String) {
     PushStorage.saveInstallationId(this, installationId)
+    PushEvents.registrationChanged()
   }
 
   override fun onUnregistered(installationId: String) {
     if (PushStorage.installationId(this) == installationId) {
       PushStorage.clearInstallationId(this)
+      PushEvents.registrationChanged()
     }
   }
 
@@ -33,35 +35,32 @@ class MimoriiFirebaseMessagingService : FirebaseMessagingService() {
     ) return
     val notificationManager = NotificationManagerCompat.from(this)
     if (!notificationManager.areNotificationsEnabled()) return
-    val title = message.notification?.title ?: message.data["title"] ?: "Mimorii"
-    val body = message.notification?.body ?: message.data["body"] ?: ""
-    val warning = message.data["severity"] != "info"
-    val tag = message.data["tag"] ?: message.messageId ?: "mimorii"
-    val path = PushNavigation.path(message.data["path"]) ?: PushNavigation.DEFAULT_PATH
+    val push = PushNotification.from(message)
     val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
       flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-      putExtra("path", path)
+      putExtra("path", push.path)
     } ?: return
     val pendingIntent = PendingIntent.getActivity(
       this,
-      tag.hashCode(),
+      push.tag.hashCode(),
       intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
     val notification = NotificationCompat.Builder(
       this,
-      if (warning) NotificationChannels.ALERTS else NotificationChannels.UPDATES
+      if (push.warning) NotificationChannels.ALERTS else NotificationChannels.UPDATES
     )
       .setSmallIcon(R.drawable.ic_stat_mimorii)
-      .setContentTitle(title)
-      .setContentText(body)
-      .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+      .setContentTitle(push.title)
+      .setContentText(push.body)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(push.body))
       .setContentIntent(pendingIntent)
       .setAutoCancel(true)
+      .setOnlyAlertOnce(true)
       .setPriority(
-        if (warning) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
+        if (push.warning) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
       )
       .build()
-    notificationManager.notify(tag, 0, notification)
+    notificationManager.notify(push.tag, 0, notification)
   }
 }

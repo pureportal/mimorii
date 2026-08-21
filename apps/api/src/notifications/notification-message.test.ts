@@ -25,4 +25,22 @@ describe("notificationMessage navigation", () => {
       appRoutes.alertHistory
     );
   });
+
+  it("collapses retries of one occurrence without collapsing later state changes", () => {
+    const payload = {
+      title: "Server is down",
+      dedupeKey: "check:resource-1",
+      occurredAt: "2026-08-21T10:00:00.000Z",
+    };
+    const first = notificationMessage("check.degraded", payload);
+    const retry = notificationMessage("check.degraded", payload);
+    const recovered = notificationMessage("check.recovered", {
+      ...payload,
+      occurredAt: "2026-08-21T10:05:00.000Z",
+    });
+
+    expect(retry).toMatchObject({ tag: first.tag, topic: first.topic });
+    expect(recovered.tag).not.toBe(first.tag);
+    expect(recovered.topic).not.toBe(first.topic);
+  });
 });

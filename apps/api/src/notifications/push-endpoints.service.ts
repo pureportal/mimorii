@@ -9,7 +9,6 @@ import { AuditService } from "../common/audit.service.js";
 import { encryptConfiguration } from "../common/crypto.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
 import { DatabaseService } from "../database/database.service.js";
-import { TeamAccessService } from "../teams/team-access.service.js";
 import { FirebasePushProvider } from "./firebase-push.provider.js";
 import type {
   RegisterAndroidEndpointDto,
@@ -33,7 +32,6 @@ export interface NotificationEndpointRow {
 export class PushEndpointsService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly access: TeamAccessService,
     private readonly audit: AuditService,
     private readonly targets: TargetSafetyService,
     private readonly webPush: WebPushProvider,
@@ -44,8 +42,7 @@ export class PushEndpointsService {
     return this.webPush.available() || this.firebase.available();
   }
 
-  async capabilities(userId: string, teamId: string): Promise<NotificationPushCapabilities> {
-    await this.access.require(userId, teamId, "viewer");
+  async capabilities(userId: string): Promise<NotificationPushCapabilities> {
     const endpoints = await this.database.all<NotificationEndpointRow>(
       "SELECT * FROM notification_endpoints WHERE user_id = ? ORDER BY created_at DESC",
       userId
@@ -62,42 +59,30 @@ export class PushEndpointsService {
 
   async registerWeb(
     userId: string,
-    teamId: string,
     input: RegisterWebPushEndpointDto
   ): Promise<NotificationEndpointSummary> {
-    await this.access.require(userId, teamId, "viewer");
     if (!this.webPush.available()) throw new BadRequestException("Web Push is not configured");
     const configuration = this.webConfiguration(input.subscription);
     await this.targets.resolveStrictPublicHost(new URL(configuration.endpoint).hostname);
-    return this.register(
-      userId,
-      teamId,
-      "web",
-      input.deviceKey,
-      configuration.endpoint,
-      configuration
-    );
+    return this.register(userId, "web", input.deviceKey, configuration.endpoint, configuration);
   }
 
   async registerAndroid(
     userId: string,
-    teamId: string,
     input: RegisterAndroidEndpointDto
   ): Promise<NotificationEndpointSummary> {
-    await this.access.require(userId, teamId, "viewer");
     if (!this.firebase.available()) {
       throw new BadRequestException("Android push is not configured");
     }
     if (!/^[A-Za-z0-9_-]+$/.test(input.installationId)) {
       throw new BadRequestException("Firebase installation ID is invalid");
     }
-    return this.register(userId, teamId, "android", input.deviceKey, input.installationId, {
+    return this.register(userId, "android", input.deviceKey, input.installationId, {
       installationId: input.installationId,
     });
   }
 
-  async remove(userId: string, teamId: string, id: string): Promise<void> {
-    await this.access.require(userId, teamId, "viewer");
+  async remove(userId: string, id: string): Promise<void> {
     const result = await this.database.run(
       "DELETE FROM notification_endpoints WHERE id = ? AND user_id = ?",
       id,
@@ -105,7 +90,6 @@ export class PushEndpointsService {
     );
     if (result.changes === 0) throw new NotFoundException("Notification endpoint not found");
     await this.audit.record({
-      teamId,
       userId,
       action: "notification_endpoint.deleted",
       subjectType: "notification_endpoint",
@@ -127,7 +111,6 @@ export class PushEndpointsService {
 
   private async register(
     userId: string,
-    teamId: string,
     platform: NotificationEndpointPlatform,
     deviceKey: string,
     endpoint: string,
@@ -140,13 +123,16 @@ export class PushEndpointsService {
     const registration = await this.database.transaction(async () => {
       await this.database.get("SELECT id FROM users WHERE id = ? FOR UPDATE", userId);
       const previous = await this.database.get<
-        Pick<NotificationEndpointRow, "endpoint_hash" | "status" | "user_id">
+        Pick<NotificationEndpointRow, "id" | "endpoint_hash" | "status" | "user_id">
       >(
-        `SELECT endpoint_hash, status, user_id FROM notification_endpoints
+        `SELECT id, endpoint_hash, status, user_id FROM notification_endpoints
          WHERE platform = ? AND device_key_hash = ? FOR UPDATE`,
         platform,
         deviceKeyHash
       );
+      if (previous && previous.user_id !== userId) {
+        await this.database.run("DELETE FROM notification_endpoints WHERE id = ?", previous.id);
+      }
       await this.database.run(
         `DELETE FROM notification_endpoints
          WHERE platform = ? AND endpoint_hash = ? AND device_key_hash != ?`,
@@ -198,7 +184,6 @@ export class PushEndpointsService {
     if (!registration.row) throw new Error("Notification endpoint registration failed");
     if (registration.changed) {
       await this.audit.record({
-        teamId,
         userId,
         action: "notification_endpoint.registered",
         subjectType: "notification_endpoint",

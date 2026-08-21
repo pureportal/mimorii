@@ -3,29 +3,34 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellOff, BellRing, MonitorSmartphone } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
-import { devicePushState, disablePush, enablePush } from "../lib/push-notifications";
+import {
+  devicePushState,
+  disablePush,
+  enablePush,
+  openNotificationSettings,
+} from "../lib/push-notifications";
 import { StatusBadge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 
-export function NotificationDeviceCard({ teamId }: { teamId: string }) {
+export function NotificationDeviceCard() {
   const queryClient = useQueryClient();
   const capabilities = useQuery({
-    queryKey: ["notification-push", teamId],
-    queryFn: () => api<NotificationPushCapabilities>(`/teams/${teamId}/notifications/push`),
+    queryKey: ["notification-push"],
+    queryFn: () => api<NotificationPushCapabilities>("/notifications/push"),
   });
   const state = useQuery({
-    queryKey: ["notification-device", teamId, capabilities.data],
+    queryKey: ["notification-device", capabilities.data],
     queryFn: () => devicePushState(capabilities.data!),
     enabled: Boolean(capabilities.data),
   });
   const refresh = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["notification-push", teamId] }),
-      queryClient.invalidateQueries({ queryKey: ["notification-device", teamId] }),
+      queryClient.invalidateQueries({ queryKey: ["notification-push"] }),
+      queryClient.invalidateQueries({ queryKey: ["notification-device"] }),
     ]);
   const enable = useMutation({
-    mutationFn: () => enablePush(teamId, capabilities.data!),
+    mutationFn: () => enablePush(capabilities.data!),
     onSuccess: async () => {
       await refresh();
       toast.success("Notifications enabled");
@@ -33,7 +38,7 @@ export function NotificationDeviceCard({ teamId }: { teamId: string }) {
     onError: (error) => toast.error(error.message),
   });
   const disable = useMutation({
-    mutationFn: () => disablePush(teamId),
+    mutationFn: () => disablePush(),
     onSuccess: async () => {
       await refresh();
       toast.success("Notifications disabled");
@@ -51,6 +56,7 @@ export function NotificationDeviceCard({ teamId }: { teamId: string }) {
         ? "Blocked in device settings"
         : null;
   const status = blocked ?? (current?.registration === "invalid" ? "Registration expired" : null);
+  const openSettings = current?.platform === "android" && current.permission === "denied";
 
   return (
     <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -66,7 +72,11 @@ export function NotificationDeviceCard({ teamId }: { teamId: string }) {
         </div>
         {status ? <p className="mt-1 text-sm text-muted">{status}</p> : null}
       </div>
-      {current?.enabled ? (
+      {openSettings ? (
+        <Button variant="outline" onClick={() => void openNotificationSettings()}>
+          Open settings
+        </Button>
+      ) : current?.enabled ? (
         <Button variant="outline" onClick={() => disable.mutate()} disabled={disable.isPending}>
           <BellOff /> Disable
         </Button>

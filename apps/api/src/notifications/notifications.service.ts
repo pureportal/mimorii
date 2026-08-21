@@ -21,6 +21,7 @@ import {
   PermanentNotificationDeliveryError,
   RetryableNotificationDeliveryError,
 } from "./notification-delivery.errors.js";
+import { notificationOccurrenceKey } from "./notification-occurrence.js";
 import { PushDeliveryService } from "./push-delivery.service.js";
 import { PushEndpointsService } from "./push-endpoints.service.js";
 import type {
@@ -259,9 +260,10 @@ export class NotificationsService {
       title: "Mimorii test notification",
       message: "This channel is configured correctly.",
       severity: "info",
-      dedupeKey: `notification-test:${id}`,
+      dedupeKey: `notification-test:${id}:${randomUUID()}`,
       occurredAt: new Date().toISOString(),
     });
+    if (!deliveryId) throw new Error("Test notification could not be queued");
     await this.deliverById(deliveryId);
     const delivery = await this.deliveryRow(deliveryId);
     await this.audit.record({
@@ -324,7 +326,7 @@ export class NotificationsService {
       channels.map((channel) => this.enqueueChannel(channel, event, payload))
     );
     if (event.startsWith("incident.")) await this.enqueueStatusSubscribers(event, payload);
-    return deliveries;
+    return deliveries.filter((id): id is string => id !== null);
   }
 
   @Interval(5_000)
@@ -415,28 +417,33 @@ export class NotificationsService {
     channel: ChannelRow,
     event: NotificationEvent,
     payload: Record<string, unknown>
-  ): Promise<string> {
+  ): Promise<string | null> {
     const id = randomUUID();
     const now = new Date().toISOString();
-    await this.database.transaction(async () => {
-      await this.database.run(
+    const inserted = await this.database.transaction(async () => {
+      const result = await this.database.run(
         `INSERT INTO notification_deliveries
-         (id, team_id, channel_id, event, payload_json, next_attempt_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, team_id, channel_id, event, payload_json, occurrence_key, next_attempt_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (channel_id, event, occurrence_key)
+         WHERE occurrence_key IS NOT NULL DO NOTHING`,
         id,
         channel.team_id,
         channel.id,
         event,
         JSON.stringify(payload),
+        notificationOccurrenceKey(event, payload),
         now,
         now
       );
+      if (result.changes === 0) return false;
       if (channel.type === "push") {
         const configuration = decryptConfiguration<PushConfiguration>(channel.configuration_json);
         await this.pushDeliveries.fanOut(id, channel.team_id, configuration.userIds);
       }
+      return true;
     });
-    return id;
+    return inserted ? id : null;
   }
 
   private async deliverById(id: string): Promise<void> {
@@ -601,15 +608,19 @@ export class NotificationsService {
       ...resourceIds
     );
     const now = new Date().toISOString();
+    const occurrenceKey = notificationOccurrenceKey(event, payload);
     for (const subscriber of subscribers) {
       await this.database.run(
         `INSERT INTO status_subscriber_deliveries
-         (id, subscriber_id, event, payload_json, next_attempt_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         (id, subscriber_id, event, payload_json, occurrence_key, next_attempt_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (subscriber_id, event, occurrence_key)
+         WHERE occurrence_key IS NOT NULL DO NOTHING`,
         randomUUID(),
         subscriber.id,
         event,
         JSON.stringify(payload),
+        occurrenceKey,
         now,
         now
       );

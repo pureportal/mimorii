@@ -3,8 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./auth";
 
-const { apiMock, setAccessTokenMock } = vi.hoisted(() => ({
+const { apiMock, revokePushOnLogoutMock, setAccessTokenMock } = vi.hoisted(() => ({
   apiMock: vi.fn(),
+  revokePushOnLogoutMock: vi.fn(),
   setAccessTokenMock: vi.fn(),
 }));
 
@@ -15,7 +16,7 @@ vi.mock("./api", () => ({
 }));
 
 vi.mock("./privacy", () => ({ usePrivacy: () => ({ preferences: null }) }));
-vi.mock("./push-notifications", () => ({ revokePushOnLogout: vi.fn() }));
+vi.mock("./push-notifications", () => ({ revokePushOnLogout: revokePushOnLogoutMock }));
 vi.mock("./swetrix", () => ({
   identifySwetrixUser: vi.fn(),
   resetSwetrixUser: vi.fn(),
@@ -34,6 +35,7 @@ describe("AuthProvider profile synchronization", () => {
   beforeEach(() => {
     localStorage.clear();
     apiMock.mockReset();
+    revokePushOnLogoutMock.mockReset();
     setAccessTokenMock.mockReset();
   });
 
@@ -84,6 +86,31 @@ describe("AuthProvider profile synchronization", () => {
       user: { acknowledgedTourIds: ["overview", "checks"] },
     });
   });
+
+  it("revokes this device's push registration when signing out", async () => {
+    apiMock.mockResolvedValue({ user: user([]), teams: [team] });
+    localStorage.setItem(
+      "mimorii.session",
+      JSON.stringify({
+        accessToken: "session-token",
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        user: user([]),
+        teams: [team],
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <SignOut />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(revokePushOnLogoutMock).toHaveBeenCalledOnce();
+    expect(localStorage.getItem("mimorii.session")).toBeNull();
+  });
 });
 
 function ProfileState() {
@@ -96,6 +123,15 @@ function ProfileState() {
         Acknowledge checks
       </button>
     </>
+  );
+}
+
+function SignOut() {
+  const { logout } = useAuth();
+  return (
+    <button type="button" onClick={logout}>
+      Sign out
+    </button>
   );
 }
 

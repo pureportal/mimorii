@@ -9,6 +9,7 @@ Mimorii push permissions
 - `allow-requestPermissions`
 - `allow-enable`
 - `allow-disable`
+- `allow-open-settings`
 
 ## Permission Table
 
@@ -93,6 +94,32 @@ Enables the mark_permission_requested command without any pre-configured scope.
 <td>
 
 Denies the mark_permission_requested command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`push:allow-open-settings`
+
+</td>
+<td>
+
+Enables the open_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`push:deny-open-settings`
+
+</td>
+<td>
+
+Denies the open_settings command without any pre-configured scope.
 
 </td>
 </tr>

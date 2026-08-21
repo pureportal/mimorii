@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { applicationDefault, getApps, initializeApp, type App } from "firebase-admin/app";
-import { getMessaging } from "firebase-admin/messaging";
+import { getMessaging, type Message } from "firebase-admin/messaging";
 import {
   InvalidNotificationEndpointError,
   PermanentNotificationDeliveryError,
@@ -25,31 +25,11 @@ export class FirebasePushProvider {
       throw new PermanentNotificationDeliveryError("Android push is not configured");
     }
     try {
-      await getMessaging(this.firebaseApp()).send({
-        fid: configuration.installationId,
-        notification: { title: message.title, body: message.body },
-        data: {
-          path: message.path,
-          severity: message.severity,
-          tag: message.tag,
-        },
-        android: {
-          collapseKey: message.topic,
-          priority: message.severity === "warning" ? "high" : "normal",
-          ttl: 300_000,
-          restrictedPackageName: "app.mimorii.monitor",
-          notification: {
-            channelId: message.severity === "warning" ? "monitoring_alerts" : "monitoring_updates",
-            tag: message.tag,
-          },
-        },
-      });
+      await getMessaging(this.firebaseApp()).send(firebasePushMessage(configuration, message));
     } catch (error) {
       const code = firebaseCode(error);
       if (
         code === "messaging/installation-id-not-registered" ||
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
         code === "messaging/invalid-recipient"
       ) {
         throw new InvalidNotificationEndpointError(
@@ -84,6 +64,33 @@ export class FirebasePushProvider {
       );
     return this.app;
   }
+}
+
+export function firebasePushMessage(
+  configuration: AndroidPushConfiguration,
+  message: PushMessage
+): Message {
+  return {
+    fid: configuration.installationId,
+    notification: { title: message.title, body: message.body },
+    data: {
+      title: message.title,
+      body: message.body,
+      path: message.path,
+      severity: message.severity,
+      tag: message.tag,
+    },
+    android: {
+      collapseKey: message.topic,
+      priority: message.severity === "warning" ? "high" : "normal",
+      ttl: 300_000,
+      restrictedPackageName: "app.mimorii.monitor",
+      notification: {
+        channelId: message.severity === "warning" ? "monitoring_alerts" : "monitoring_updates",
+        tag: message.tag,
+      },
+    },
+  };
 }
 
 function firebaseCode(error: unknown): string | null {

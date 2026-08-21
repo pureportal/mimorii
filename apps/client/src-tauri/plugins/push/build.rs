@@ -4,6 +4,7 @@ const COMMANDS: &[&str] = &[
     "requestPermissions",
     "enable",
     "disable",
+    "open_settings",
 ];
 
 fn main() {
