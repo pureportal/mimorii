@@ -133,7 +133,8 @@ export const guideTopics: readonly GuideTopic[] = [
     id: "resources",
     title: "Resources",
     group: "monitoring",
-    summary: "The websites, services, ports, and servers whose health you want Mimorii to follow.",
+    summary:
+      "Resources are the websites, services, ports, and servers you monitor. Open one to review its checks, current health, and history.",
     to: appRoutes.resources,
     exactPaths: [appRoutes.resources],
     keywords: ["website", "service", "server", "endpoint", "host", "target", "tags"],
@@ -168,13 +169,15 @@ export const guideTopics: readonly GuideTopic[] = [
     tour: [
       {
         target: '[data-guide-page="resources-toolbar"]',
-        title: "Find or add a resource",
-        content: "Search the current workspace or add a website, port, or server from here.",
+        title: "Search or start monitoring",
+        content:
+          "Search by name, address, or tag, or add a website, port, or server with its first check.",
       },
       {
         target: '[data-guide-page="resources-list"]',
-        title: "Resource cards",
-        content: "Each card shows the current state and opens the resource's full monitoring view.",
+        title: "Compare resource health",
+        content:
+          "Compare current health, passing checks, and last activity. Open a resource to investigate its monitoring history.",
       },
     ],
   },

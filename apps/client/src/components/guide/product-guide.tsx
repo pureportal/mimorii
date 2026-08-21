@@ -17,33 +17,22 @@ const interfaceTour: readonly GuideTourStop[] = [
   {
     target: '[data-guide="workspace-switcher"]',
     title: "Workspace",
-    content: "Choose which team's resources, monitoring, and settings you are viewing.",
+    content:
+      "Switch workspaces to monitor or manage another team's services; resources and settings stay scoped to the selected team.",
     placement: "right",
   },
   {
     target: '[data-guide="primary-navigation"], [data-guide="mobile-navigation"]',
     title: "Product areas",
     content:
-      "Monitoring, operations, insights, publishing, and workspace tools are grouped by purpose.",
+      "Monitoring tracks health; Operations handles incidents and maintenance; Insights analyzes reliability; Publishing shares status; Workspace manages people and access.",
     placement: "right",
   },
   {
-    target: '[data-guide="page-heading"]',
-    title: "Current page",
-    content:
-      "The small label names the menu group; the larger title names the page or nested view.",
-    placement: "bottom",
-  },
-  {
-    target: '[data-guide="page-content"]',
-    title: "Your work area",
-    content: "The controls and current data for the selected page appear here.",
-    placement: "top",
-  },
-  {
     target: '[data-guide="guide-trigger"]',
-    title: "Help stays nearby",
-    content: "Open Mimo Guide from any page whenever you need a menu explanation or workflow.",
+    title: "Mimo Guide",
+    content:
+      "Look up an unfamiliar feature or follow a workflow for tasks such as adding monitoring, setting alerts, or publishing status.",
     placement: "bottom",
   },
 ];
@@ -229,19 +218,13 @@ function contextualTour(topic: GuideTopic): GuideTourStop[] {
       ? [
           {
             target: `[data-guide-nav="${topic.navigationId}"]`,
-            title: `Find ${topic.title}`,
-            content: `This destination lives in the ${topic.group.replace("-", " ")} area.`,
+            title: topic.title,
+            content: topic.summary,
             placement: "right" as const,
           },
         ]
       : []),
     ...topic.tour,
-    {
-      target: '[data-guide="guide-trigger"]',
-      title: "Open the guide again",
-      content: "Return here for every menu, comparison, and step-by-step workflow.",
-      placement: "bottom",
-    },
   ];
 }
 

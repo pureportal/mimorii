@@ -5,8 +5,15 @@ import { appRoutes } from "../../lib/app-navigation";
 import type { GuideTopic } from "./guide-content";
 import { ProductGuide } from "./product-guide";
 
+interface CapturedTourStep {
+  content?: unknown;
+  placement?: string;
+  target?: Element | string;
+  title?: unknown;
+}
+
 const guideTourState = vi.hoisted(() => ({
-  steps: [] as Array<{ placement?: string }>,
+  steps: [] as CapturedTourStep[],
 }));
 
 vi.mock("./guide-dialog", () => ({
@@ -33,7 +40,7 @@ vi.mock("./guide-tour", () => ({
     onEnd,
   }: {
     run: boolean;
-    steps: Array<{ placement?: string }>;
+    steps: CapturedTourStep[];
     onEnd: (outcome: "finished" | "skipped") => void;
   }) => {
     guideTourState.steps = steps;
@@ -65,7 +72,9 @@ describe("ProductGuide automatic tours", () => {
   afterEach(() => {
     cleanup();
     guideTourState.steps = [];
-    document.querySelectorAll("[data-guide-page]").forEach((element) => element.remove());
+    document
+      .querySelectorAll("[data-guide-page], [data-guide-nav], [data-guide]")
+      .forEach((element) => element.remove());
     vi.clearAllMocks();
   });
 
@@ -150,6 +159,59 @@ describe("ProductGuide automatic tours", () => {
     expect(acknowledgeTour).not.toHaveBeenCalled();
   });
 
+  it("explains what Resources are without adding a repeated guide reminder", async () => {
+    const navigation = addVisibleAttributeTarget("data-guide-nav", "resources");
+    const toolbar = addVisibleTarget("resources-toolbar");
+    const list = addVisibleTarget("resources-list");
+    const guideTrigger = addVisibleAttributeTarget("data-guide", "guide-trigger");
+
+    renderGuide(appRoutes.resources);
+
+    expect(await screen.findByTestId("running-tour")).toBeInTheDocument();
+    expect(guideTourState.steps).toEqual([
+      expect.objectContaining({
+        target: navigation,
+        title: "Resources",
+        content:
+          "Resources are the websites, services, ports, and servers you monitor. Open one to review its checks, current health, and history.",
+        placement: "right",
+      }),
+      expect.objectContaining({
+        target: toolbar,
+        title: "Search or start monitoring",
+        content:
+          "Search by name, address, or tag, or add a website, port, or server with its first check.",
+      }),
+      expect.objectContaining({
+        target: list,
+        title: "Compare resource health",
+        content:
+          "Compare current health, passing checks, and last activity. Open a resource to investigate its monitoring history.",
+      }),
+    ]);
+    expect(guideTourState.steps).not.toContainEqual(
+      expect.objectContaining({ target: guideTrigger })
+    );
+  });
+
+  it("keeps only actionable stops in the general interface tour", async () => {
+    const workspace = addVisibleAttributeTarget("data-guide", "workspace-switcher");
+    const navigation = addVisibleAttributeTarget("data-guide", "primary-navigation");
+    addVisibleAttributeTarget("data-guide", "page-heading");
+    addVisibleAttributeTarget("data-guide", "page-content");
+    const guideTrigger = addVisibleAttributeTarget("data-guide", "guide-trigger");
+
+    renderGuide("/app/not-configured", { open: true });
+    fireEvent.click(screen.getByRole("button", { name: "Start current tour" }));
+
+    expect(await screen.findByTestId("running-tour")).toBeInTheDocument();
+    expect(guideTourState.steps).toEqual([
+      expect.objectContaining({ target: workspace, title: "Workspace" }),
+      expect.objectContaining({ target: navigation, title: "Product areas" }),
+      expect.objectContaining({ target: guideTrigger, title: "Mimo Guide" }),
+    ]);
+  });
+
   it("does not automatically launch on a view without a configured tour", async () => {
     addVisibleTarget("resources-toolbar");
     renderGuide("/app/not-configured");
@@ -168,12 +230,17 @@ function renderGuide(path: string, props: Partial<React.ComponentProps<typeof Pr
 }
 
 function addVisibleTarget(name: string) {
+  return addVisibleAttributeTarget("data-guide-page", name);
+}
+
+function addVisibleAttributeTarget(attribute: string, value: string) {
   const target = document.createElement("div");
-  target.dataset.guidePage = name;
+  target.setAttribute(attribute, value);
   Object.defineProperty(target, "getClientRects", {
     value: () => [{ bottom: 1, height: 1, left: 0, right: 1, top: 0, width: 1, x: 0, y: 0 }],
   });
   document.body.append(target);
+  return target;
 }
 
 function addVisibleDialog() {
