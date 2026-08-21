@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5", features = [] }
 
 [features]
+client-app = ["dep:tauri-plugin-push"]
 mobile-agent = ["dep:tauri-plugin-agent-mobile"]
 
 [dependencies]
@@ -20,7 +21,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.11", features = [] }
 tauri-plugin-agent-mobile = { path = "../../agent-mobile", optional = true }
-tauri-plugin-push = { path = "plugins/push" }
+tauri-plugin-push = { path = "plugins/push", optional = true }
 
 [profile.release]
 codegen-units = 1

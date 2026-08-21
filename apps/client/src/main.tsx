@@ -4,10 +4,12 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "sonner";
 import { App } from "./app";
+import { AndroidRouteBackHandler } from "./components/android-route-back-handler";
 import { PrivacyControls } from "./components/privacy-controls";
 import { PushEndpointSync } from "./components/push-endpoint-sync";
 import { AuthProvider } from "./lib/auth";
 import { PrivacyProvider } from "./lib/privacy";
+import { applicationRuntime } from "./lib/runtime";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -17,10 +19,13 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById("root")!).render(
+const root = createRoot(document.getElementById("root")!);
+
+root.render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AndroidRouteBackHandler enabled={applicationRuntime === "android-client"} />
         <PrivacyProvider>
           <AuthProvider>
             <App />

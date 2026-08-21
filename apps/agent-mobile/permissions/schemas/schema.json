@@ -319,6 +319,18 @@
           "markdownDescription": "Denies the enroll command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_background_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-background-settings",
+          "markdownDescription": "Enables the open_background_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_background_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-background-settings",
+          "markdownDescription": "Denies the open_background_settings command without any pre-configured scope."
+        },
+        {
           "description": "Enables the status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-status",
@@ -343,10 +355,10 @@
           "markdownDescription": "Denies the unenroll command without any pre-configured scope."
         },
         {
-          "description": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-unenroll`",
+          "description": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-unenroll`"
+          "markdownDescription": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`"
         }
       ]
     }

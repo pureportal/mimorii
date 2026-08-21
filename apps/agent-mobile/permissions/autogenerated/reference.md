@@ -7,6 +7,7 @@ Mimorii mobile collector permissions
 - `allow-status`
 - `allow-enroll`
 - `allow-collect-now`
+- `allow-open-background-settings`
 - `allow-unenroll`
 
 ## Permission Table
@@ -66,6 +67,32 @@ Enables the enroll command without any pre-configured scope.
 <td>
 
 Denies the enroll command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent-mobile:allow-open-background-settings`
+
+</td>
+<td>
+
+Enables the open_background_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent-mobile:deny-open-background-settings`
+
+</td>
+<td>
+
+Denies the open_background_settings command without any pre-configured scope.
 
 </td>
 </tr>

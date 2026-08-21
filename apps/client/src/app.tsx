@@ -2,8 +2,10 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LoadingState } from "./components/page-state";
 import { GlobalAdminRoute } from "./components/global-admin-route";
+import { AndroidClientLayout } from "./components/android-client-layout";
 import { PublicLayout } from "./components/public-layout";
 import { appPaths } from "./lib/app-navigation";
+import { applicationRuntime, startupPath, type ApplicationRuntime } from "./lib/runtime";
 
 const ProtectedLayout = lazy(() =>
   import("./components/dashboard-layout").then((module) => ({
@@ -93,14 +95,18 @@ const ImprintPage = lazy(() =>
   import("./pages/legal/imprint-page").then((module) => ({ default: module.ImprintPage }))
 );
 
-export function App() {
+export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRuntime }) {
+  const androidClient = runtime === "android-client";
   return (
     <Suspense fallback={<LoadingState />}>
       <Routes>
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route element={androidClient ? <AndroidClientLayout /> : <PublicLayout />}>
+          <Route
+            path="/"
+            element={androidClient ? <Navigate to="/login" replace /> : <LandingPage />}
+          />
+          <Route path="/login" element={<AuthPage mode="login" compact={androidClient} />} />
+          <Route path="/register" element={<AuthPage mode="register" compact={androidClient} />} />
           <Route path="/sponsors" element={<SponsorsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
@@ -144,7 +150,7 @@ export function App() {
             <Route path={appPaths.platformAudit} element={<GlobalAdminPage section="audit" />} />
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={startupPath(runtime)} replace />} />
       </Routes>
     </Suspense>
   );

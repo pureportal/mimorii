@@ -7,8 +7,15 @@ import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../lib/auth";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import { cn } from "../lib/cn";
 
-export function AuthPage({ mode }: { mode: "login" | "register" }) {
+export function AuthPage({
+  mode,
+  compact = false,
+}: {
+  mode: "login" | "register";
+  compact?: boolean;
+}) {
   const { session, login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,11 +48,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <main className="grid lg:grid-cols-[1fr_1.05fr]">
+    <main className={cn(!compact && "grid lg:grid-cols-[1fr_1.05fr]")}>
       <div className="flex flex-col px-5 py-6 sm:px-10 lg:px-14">
         <div className="mx-auto my-auto w-full max-w-md py-12">
           <h1 className="font-display text-3xl font-black tracking-tight">
-            {mode === "login" ? "Welcome back" : "Create your workspace"}
+            {mode === "login" ? (compact ? "Sign in" : "Welcome back") : "Create your workspace"}
           </h1>
           <form className="mt-8 grid gap-5" onSubmit={submit}>
             {mode === "register" ? (
@@ -157,25 +164,29 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           </div>
         </div>
       </div>
-      <div className="relative hidden overflow-hidden bg-night p-10 lg:block">
-        <img
-          src="/art/mimorii-hero.png"
-          alt=""
-          className="absolute inset-0 size-full object-cover opacity-82"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-night via-night/10 to-transparent" />
-        <Card className="absolute bottom-10 left-10 right-10 border-white/10 bg-night/76 p-6 text-white backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-mint text-night">
-              <ServerCog />
-            </span>
-            <div>
-              <p className="font-display text-lg font-bold">Your server. Your metrics.</p>
-              <p className="text-sm text-white/58">Local accounts. Agents that only connect out.</p>
+      {compact ? null : (
+        <div className="relative hidden overflow-hidden bg-night p-10 lg:block">
+          <img
+            src="/art/mimorii-hero.png"
+            alt=""
+            className="absolute inset-0 size-full object-cover opacity-82"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-night via-night/10 to-transparent" />
+          <Card className="absolute bottom-10 left-10 right-10 border-white/10 bg-night/76 p-6 text-white backdrop-blur-xl">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-mint text-night">
+                <ServerCog />
+              </span>
+              <div>
+                <p className="font-display text-lg font-bold">Your server. Your metrics.</p>
+                <p className="text-sm text-white/58">
+                  Local accounts. Agents that only connect out.
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
     </main>
   );
 }

@@ -22,6 +22,7 @@ data class AgentMobileEnrollment(
   val serverUrl: String,
   val enrollmentKey: String,
   val collectorId: String,
+  val collectorName: String,
   val collectionIntervalSeconds: Long,
   val revision: String
 )
@@ -37,6 +38,7 @@ object AgentMobileStorage {
   private const val SERVER_URL = "server_url"
   private const val ENROLLMENT_KEY = "enrollment_key"
   private const val COLLECTOR_ID = "collector_id"
+  private const val COLLECTOR_NAME = "collector_name"
   private const val COLLECTION_INTERVAL_SECONDS = "collection_interval_seconds"
   private const val ENROLLMENT_REVISION = "enrollment_revision"
   private const val PENDING_SUBMISSION_ID = "pending_submission_id"
@@ -55,6 +57,7 @@ object AgentMobileStorage {
       .putString(SERVER_URL, enrollment.serverUrl)
       .putString(ENROLLMENT_KEY, encrypt(enrollment.enrollmentKey))
       .putString(COLLECTOR_ID, enrollment.collectorId)
+      .putString(COLLECTOR_NAME, enrollment.collectorName)
       .putLong(COLLECTION_INTERVAL_SECONDS, enrollment.collectionIntervalSeconds)
       .putString(ENROLLMENT_REVISION, enrollment.revision)
       .remove(LAST_ERROR)
@@ -70,6 +73,7 @@ object AgentMobileStorage {
     val preferences = preferences(context)
     val hasCredentials = preferences.contains(SERVER_URL) ||
       preferences.contains(ENROLLMENT_KEY) ||
+      preferences.contains(COLLECTOR_NAME) ||
       preferences.contains(COLLECTION_INTERVAL_SECONDS) ||
       preferences.contains(ENROLLMENT_REVISION)
     if (!hasCredentials) return null
@@ -77,10 +81,19 @@ object AgentMobileStorage {
       val serverUrl = requireNotNull(preferences.getString(SERVER_URL, null))
       val encryptedKey = requireNotNull(preferences.getString(ENROLLMENT_KEY, null))
       val collectorId = canonicalUuid(preferences.getString(COLLECTOR_ID, null))
+      val collectorName = requireNotNull(preferences.getString(COLLECTOR_NAME, null)).trim()
+      require(collectorName.isNotEmpty() && collectorName.length <= 100)
       val interval = preferences.getLong(COLLECTION_INTERVAL_SECONDS, 0)
       val revision = canonicalUuid(preferences.getString(ENROLLMENT_REVISION, null))
       require(interval in 900L..3_600L)
-      AgentMobileEnrollment(serverUrl, decrypt(encryptedKey), collectorId, interval, revision)
+      AgentMobileEnrollment(
+        serverUrl,
+        decrypt(encryptedKey),
+        collectorId,
+        collectorName,
+        interval,
+        revision
+      )
     } catch (_: Exception) {
       invalidateEnrollmentState(
         context,
@@ -203,6 +216,7 @@ object AgentMobileStorage {
       .remove(SERVER_URL)
       .remove(ENROLLMENT_KEY)
       .remove(COLLECTOR_ID)
+      .remove(COLLECTOR_NAME)
       .remove(COLLECTION_INTERVAL_SECONDS)
       .remove(ENROLLMENT_REVISION)
       .remove(LAST_SUBMITTED_AT)
@@ -221,6 +235,7 @@ object AgentMobileStorage {
     val editor = preferences.edit()
       .remove(SERVER_URL)
       .remove(ENROLLMENT_KEY)
+      .remove(COLLECTOR_NAME)
       .remove(COLLECTION_INTERVAL_SECONDS)
       .remove(ENROLLMENT_REVISION)
       .putString(LAST_ERROR, error.take(500))

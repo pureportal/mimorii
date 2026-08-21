@@ -33,7 +33,14 @@ const buildArguments = [
   "x86_64",
   "--ci",
 ];
-if (product === "agent") {
+if (product === "client") {
+  buildArguments.push(
+    "--features",
+    "client-app",
+    "--config",
+    join(repoRoot, "apps/client/src-tauri/tauri.android-client.conf.json")
+  );
+} else {
   buildArguments.push(
     "--features",
     "mobile-agent",

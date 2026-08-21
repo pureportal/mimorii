@@ -752,6 +752,13 @@ export interface AgentSummary {
   createdAt: string;
 }
 
+export interface AgentEnrollment {
+  collectorId: string;
+  name: string;
+  kind: CollectorKind;
+  collectionIntervalSeconds: number;
+}
+
 export const mobileBatteryPowerSources = [
   "none",
   "ac",

@@ -1,6 +1,12 @@
 package app.mimorii.agentmobile
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.webkit.WebView
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -8,70 +14,61 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
-import java.net.URI
-import java.util.UUID
+import java.util.concurrent.Executors
 import org.json.JSONObject
 
 @InvokeArg
 class EnrollArgs {
   lateinit var serverUrl: String
   lateinit var enrollmentKey: String
-  lateinit var collectorId: String
-  var collectionIntervalSeconds: Long = 0
 }
 
 @TauriPlugin
 class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
+  private val commands = Executors.newSingleThreadExecutor()
+
   override fun load(webView: WebView) {
-    val enrollment = AgentMobileStorage.enrollment(activity)
-    try {
-      if (enrollment == null) {
-        AgentMobileScheduler.cancel(activity)
-      } else {
-        AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
-      }
-    } catch (error: Exception) {
-      if (enrollment != null) {
-        AgentMobileStorage.recordError(
-          activity,
-          enrollment,
-          error.message ?: "Background collection could not be scheduled"
-        )
-      }
-    }
+    AgentMobileLifecycle.reconcile(activity)
   }
 
   @Command
   fun status(invoke: Invoke) {
+    AgentMobileLifecycle.reconcile(activity)
     invoke.resolve(state())
   }
 
   @Command
   fun enroll(invoke: Invoke) {
-    try {
-      val args = invoke.parseArgs(EnrollArgs::class.java)
-      val enrollment = AgentMobileEnrollment(
-        serverUrl = normalizeMobileServerUrl(args.serverUrl),
-        enrollmentKey = validateEnrollmentKey(args.enrollmentKey),
-        collectorId = UUID.fromString(args.collectorId).toString(),
-        collectionIntervalSeconds = validateInterval(args.collectionIntervalSeconds),
-        revision = UUID.randomUUID().toString()
-      )
-      AgentMobileStorage.saveEnrollment(activity, enrollment)
-      try {
-        AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
-        AgentMobileScheduler.collectNow(activity)
-      } catch (error: Exception) {
-        AgentMobileStorage.recordError(
-          activity,
-          enrollment,
-          error.message ?: "Background collection could not be scheduled"
-        )
-        throw error
-      }
-      invoke.resolve(state())
+    val args = try {
+      invoke.parseArgs(EnrollArgs::class.java)
     } catch (error: Exception) {
-      invoke.reject(error.message ?: "Mobile collector enrollment failed")
+      invoke.reject(error.message ?: "Enrollment details are invalid")
+      return
+    }
+    commands.execute {
+      try {
+        val enrollment = AgentEnrollmentVerifier(activity).verify(
+          args.serverUrl,
+          args.enrollmentKey
+        )
+        AgentMobileStorage.saveEnrollment(activity, enrollment)
+        try {
+          AgentMobileScheduler.ensurePeriodic(activity, enrollment.collectionIntervalSeconds)
+          AgentMobileScheduler.collectNow(activity)
+        } catch (error: Exception) {
+          AgentMobileStorage.recordError(
+            activity,
+            enrollment,
+            error.message ?: "Background collection could not be scheduled"
+          )
+          throw error
+        }
+        activity.runOnUiThread { invoke.resolve(state()) }
+      } catch (error: Exception) {
+        activity.runOnUiThread {
+          invoke.reject(error.message ?: "Android collector enrollment failed")
+        }
+      }
     }
   }
 
@@ -80,7 +77,7 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
     try {
       if (AgentMobileStorage.enrollment(activity) == null) {
         AgentMobileScheduler.cancel(activity)
-        invoke.reject("Mobile collector is not enrolled")
+        invoke.reject("Android collector is not enrolled")
         return
       }
       AgentMobileScheduler.collectNow(activity)
@@ -91,18 +88,38 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   @Command
+  fun open_background_settings(invoke: Invoke) {
+    if (!isBackgroundRestricted()) {
+      invoke.reject("Background access is already allowed")
+      return
+    }
+    try {
+      activity.startActivity(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+          data = Uri.parse("package:${activity.packageName}")
+        }
+      )
+      invoke.resolve()
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Android settings could not be opened")
+    }
+  }
+
+  @Command
   fun unenroll(invoke: Invoke) {
     try {
       AgentMobileScheduler.cancel(activity)
       AgentMobileStorage.clearEnrollment(activity)
       invoke.resolve(state())
     } catch (error: Exception) {
-      invoke.reject(error.message ?: "Mobile collector could not be disconnected")
+      invoke.reject(error.message ?: "Android collector could not be disconnected")
     }
   }
 
   private fun state(): JSObject {
     val enrollment = AgentMobileStorage.enrollment(activity)
+    val backgroundRestricted = isBackgroundRestricted()
+    val powerManager = activity.getSystemService(PowerManager::class.java)
     return JSObject().apply {
       put("available", true)
       put("enrolled", enrollment != null)
@@ -110,36 +127,34 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
         "collectorId",
         enrollment?.collectorId ?: AgentMobileStorage.collectorId(activity) ?: JSONObject.NULL
       )
+      put("collectorName", enrollment?.collectorName ?: JSONObject.NULL)
+      put("serverUrl", enrollment?.serverUrl ?: JSONObject.NULL)
       put(
         "collectionIntervalSeconds",
         enrollment?.collectionIntervalSeconds ?: JSONObject.NULL
       )
       put("lastSubmittedAt", AgentMobileStorage.lastSubmittedAt(activity) ?: JSONObject.NULL)
       put("lastError", AgentMobileStorage.lastError(activity) ?: JSONObject.NULL)
+      put(
+        "backgroundMode",
+        when {
+          enrollment == null -> "inactive"
+          backgroundRestricted -> "restricted"
+          else -> "scheduled"
+        }
+      )
+      put("backgroundRestricted", backgroundRestricted)
+      put(
+        "batteryOptimizationExempt",
+        powerManager.isIgnoringBatteryOptimizations(activity.packageName)
+      )
+      put("bootRecoveryEnabled", true)
+      put("foregroundService", false)
+      put("notificationPermissionRequired", false)
     }
   }
 
-  private fun validateEnrollmentKey(value: String): String = value.trim().also {
-    require(it.startsWith("mim_agent_") && it.length >= 40) { "Collector key is invalid" }
-  }
-
-  private fun validateInterval(value: Long): Long = value.also {
-    require(it in 900L..3_600L) { "Collection interval must be between 900 and 3600 seconds" }
-  }
-}
-
-internal fun normalizeMobileServerUrl(value: String): String {
-  val uri = URI(value.trim())
-  require(uri.scheme == "https" || uri.scheme == "http") { "Server must use HTTP or HTTPS" }
-  require(uri.host != null) { "Server URL is invalid" }
-  if (uri.scheme == "http") {
-    require(uri.host in setOf("localhost", "127.0.0.1", "::1", "[::1]")) {
-      "HTTP exposes the collector key; use HTTPS"
-    }
-  }
-  require(uri.query == null && uri.fragment == null && uri.userInfo == null) {
-    "Server URL is invalid"
-  }
-  val path = uri.path.trimEnd('/').let { if (it.endsWith("/api")) it else "$it/api" }
-  return URI(uri.scheme, null, uri.host, uri.port, path, null, null).toString().trimEnd('/')
+  private fun isBackgroundRestricted(): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+      activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted
 }

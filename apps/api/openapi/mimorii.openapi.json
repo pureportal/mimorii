@@ -1566,6 +1566,142 @@
         ]
       }
     },
+    "/api/teams/{teamId}/resources/{id}/image": {
+      "get": {
+        "operationId": "image",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource image",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource image not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resources"
+        ]
+      },
+      "post": {
+        "operationId": "replaceImage",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resources"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/resources/{id}/favicon": {
+      "post": {
+        "operationId": "refreshFavicon",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resources"
+        ]
+      }
+    },
     "/api/teams/{teamId}/maintenance": {
       "get": {
         "operationId": "list",
@@ -1831,146 +1967,6 @@
         },
         "responses": {
           "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Notifications"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/notifications/push": {
-      "get": {
-        "operationId": "push",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Notifications"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/notifications/endpoints/web": {
-      "post": {
-        "operationId": "registerWebEndpoint",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterWebPushEndpointDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Notifications"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/notifications/endpoints/android": {
-      "post": {
-        "operationId": "registerAndroidEndpoint",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterAndroidEndpointDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Notifications"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/notifications/endpoints/{id}": {
-      "delete": {
-        "operationId": "removeEndpoint",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
             "description": ""
           }
         },
@@ -2303,6 +2299,111 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/notifications/push": {
+      "get": {
+        "operationId": "capabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/notifications/endpoints/web": {
+      "post": {
+        "operationId": "registerWeb",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterWebPushEndpointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/notifications/endpoints/android": {
+      "post": {
+        "operationId": "registerAndroid",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterAndroidEndpointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/notifications/endpoints/{id}": {
+      "delete": {
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
             "description": ""
           }
         },
@@ -3465,6 +3566,25 @@
         ],
         "tags": [
           "Agents"
+        ]
+      }
+    },
+    "/api/agent/enrollment": {
+      "get": {
+        "operationId": "enrollment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "agent-key": []
+          }
+        ],
+        "tags": [
+          "Agent transport"
         ]
       }
     },
@@ -4971,40 +5091,6 @@
           }
         }
       },
-      "RegisterWebPushEndpointDto": {
-        "type": "object",
-        "properties": {
-          "deviceKey": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "subscription": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "deviceKey",
-          "subscription"
-        ]
-      },
-      "RegisterAndroidEndpointDto": {
-        "type": "object",
-        "properties": {
-          "deviceKey": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "installationId": {
-            "type": "string",
-            "minLength": 10,
-            "maxLength": 300
-          }
-        },
-        "required": [
-          "deviceKey",
-          "installationId"
-        ]
-      },
       "CreateNotificationChannelDto": {
         "type": "object",
         "properties": {
@@ -5292,6 +5378,40 @@
             "default": true
           }
         }
+      },
+      "RegisterWebPushEndpointDto": {
+        "type": "object",
+        "properties": {
+          "deviceKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subscription": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "deviceKey",
+          "subscription"
+        ]
+      },
+      "RegisterAndroidEndpointDto": {
+        "type": "object",
+        "properties": {
+          "deviceKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "deviceKey",
+          "installationId"
+        ]
       },
       "CreateCheckDto": {
         "type": "object",

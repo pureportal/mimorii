@@ -1,14 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Mimorii Agent",
-  "identifier": "app.mimorii.agent",
   "app": {
     "security": {
       "capabilities": [
         {
-          "identifier": "android-agent",
+          "identifier": "android-client",
           "windows": ["main"],
-          "permissions": ["agent-mobile:default"]
+          "permissions": ["push:default"]
         }
       ]
     }

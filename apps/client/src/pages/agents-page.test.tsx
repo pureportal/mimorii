@@ -2,22 +2,11 @@ import type { AgentSummary } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parseAgentEnrollmentCode } from "../lib/agent-enrollment";
 import { CollectorsPage } from "./agents-page";
 
-const {
-  apiMock,
-  collectMobileStatusNowMock,
-  enrollMobileCollectorMock,
-  mobileCollectorStateMock,
-  unenrollMobileCollectorMock,
-  useAuthMock,
-  writeTextMock,
-} = vi.hoisted(() => ({
+const { apiMock, useAuthMock, writeTextMock } = vi.hoisted(() => ({
   apiMock: vi.fn(),
-  collectMobileStatusNowMock: vi.fn(),
-  enrollMobileCollectorMock: vi.fn(),
-  mobileCollectorStateMock: vi.fn(),
-  unenrollMobileCollectorMock: vi.fn(),
   useAuthMock: vi.fn(),
   writeTextMock: vi.fn(),
 }));
@@ -29,13 +18,6 @@ vi.mock("../lib/api", () => ({
 }));
 
 vi.mock("../lib/auth", () => ({ useAuth: useAuthMock }));
-
-vi.mock("../lib/mobile-collector", () => ({
-  collectMobileStatusNow: collectMobileStatusNowMock,
-  enrollMobileCollector: enrollMobileCollectorMock,
-  mobileCollectorState: mobileCollectorStateMock,
-  unenrollMobileCollector: unenrollMobileCollectorMock,
-}));
 
 const warehouseRelay: AgentSummary = {
   id: "agent-1",
@@ -70,10 +52,6 @@ const fieldPhone: AgentSummary = {
 describe("CollectorsPage confirmations", () => {
   beforeEach(() => {
     apiMock.mockReset();
-    collectMobileStatusNowMock.mockReset();
-    enrollMobileCollectorMock.mockReset();
-    mobileCollectorStateMock.mockReset();
-    unenrollMobileCollectorMock.mockReset();
     useAuthMock.mockReset();
     writeTextMock.mockReset();
     Object.defineProperty(navigator, "clipboard", {
@@ -81,14 +59,6 @@ describe("CollectorsPage confirmations", () => {
       value: { writeText: writeTextMock },
     });
     writeTextMock.mockResolvedValue(undefined);
-    mobileCollectorStateMock.mockResolvedValue({
-      available: false,
-      enrolled: false,
-      collectorId: null,
-      collectionIntervalSeconds: null,
-      lastSubmittedAt: null,
-      lastError: null,
-    });
     useAuthMock.mockReturnValue({
       session: null,
       activeTeam: {
@@ -189,22 +159,7 @@ describe("CollectorsPage confirmations", () => {
     );
   });
 
-  it("reconnects the associated Android collector after its key is rejected", async () => {
-    const disconnectedState = {
-      available: true,
-      enrolled: false,
-      collectorId: fieldPhone.id,
-      collectionIntervalSeconds: null,
-      lastSubmittedAt: "2026-08-13T08:00:00.000Z",
-      lastError: "Collector key was rejected",
-    };
-    mobileCollectorStateMock.mockResolvedValue(disconnectedState);
-    enrollMobileCollectorMock.mockResolvedValue({
-      ...disconnectedState,
-      enrolled: true,
-      collectionIntervalSeconds: 900,
-      lastError: null,
-    });
+  it("copies a complete enrollment code when rotating an Android key", async () => {
     apiMock.mockImplementation((path: string) => {
       if (path === "/teams/team-1/agents") return Promise.resolve([fieldPhone]);
       if (path.endsWith("/rotate-key")) {
@@ -217,48 +172,14 @@ describe("CollectorsPage confirmations", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Collector key was rejected");
-    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rotate key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rotate key" }));
 
-    expect(
-      screen.getByRole("alertdialog", { name: "Connect Field phone to this device?" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Its current key will stop working on any other device.")
-    ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Connect device" }));
-
-    await waitFor(() =>
-      expect(enrollMobileCollectorMock).toHaveBeenCalledWith({
-        serverUrl: "https://monitor.example",
-        enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
-        collectorId: fieldPhone.id,
-        collectionIntervalSeconds: 900,
-      })
-    );
-  });
-
-  it("schedules an immediate collection for the enrolled Android collector", async () => {
-    const connectedState = {
-      available: true,
-      enrolled: true,
-      collectorId: fieldPhone.id,
-      collectionIntervalSeconds: 900,
-      lastSubmittedAt: "2026-08-13T08:00:00.000Z",
-      lastError: null,
-    };
-    mobileCollectorStateMock.mockResolvedValue(connectedState);
-    collectMobileStatusNowMock.mockResolvedValue(connectedState);
-    apiMock.mockImplementation((path: string) => {
-      if (path === "/teams/team-1/agents") return Promise.resolve([fieldPhone]);
-      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledOnce());
+    expect(parseAgentEnrollmentCode(writeTextMock.mock.calls[0]![0])).toEqual({
+      serverUrl: "https://monitor.example",
+      enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
     });
-
-    renderPage();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Collect now" }));
-
-    await waitFor(() => expect(collectMobileStatusNowMock).toHaveBeenCalledOnce());
   });
 });
 

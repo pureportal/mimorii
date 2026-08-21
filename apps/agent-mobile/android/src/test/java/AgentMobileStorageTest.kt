@@ -206,6 +206,7 @@ class AgentMobileStorageTest {
     serverUrl = "https://monitor.example/api",
     enrollmentKey = "mim_agent_test_key_that_is_long_enough_for_enrollment",
     collectorId = collectorId,
+    collectorName = "Test phone",
     collectionIntervalSeconds = 900,
     revision = revision
   )

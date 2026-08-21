@@ -67,6 +67,7 @@ let configuredManifest = manifest
     ""
   )
   .replace(/\s+android:enableOnBackInvokedCallback="[^"]*"/, "");
+configuredManifest = configureForegroundServicePermission(configuredManifest, productKey);
 for (const [name, value] of [
   ["allowBackup", "false"],
   ["dataExtractionRules", "@xml/data_extraction_rules"],
@@ -133,6 +134,24 @@ function setApplicationAttribute(value, name, attributeValue) {
   if (existing.test(value)) return value.replace(existing, attribute);
   const lineEnding = value.includes("\r\n") ? "\r\n" : "\n";
   return value.replace("<application", `<application${lineEnding}        ${attribute}`);
+}
+
+function configureForegroundServicePermission(value, selectedProduct) {
+  let configured = value
+    .replace(
+      /\s*<uses-permission\s+android:name="android\.permission\.FOREGROUND_SERVICE"\s+tools:node="remove"\s*\/>/,
+      ""
+    )
+    .replace(/\s+xmlns:tools="http:\/\/schemas\.android\.com\/tools"/, "");
+  if (selectedProduct !== "agent") return configured;
+  configured = configured.replace(
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools">'
+  );
+  return configured.replace(
+    '    <uses-permission android:name="android.permission.INTERNET" />',
+    '    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />'
+  );
 }
 
 function configureJavaPackage(javaDirectory, applicationId) {

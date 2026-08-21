@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import type { AgentEnrollment } from "@mimorii/contracts";
 import { CurrentAgent, type AuthenticatedAgent } from "./agent-auth.js";
 import { AgentGuard } from "./agent.guard.js";
 import { AgentHeartbeatDto } from "./agents.dto.js";
@@ -16,6 +17,16 @@ export class AgentTransportController {
     private readonly agents: AgentsService,
     private readonly mobileDeviceStatuses: MobileDeviceStatusService
   ) {}
+
+  @Get("enrollment")
+  enrollment(@CurrentAgent() agent: AuthenticatedAgent): AgentEnrollment {
+    return {
+      collectorId: agent.id,
+      name: agent.name,
+      kind: agent.kind,
+      collectionIntervalSeconds: agent.collectionIntervalSeconds,
+    };
+  }
 
   @Get("tasks")
   poll(@CurrentAgent() agent: AuthenticatedAgent, @Query("limit") limit?: string) {

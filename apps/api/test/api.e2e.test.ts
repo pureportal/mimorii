@@ -357,6 +357,88 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .send({ name: "Fixture", kind: "endpoint", target: fixtureUrl, tags: ["test"] })
       .expect(201);
+    expect(resource.body.imageUpdatedAt).toBeNull();
+
+    const firstImageInput = await sharp({
+      create: {
+        width: 360,
+        height: 180,
+        channels: 4,
+        background: { r: 80, g: 110, b: 210, alpha: 1 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+    const firstImage = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources/${resource.body.id}/image`)
+      .set("authorization", authorization)
+      .attach("image", firstImageInput, { filename: "resource.jpg", contentType: "image/jpeg" })
+      .expect(200);
+    expect(firstImage.body.imageUpdatedAt).toBeTypeOf("string");
+
+    const firstStoredImage = await app.get(DatabaseService).get<{
+      image_data: Buffer;
+      updated_at: string;
+    }>("SELECT image_data, updated_at FROM resource_images WHERE resource_id = ?", resource.body.id);
+    expect(firstStoredImage?.updated_at).toBe(firstImage.body.imageUpdatedAt);
+    expect(await sharp(firstStoredImage!.image_data).metadata()).toMatchObject({
+      format: "png",
+      width: 128,
+      height: 128,
+    });
+
+    const servedImage = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${resource.body.id}/image`)
+      .set("authorization", authorization)
+      .expect("content-type", /image\/png/)
+      .expect(200);
+    expect(servedImage.body).toEqual(firstStoredImage!.image_data);
+    const servedImageEtag = servedImage.headers.etag;
+    if (!servedImageEtag) throw new Error("Expected a resource image ETag");
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${resource.body.id}/image`)
+      .set("authorization", authorization)
+      .set("if-none-match", servedImageEtag)
+      .expect(304);
+
+    const replacementInput = await sharp({
+      create: {
+        width: 160,
+        height: 320,
+        channels: 4,
+        background: { r: 230, g: 90, b: 115, alpha: 1 },
+      },
+    })
+      .webp()
+      .toBuffer();
+    const replacement = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources/${resource.body.id}/image`)
+      .set("authorization", authorization)
+      .attach("image", replacementInput, {
+        filename: "replacement.webp",
+        contentType: "image/webp",
+      })
+      .expect(200);
+    expect(replacement.body.imageUpdatedAt).not.toBe(firstImage.body.imageUpdatedAt);
+    const replacementStoredImage = await app
+      .get(DatabaseService)
+      .get<{ image_data: Buffer }>(
+        "SELECT image_data FROM resource_images WHERE resource_id = ?",
+        resource.body.id
+      );
+    expect(replacementStoredImage!.image_data).not.toEqual(firstStoredImage!.image_data);
+
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources/${resource.body.id}/favicon`)
+      .set("authorization", authorization)
+      .expect(502)
+      .expect(({ body }) => expect(body.message).toBe("Favicon could not be retrieved"));
+
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${resource.body.id}`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => expect(body.imageUpdatedAt).toBe(replacement.body.imageUpdatedAt));
     const check = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks`)
       .set("authorization", authorization)
@@ -727,6 +809,18 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     });
 
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
+    await request(app.getHttpServer())
+      .get("/api/agent/enrollment")
+      .set("authorization", agentAuthorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toEqual({
+          collectorId: createdAgent.body.id,
+          name: "Field phone",
+          kind: "mobile",
+          collectionIntervalSeconds: 900,
+        })
+      );
     const observedAt = new Date().toISOString();
     const status = {
       collectorId: createdAgent.body.id,
@@ -1881,7 +1975,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         contentType: "image/png",
       })
       .expect(400)
-      .expect(({ body }) => expect(body.message).toBe("Choose a valid sponsor image"));
+      .expect(({ body }) => expect(body.message).toBe("Choose a valid image"));
 
     await request(app.getHttpServer())
       .post("/api/admin/sponsors")
