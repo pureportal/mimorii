@@ -278,14 +278,8 @@ for (const obsolete of [
     throw new Error(`Release workflow still references an obsolete client asset: ${obsolete}`);
   }
 }
-for (const requirement of [
-  "build-windows-agent-installer.mjs",
-  "Azure/artifact-signing-action",
-  "Get-AuthenticodeSignature",
-]) {
-  if (!releaseWorkflow.includes(requirement)) {
-    throw new Error(`Windows installer release is missing ${requirement}`);
-  }
+if (!releaseWorkflow.includes("build-windows-agent-installer.mjs")) {
+  throw new Error("Windows installer release is missing build-windows-agent-installer.mjs");
 }
 const latestReleaseBase = "https://github.com/pureportal/mimorii/releases/latest/download";
 for (const name of releaseAssetNames) {

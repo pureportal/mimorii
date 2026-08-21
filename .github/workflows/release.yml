@@ -407,7 +407,6 @@ jobs:
     outputs:
       artifact_name: ${{ steps.artifact.outputs.name }}
     env:
-      AZURE_CORE_OUTPUT: none
       MIMORII_ARTIFACT_DIR: ${{ github.workspace }}/dist/release/windows
 
     steps:
@@ -450,10 +449,6 @@ jobs:
             if (-not (Test-Path -LiteralPath $path)) {
               throw "Expected Windows agent executable was not produced: $path"
             }
-            $signature = Get-AuthenticodeSignature -LiteralPath $path
-            if ($signature.Status -ne "NotSigned") {
-              throw "Expected unsigned Windows agent executable: $path ($($signature.Status))"
-            }
           }
           $actualVersion = & apps/agent-desktop/target/release/mimorii-agent-desktop.exe --version
           $expectedVersion = "mimorii-agent-desktop ${{ needs.metadata.outputs.version }}"
@@ -465,53 +460,6 @@ jobs:
           ).ProductVersion
           if ($uiVersion -ne "${{ needs.metadata.outputs.version }}") {
             throw "Unexpected Windows agent UI version: $uiVersion"
-          }
-
-      - name: Sign in to Azure
-        uses: Azure/login@93381592711f247e165c389ebb30b596c84cdc48
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sign Windows agent
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
-        with:
-          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\apps\agent-desktop\target\release\mimorii-agent-desktop.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: Mimorii Agent
-          description-url: https://github.com/pureportal/mimorii
-
-      - name: Sign Windows agent UI
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
-        with:
-          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\apps\agent-desktop-ui\target\release\mimorii-agent-desktop-ui.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: Mimorii Agent
-          description-url: https://github.com/pureportal/mimorii
-
-      - name: Verify signed Windows agent
-        shell: pwsh
-        run: |
-          $paths = @(
-            "apps/agent-desktop/target/release/mimorii-agent-desktop.exe",
-            "apps/agent-desktop-ui/target/release/mimorii-agent-desktop-ui.exe"
-          )
-          foreach ($path in $paths) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $path
-            if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
-              throw "Windows agent signature is invalid or not timestamped: $path ($($signature.Status))"
-            }
           }
 
       - name: Build Windows installer
@@ -532,28 +480,6 @@ jobs:
             throw "Windows installer was not produced: $artifactPath"
           }
           "artifact_path=$artifactPath" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Sign Windows installer
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
-        with:
-          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ steps.windows_agent_artifacts.outputs.artifact_path }}
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: Mimorii Agent
-          description-url: https://github.com/pureportal/mimorii
-
-      - name: Verify signed Windows installer
-        shell: pwsh
-        run: |
-          $path = "${{ steps.windows_agent_artifacts.outputs.artifact_path }}"
-          $signature = Get-AuthenticodeSignature -LiteralPath $path
-          if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
-            throw "Windows installer signature is invalid or not timestamped: $($signature.Status)"
-          }
 
       - name: Name Windows artifact
         id: artifact

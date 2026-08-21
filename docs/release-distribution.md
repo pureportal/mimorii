@@ -73,23 +73,10 @@ Configure these Actions secrets:
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password                       |
 | `ANDROID_KEY_ALIAS`         | Release key alias                       |
 | `ANDROID_KEY_PASSWORD`      | Keystore key password                   |
-| `AZURE_CLIENT_ID`           | OIDC signing application client ID      |
-| `AZURE_TENANT_ID`           | Microsoft Entra tenant ID               |
-| `AZURE_SUBSCRIPTION_ID`     | Azure subscription ID                   |
 
 The Android release key must remain unchanged for application updates. Keep an offline backup
 outside GitHub. The workflow decodes the key only on the ephemeral Android runner and removes it
 after the build.
-
-Configure these Actions variables for Windows Artifact Signing:
-
-- `AZURE_ARTIFACT_SIGNING_ENDPOINT`
-- `AZURE_ARTIFACT_SIGNING_ACCOUNT`
-- `AZURE_ARTIFACT_SIGNING_PROFILE`
-
-Give the OIDC service principal the Artifact Signing Certificate Profile Signer role. Release
-builds sign and timestamp the agent executable before embedding it in the MSI, then sign and
-timestamp the MSI.
 
 Android push is optional. Configure all four Actions variables or leave all four unset:
 
