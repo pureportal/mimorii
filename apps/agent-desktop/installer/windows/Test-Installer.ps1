@@ -54,14 +54,8 @@ function Get-InstalledProductCodes {
 }
 
 function Test-LegacyTask {
-    $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = "SilentlyContinue"
-    try {
-        schtasks.exe /Query /TN $legacyTaskName *> $null
-        $LASTEXITCODE -eq 0
-    } finally {
-        $ErrorActionPreference = $previousPreference
-    }
+    $task = Get-ScheduledTask -TaskName $legacyTaskName -ErrorAction SilentlyContinue
+    $null -ne $task
 }
 
 function Assert-Installed {
