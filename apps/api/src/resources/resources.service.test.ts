@@ -5,13 +5,15 @@ import type { DatabaseService } from "../database/database.service.js";
 import type { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
 import { ResourcesService } from "./resources.service.js";
+import type { ResourceImagesService } from "./resource-images.service.js";
 
 function service(database: object, requireAccess: ReturnType<typeof vi.fn>) {
   return new ResourcesService(
     database as DatabaseService,
     { require: requireAccess } as unknown as TeamAccessService,
     {} as MaintenanceService,
-    {} as AuditService
+    {} as AuditService,
+    { tryAssignFavicon: vi.fn() } as unknown as ResourceImagesService
   );
 }
 
@@ -83,5 +85,56 @@ describe("ResourcesService agent assignment", () => {
       })
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(database.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("ResourcesService image assignment", () => {
+  it("returns a created website when automatic favicon assignment is unavailable", async () => {
+    const database = {
+      get: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({
+        id: "resource-1",
+        team_id: "team-1",
+        name: "Website",
+        kind: "endpoint",
+        target: "https://example.com/",
+        description: null,
+        tags_json: "[]",
+        agent_id: null,
+        status: "pending",
+        checks_up: 0,
+        checks_total: 0,
+        last_checked_at: null,
+        image_updated_at: null,
+        created_at: "2026-08-21T12:00:00.000Z",
+      }),
+      run: vi.fn().mockResolvedValue({ changes: 1 }),
+    };
+    const access = { require: vi.fn(async () => ({})) };
+    const maintenance = { isResourceActive: vi.fn().mockResolvedValue(false) };
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    const images = { tryAssignFavicon: vi.fn().mockResolvedValue(false) };
+    const resources = new ResourcesService(
+      database as unknown as DatabaseService,
+      access as unknown as TeamAccessService,
+      maintenance as unknown as MaintenanceService,
+      audit as unknown as AuditService,
+      images as unknown as ResourceImagesService
+    );
+
+    await expect(
+      resources.create("user-1", "team-1", {
+        name: "Website",
+        kind: "endpoint",
+        target: "https://example.com/",
+      })
+    ).resolves.toMatchObject({ name: "Website", imageUpdatedAt: null });
+    expect(database.run).toHaveBeenCalledOnce();
+    expect(images.tryAssignFavicon).toHaveBeenCalledWith(
+      "user-1",
+      "team-1",
+      expect.any(String),
+      "endpoint",
+      "https://example.com/"
+    );
   });
 });

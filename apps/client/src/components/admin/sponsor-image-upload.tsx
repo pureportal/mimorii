@@ -3,10 +3,10 @@ import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent } 
 import { apiBlob } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import {
-  sponsorImageAccept,
-  sponsorImageRequirements,
-  validateSponsorImage,
-} from "../../lib/sponsor-image";
+  imageAssetAccept,
+  imageAssetRequirements,
+  validateImageAsset,
+} from "../../lib/image-asset";
 import { Button } from "../ui/button";
 import { Field, FieldError, FieldLabel } from "../ui/field";
 
@@ -99,7 +99,7 @@ export function SponsorImageUpload({
     setError("");
     onReadyChange(false);
     try {
-      await validateSponsorImage(files[0]!);
+      await validateImageAsset(files[0]!);
       if (validationSequence.current !== sequence) return;
       replaceSelectedFile(files[0]!);
       setRemoveCurrent(false);
@@ -164,7 +164,7 @@ export function SponsorImageUpload({
     event.dataTransfer.dropEffect = "copy";
     const fileItems = Array.from(event.dataTransfer.items).filter((item) => item.kind === "file");
     setDragState(
-      fileItems.length === 1 && sponsorImageAccept.split(",").includes(fileItems[0]!.type)
+      fileItems.length === 1 && imageAssetAccept.split(",").includes(fileItems[0]!.type)
         ? "accepted"
         : "rejected"
     );
@@ -200,7 +200,7 @@ export function SponsorImageUpload({
       <input
         id={inputId}
         type="file"
-        accept={sponsorImageAccept}
+        accept={imageAssetAccept}
         aria-label="Image"
         aria-describedby={`${requirementsId}${error ? ` ${errorId}` : ""}`}
         aria-invalid={Boolean(error)}
@@ -237,7 +237,7 @@ export function SponsorImageUpload({
             {stateLabel}
           </span>
           <span id={requirementsId} className="mt-1 block text-xs text-muted">
-            {sponsorImageRequirements}
+            {imageAssetRequirements}
           </span>
         </span>
       </label>

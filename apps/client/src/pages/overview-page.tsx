@@ -1,6 +1,6 @@
 import type { OverviewAnalytics, ResourceSummary } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowRight, Clock3, Gauge, Plus, Server, TriangleAlert } from "lucide-react";
+import { Activity, ArrowRight, Clock3, Gauge, Plus, TriangleAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Area,
@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
+import { ResourceImage } from "../components/resource-image";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -202,9 +203,11 @@ export function OverviewPage() {
                 to={appRoutes.resource(resource.id)}
                 className="flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-ink/4"
               >
-                <span className="grid size-9 place-items-center rounded-xl bg-ink/5 text-muted">
-                  <Server className="size-4" />
-                </span>
+                <ResourceImage
+                  resource={resource}
+                  className="size-9 bg-ink/5 text-muted"
+                  iconClassName="size-4"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{resource.name}</p>
                   <p className="truncate text-xs text-muted">{resource.target}</p>

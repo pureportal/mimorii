@@ -1,4 +1,4 @@
-import { sponsorImageMaxBytes } from "@mimorii/contracts";
+import { imageAssetMaxBytes } from "@mimorii/contracts";
 import {
   BadRequestException,
   Body,
@@ -34,7 +34,7 @@ import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
 import { PlatformSettingsService } from "../platform-settings/platform-settings.service.js";
-import { optimizeSponsorFavicon } from "../sponsors/sponsor-favicon.js";
+import { optimizeImageAsset } from "../common/image-asset.js";
 import {
   CreateSponsorDto,
   DeleteSponsorDto,
@@ -54,7 +54,7 @@ interface UploadedFavicon {
 }
 
 const FaviconUploadInterceptor = FileInterceptor("favicon", {
-  limits: { fields: 7, files: 1, fileSize: sponsorImageMaxBytes },
+  limits: { fields: 7, files: 1, fileSize: imageAssetMaxBytes },
 });
 
 @ApiTags("Global administration")
@@ -179,7 +179,7 @@ export class AdminController {
     @Body() input: CreateSponsorDto,
     @UploadedFile() favicon?: UploadedFavicon
   ) {
-    const faviconData = favicon ? await optimizeSponsorFavicon(favicon.buffer) : undefined;
+    const faviconData = favicon ? await optimizeImageAsset(favicon.buffer, 64) : undefined;
     return this.sponsorships.createSponsor(actor.id, input, faviconData);
   }
 
@@ -208,7 +208,7 @@ export class AdminController {
     if (favicon && input.removeFavicon) {
       throw new BadRequestException("Choose either a replacement image or removal");
     }
-    const faviconData = favicon ? await optimizeSponsorFavicon(favicon.buffer) : undefined;
+    const faviconData = favicon ? await optimizeImageAsset(favicon.buffer, 64) : undefined;
     return this.sponsorships.updateSponsor(actor.id, id, input, faviconData);
   }
 

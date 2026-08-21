@@ -13,6 +13,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
+import { ResourceImagesService } from "./resource-images.service.js";
 
 interface ResourceRow {
   id: string;
@@ -27,6 +28,7 @@ interface ResourceRow {
   checks_up: number;
   checks_total: number;
   last_checked_at: string | null;
+  image_updated_at: string | null;
   created_at: string;
 }
 
@@ -36,7 +38,8 @@ export class ResourcesService {
     private readonly database: DatabaseService,
     private readonly access: TeamAccessService,
     private readonly maintenance: MaintenanceService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly images: ResourceImagesService
   ) {}
 
   async list(userId: string, teamId: string): Promise<ResourceSummary[]> {
@@ -94,6 +97,7 @@ export class ResourcesService {
       subjectType: "resource",
       subjectId: id,
     });
+    await this.images.tryAssignFavicon(userId, teamId, id, input.kind, input.target.trim());
     return this.get(userId, teamId, id);
   }
 
@@ -183,7 +187,8 @@ export class ResourcesService {
         END AS status,
         SUM(CASE WHEN c.current_status = 'up' THEN 1 ELSE 0 END) AS checks_up,
         COUNT(c.id) AS checks_total,
-        MAX(c.last_checked_at) AS last_checked_at
+        MAX(c.last_checked_at) AS last_checked_at,
+        (SELECT ri.updated_at FROM resource_images ri WHERE ri.resource_id = r.id) AS image_updated_at
       FROM resources r LEFT JOIN checks c ON c.resource_id = r.id
       ${where}
       GROUP BY r.id
@@ -205,6 +210,7 @@ export class ResourcesService {
       checksTotal: row.checks_total,
       lastCheckedAt: row.last_checked_at,
       inMaintenance: await this.maintenance.isResourceActive(row.id),
+      imageUpdatedAt: row.image_updated_at,
       createdAt: row.created_at,
     };
   }

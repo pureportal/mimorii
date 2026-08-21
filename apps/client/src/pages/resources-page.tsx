@@ -1,10 +1,11 @@
 import type { AgentSummary, CheckType, ResourceSummary } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Globe2, Network, Plus, Search, Server, Waypoints } from "lucide-react";
+import { Bot, Globe2, Plus, Search, Waypoints } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
+import { ResourceImage } from "../components/resource-image";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -107,14 +108,11 @@ export function ResourcesPage() {
 }
 
 function ResourceCard({ resource }: { resource: ResourceSummary }) {
-  const Icon = resource.kind === "server" ? Server : resource.kind === "service" ? Network : Globe2;
   return (
     <Link to={appRoutes.resource(resource.id)}>
       <Card className="group h-full p-5 transition hover:-translate-y-0.5 hover:border-lavender hover:shadow-[0_18px_40px_-26px_rgba(68,54,128,.45)]">
         <div className="flex items-start gap-4">
-          <span className="grid size-11 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-            <Icon className="size-5" />
-          </span>
+          <ResourceImage resource={resource} className="size-11" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-3">
               <h2 className="truncate font-display font-bold">{resource.name}</h2>

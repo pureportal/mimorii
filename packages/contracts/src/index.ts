@@ -154,14 +154,9 @@ export type NotificationEndpointPlatform = (typeof notificationEndpointPlatforms
 export const sponsorshipTiers = ["platinum", "gold", "silver"] as const;
 export type SponsorshipTier = (typeof sponsorshipTiers)[number];
 
-export const sponsorImageMimeTypes = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-] as const;
-export const sponsorImageMaxBytes = 5 * 1024 * 1024;
-export const sponsorImageMaxDimension = 4096;
+export const imageAssetMimeTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+export const imageAssetMaxBytes = 5 * 1024 * 1024;
+export const imageAssetMaxDimension = 4096;
 
 export const sponsorshipApplicationStatuses = ["pending", "approved", "declined"] as const;
 export type SponsorshipApplicationStatus = (typeof sponsorshipApplicationStatuses)[number];
@@ -308,6 +303,7 @@ export interface ResourceSummary {
   checksTotal: number;
   lastCheckedAt: string | null;
   inMaintenance: boolean;
+  imageUpdatedAt: string | null;
   createdAt: string;
 }
 

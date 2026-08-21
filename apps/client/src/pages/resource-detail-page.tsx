@@ -14,6 +14,7 @@ import {
   Cpu,
   Database,
   Gauge,
+  ImageIcon,
   MemoryStick,
   Network,
   Pencil,
@@ -24,6 +25,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
+import { ResourceImage } from "../components/resource-image";
+import { ResourceImageDialog } from "../components/resource-image-dialog";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -59,6 +62,7 @@ export function ResourceDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedCheckId, setSelectedCheckId] = useState<string | null>(null);
@@ -152,33 +156,45 @@ export function ResourceDetailPage() {
               <ArrowLeft /> Resources
             </Link>
           </Button>
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-3xl font-black tracking-tight">
-              {resource.data.name}
-            </h2>
-            <StatusBadge status={resource.data.status} />
-            {resource.data.inMaintenance ? <StatusBadge status="maintenance" /> : null}
-          </div>
-          <p className="mt-2 text-sm text-muted">{resource.data.target}</p>
-          {resource.data.description ? (
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-              {resource.data.description}
-            </p>
-          ) : null}
-          {resource.data.tags.length ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {resource.data.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-lg bg-ink/5 px-2 py-1 text-[11px] font-medium text-muted"
-                >
-                  {tag}
-                </span>
-              ))}
+          <div className="flex items-start gap-4">
+            <ResourceImage
+              resource={resource.data}
+              className="size-16 rounded-2xl"
+              iconClassName="size-7"
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="font-display text-3xl font-black tracking-tight">
+                  {resource.data.name}
+                </h2>
+                <StatusBadge status={resource.data.status} />
+                {resource.data.inMaintenance ? <StatusBadge status="maintenance" /> : null}
+              </div>
+              <p className="mt-2 break-all text-sm text-muted">{resource.data.target}</p>
+              {resource.data.description ? (
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+                  {resource.data.description}
+                </p>
+              ) : null}
+              {resource.data.tags.length ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {resource.data.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-lg bg-ink/5 px-2 py-1 text-[11px] font-medium text-muted"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImageOpen(true)}>
+            <ImageIcon /> Change image
+          </Button>
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil /> Edit
           </Button>
@@ -433,6 +449,12 @@ export function ResourceDetailPage() {
         onOpenChange={setEditOpen}
         resource={resource.data}
         agents={(agents.data ?? []).filter((agent) => agent.kind === "desktop")}
+        onSaved={refresh}
+      />
+      <ResourceImageDialog
+        open={imageOpen}
+        onOpenChange={setImageOpen}
+        resource={resource.data}
         onSaved={refresh}
       />
       <ConfirmationDialog
