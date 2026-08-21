@@ -1,0 +1,19 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputName>mimorii-agent-windows-x64</OutputName>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <AgentExecutable Condition="'$(AgentExecutable)' == ''">$(MSBuildThisFileDirectory)..\..\target\release\mimorii-agent-desktop.exe</AgentExecutable>
+    <AgentUiExecutable Condition="'$(AgentUiExecutable)' == ''">$(MSBuildThisFileDirectory)..\..\..\agent-desktop-ui\target\release\mimorii-agent-desktop-ui.exe</AgentUiExecutable>
+    <DefineConstants>ProductVersion=$(ProductVersion);ProductCode=$(ProductCode);AgentExecutable=$(AgentExecutable);AgentUiExecutable=$(AgentUiExecutable)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+  <Target Name="ValidateInstallerProperties" BeforeTargets="CoreCompile">
+    <Error Condition="'$(ProductVersion)' == ''" Text="ProductVersion is required." />
+    <Error Condition="'$(ProductCode)' == ''" Text="ProductCode is required." />
+    <Error Condition="!Exists('$(AgentExecutable)')" Text="AgentExecutable does not exist." />
+    <Error Condition="!Exists('$(AgentUiExecutable)')" Text="AgentUiExecutable does not exist." />
+  </Target>
+</Project>

@@ -7,9 +7,12 @@ use std::time::Duration;
 use clap::Parser;
 use serde_json::{Value, json};
 
+#[cfg(target_os = "linux")]
+use super::ServiceAction;
+#[cfg(windows)]
+use super::WindowsServiceControlAction;
 use super::{
-    Cli, CollectionWorker, Command, ServiceAction, check_runner_cycle, cycle, run_configured_cycle,
-    time_now,
+    Cli, CollectionWorker, Command, check_runner_cycle, cycle, run_configured_cycle, time_now,
 };
 use crate::config::AgentConfig;
 use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
@@ -162,24 +165,50 @@ fn parses_all_runtime_and_service_commands() {
         Cli::try_parse_from(["mimorii-agent-desktop", "status"])
             .unwrap()
             .command,
-        Command::Status
+        Command::Status { json: false }
     ));
-    assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-desktop", "service", "install"])
-            .unwrap()
-            .command,
-        Command::Service {
-            action: ServiceAction::Install
-        }
-    ));
-    assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-desktop", "service", "uninstall"])
-            .unwrap()
-            .command,
-        Command::Service {
-            action: ServiceAction::Uninstall
-        }
-    ));
+    #[cfg(target_os = "linux")]
+    {
+        assert!(matches!(
+            Cli::try_parse_from(["mimorii-agent-desktop", "service", "install"])
+                .unwrap()
+                .command,
+            Command::Service {
+                action: ServiceAction::Install
+            }
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["mimorii-agent-desktop", "service", "uninstall"])
+                .unwrap()
+                .command,
+            Command::Service {
+                action: ServiceAction::Uninstall
+            }
+        ));
+    }
+    #[cfg(windows)]
+    {
+        assert!(matches!(
+            Cli::try_parse_from(["mimorii-agent-desktop", "status", "--json"])
+                .unwrap()
+                .command,
+            Command::Status { json: true }
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["mimorii-agent-desktop", "windows-service"])
+                .unwrap()
+                .command,
+            Command::WindowsService
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["mimorii-agent-desktop", "windows-service-control", "start"])
+                .unwrap()
+                .command,
+            Command::WindowsServiceControl {
+                action: WindowsServiceControlAction::Start
+            }
+        ));
+    }
 }
 
 #[test]

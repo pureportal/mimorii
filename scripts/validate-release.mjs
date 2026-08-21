@@ -13,24 +13,31 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const rootPackage = readJson("package.json");
 const clientPackage = readJson("apps/client/package.json");
 const tauriConfig = readJson("apps/client/src-tauri/tauri.conf.json");
+const androidClientConfig = readJson("apps/client/src-tauri/tauri.android-client.conf.json");
 const androidAgentConfig = readJson("apps/client/src-tauri/tauri.android-agent.conf.json");
 const openApi = readJson("apps/api/openapi/mimorii.openapi.json");
 const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
 const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
+const agentUiCargo = readFile("apps/agent-desktop-ui/Cargo.toml");
 const mobileAgentCargo = readFile("apps/agent-mobile/Cargo.toml");
 const pushCargo = readFile("apps/client/src-tauri/plugins/push/Cargo.toml");
 const tauriEntryPoint = readFile("apps/client/src-tauri/src/lib.rs");
+const clientEntryPoint = readFile("apps/client/src/main.tsx");
+const agentEntryPoint = readFile("apps/client/src/agent-main.tsx");
+const viteConfig = readFile("apps/client/vite.config.ts");
 const defaultCapability = readJson("apps/client/src-tauri/capabilities/default.json");
 const androidBuild = readFile("scripts/build-android-app.mjs");
 const androidProjectConfiguration = readFile("scripts/configure-android-project.mjs");
 const releaseWorkflow = readFile(".github/workflows/release.yml");
 const distributionDocumentation = readFile("docs/release-distribution.md");
+const androidDocumentation = readFile("docs/android-apps.md");
 const versions = new Map([
   ["package.json", rootPackage.version],
   ["apps/api/package.json", readJson("apps/api/package.json").version],
   ["apps/client/package.json", clientPackage.version],
   ["packages/contracts/package.json", readJson("packages/contracts/package.json").version],
   ["apps/agent-desktop/Cargo.toml", cargoPackageValue(agentCargo, "version")],
+  ["apps/agent-desktop-ui/Cargo.toml", cargoPackageValue(agentUiCargo, "version")],
   ["apps/agent-mobile/Cargo.toml", cargoPackageValue(mobileAgentCargo, "version")],
   ["apps/client/src-tauri/Cargo.toml", cargoPackageValue(clientCargo, "version")],
   ["apps/client/src-tauri/plugins/push/Cargo.toml", cargoPackageValue(pushCargo, "version")],
@@ -62,9 +69,16 @@ expectArrayEqual(
   ["default"],
   "Android client capabilities"
 );
+expectArrayEqual(defaultCapability.permissions, ["core:default"], "Shared application permissions");
+const androidClientCapability = androidClientConfig.app?.security?.capabilities?.[0];
+expectEqual(
+  androidClientCapability?.identifier,
+  "android-client",
+  "Android client capability identifier"
+);
 expectArrayEqual(
-  defaultCapability.permissions,
-  ["core:default", "push:default"],
+  androidClientCapability?.permissions,
+  ["push:default"],
   "Android client permissions"
 );
 const androidAgentCapability = androidAgentConfig.app?.security?.capabilities?.[0];
@@ -80,7 +94,7 @@ expectEqual(
 );
 expectArrayEqual(
   androidAgentCapability.permissions,
-  ["core:default", "agent-mobile:default", "push:default"],
+  ["agent-mobile:default"],
   "Android agent permissions"
 );
 
@@ -92,11 +106,27 @@ for (const target of ["aarch64", "armv7", "x86_64"]) {
 if (androidBuild.includes('"i686"')) {
   throw new Error("Android release command must not include the redundant i686 target");
 }
-if (!androidBuild.includes('"--features"') || !androidBuild.includes('"mobile-agent"')) {
-  throw new Error("Android agent build must enable the mobile-agent Cargo feature");
+for (const feature of ["client-app", "mobile-agent"]) {
+  if (!androidBuild.includes('"--features"') || !androidBuild.includes(`"${feature}"`)) {
+    throw new Error(`Android build must enable the ${feature} Cargo feature`);
+  }
 }
 if (!androidBuild.includes("VITE_MIMORII_ANDROID_PRODUCT: product")) {
   throw new Error("Android builds must identify the selected product to the web client");
+}
+for (const config of ["tauri.android-client.conf.json", "tauri.android-agent.conf.json"]) {
+  if (!androidBuild.includes(config)) {
+    throw new Error(`Android build is missing its target capability config: ${config}`);
+  }
+}
+if (
+  !viteConfig.includes('order: "pre"') ||
+  !viteConfig.includes("/src/agent-main.tsx") ||
+  !agentEntryPoint.includes('from "./agent-app"') ||
+  clientEntryPoint.includes("AgentApp") ||
+  /AuthProvider|BrowserRouter|PushEndpointSync/.test(agentEntryPoint)
+) {
+  throw new Error("Android Agent must use a frontend entry isolated from the Client");
 }
 for (const [fragment, label] of [
   ['.replace(/namespace = "[^"]+"/', "Gradle namespace"],
@@ -106,6 +136,12 @@ for (const [fragment, label] of [
   if (!androidProjectConfiguration.includes(fragment)) {
     throw new Error(`Android project configuration must switch the ${label}`);
   }
+}
+if (
+  !androidProjectConfiguration.includes("configureForegroundServicePermission") ||
+  !androidProjectConfiguration.includes("android.permission.FOREGROUND_SERVICE")
+) {
+  throw new Error("Android Agent must remove WorkManager's unused foreground-service permission");
 }
 for (const buildGeneratedFile of ["tauri.settings.gradle", "tauri.build.gradle.kts"]) {
   if (androidProjectConfiguration.includes(buildGeneratedFile)) {
@@ -168,15 +204,19 @@ if (
   !clientCargo.includes(
     'tauri-plugin-agent-mobile = { path = "../../agent-mobile", optional = true }'
   ) ||
-  !clientCargo.includes('mobile-agent = ["dep:tauri-plugin-agent-mobile"]')
+  !clientCargo.includes('mobile-agent = ["dep:tauri-plugin-agent-mobile"]') ||
+  !clientCargo.includes('client-app = ["dep:tauri-plugin-push"]') ||
+  !clientCargo.includes('tauri-plugin-push = { path = "plugins/push", optional = true }')
 ) {
-  throw new Error("The Android mobile collector must be an agent-only Cargo feature");
+  throw new Error("Android Client and Agent native plugins must use separate Cargo features");
 }
 if (
   !tauriEntryPoint.includes('#[cfg(feature = "mobile-agent")]') ||
-  !tauriEntryPoint.includes("builder.plugin(tauri_plugin_agent_mobile::init())")
+  !tauriEntryPoint.includes("builder.plugin(tauri_plugin_agent_mobile::init())") ||
+  !tauriEntryPoint.includes('#[cfg(feature = "client-app")]') ||
+  !tauriEntryPoint.includes("builder.plugin(tauri_plugin_push::init())")
 ) {
-  throw new Error("Only the Android agent may initialize the mobile collector plugin");
+  throw new Error("Android Client and Agent must initialize only their native plugin");
 }
 
 if (new Set(releaseAssetNames).size !== releaseAssetNames.length) {
@@ -187,11 +227,23 @@ for (const name of releaseAssetNames) {
     throw new Error(`Release asset filename must be versionless: ${name}`);
   }
 }
+for (const reference of [
+  "v2.tauri.app/develop/plugins/develop-mobile",
+  "developer.android.com/develop/background-work/background-tasks/persistent",
+  "developer.android.com/about/versions/15/behavior-changes-all",
+]) {
+  if (!androidDocumentation.includes(reference)) {
+    throw new Error(`Android architecture documentation is missing ${reference}`);
+  }
+}
 if (releasePackages.androidAgent === releasePackages.androidClient) {
   throw new Error("Android agent and client filenames must be distinct");
 }
 if (!releasePackages.linuxAgent.includes("ubuntu-debian")) {
   throw new Error("Linux agent filename must identify Ubuntu and Debian support");
+}
+if (!releasePackages.windowsAgent.endsWith(".msi")) {
+  throw new Error("Windows agent releases must use the MSI installer");
 }
 if (!releasePackageNames.every((name) => name.startsWith("mimorii-"))) {
   throw new Error("Every release package must identify the Mimorii product");
@@ -217,13 +269,22 @@ for (const requirement of [
   }
 }
 for (const obsolete of [
-  ".msi",
   "-setup.exe",
+  "mimorii-agent-windows-x64.zip",
   "ubuntu_client_artifacts",
   "windows_client_artifacts",
 ]) {
   if (releaseWorkflow.includes(obsolete)) {
     throw new Error(`Release workflow still references an obsolete client asset: ${obsolete}`);
+  }
+}
+for (const requirement of [
+  "build-windows-agent-installer.mjs",
+  "Azure/artifact-signing-action",
+  "Get-AuthenticodeSignature",
+]) {
+  if (!releaseWorkflow.includes(requirement)) {
+    throw new Error(`Windows installer release is missing ${requirement}`);
   }
 }
 const latestReleaseBase = "https://github.com/pureportal/mimorii/releases/latest/download";

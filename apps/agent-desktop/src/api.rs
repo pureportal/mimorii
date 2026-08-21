@@ -15,8 +15,8 @@ pub struct ApiClient {
 impl ApiClient {
     pub fn new(config: AgentConfig) -> Result<Self> {
         let client = Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(35))
+            .connect_timeout(Duration::from_secs(8))
+            .timeout(Duration::from_secs(20))
             .build()?;
         Ok(Self { client, config })
     }

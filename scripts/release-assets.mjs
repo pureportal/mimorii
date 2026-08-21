@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 export const releasePackages = Object.freeze({
   androidAgent: "mimorii-agent-android.apk",
   linuxAgent: "mimorii-agent-ubuntu-debian-x64.tar.gz",
-  windowsAgent: "mimorii-agent-windows-x64.zip",
+  windowsAgent: "mimorii-agent-windows-x64.msi",
   androidClient: "mimorii-client-android.apk",
 });
 

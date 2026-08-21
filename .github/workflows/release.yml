@@ -227,6 +227,14 @@ jobs:
         id: android_client
         run: pnpm tauri:android:client:release
 
+      - name: Test Android notifications
+        working-directory: apps/client/src-tauri/gen/android
+        run: >-
+          ./gradlew
+          :tauri-plugin-push:testDebugUnitTest
+          --no-daemon
+          --console=plain
+
       - name: Lint Android client
         working-directory: apps/client/src-tauri/gen/android
         run: >-
@@ -253,7 +261,6 @@ jobs:
         run: >-
           ./gradlew
           :tauri-plugin-agent-mobile:lintRelease
-          :tauri-plugin-push:lintRelease
           :app:lintUniversalRelease
           --no-daemon
           --console=plain
@@ -400,6 +407,7 @@ jobs:
     outputs:
       artifact_name: ${{ steps.artifact.outputs.name }}
     env:
+      AZURE_CORE_OUTPUT: none
       MIMORII_ARTIFACT_DIR: ${{ github.workspace }}/dist/release/windows
 
     steps:
@@ -414,32 +422,99 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d
+        with:
+          dotnet-version: "8.0.x"
+
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          workspaces: apps/agent-desktop -> target
+          workspaces: |
+            apps/agent-desktop -> target
+            apps/agent-desktop-ui -> target
 
       - name: Build Windows agent
-        run: cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
+        run: |
+          cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
+          cargo build --locked --release --manifest-path apps/agent-desktop-ui/Cargo.toml
 
-      - name: Verify unsigned Windows agent
+      - name: Verify Windows agent
         shell: pwsh
         run: |
-          $path = "apps/agent-desktop/target/release/mimorii-agent-desktop.exe"
-          if (-not (Test-Path -LiteralPath $path)) {
-            throw "Expected Windows agent was not produced: $path"
-          }
-          $signature = Get-AuthenticodeSignature -LiteralPath $path
-          if ($signature.Status -ne "NotSigned") {
-            throw "Expected unsigned Windows agent, but Authenticode status is $($signature.Status)."
+          $paths = @(
+            "apps/agent-desktop/target/release/mimorii-agent-desktop.exe",
+            "apps/agent-desktop-ui/target/release/mimorii-agent-desktop-ui.exe"
+          )
+          foreach ($path in $paths) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Expected Windows agent executable was not produced: $path"
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $path
+            if ($signature.Status -ne "NotSigned") {
+              throw "Expected unsigned Windows agent executable: $path ($($signature.Status))"
+            }
           }
           $actualVersion = & apps/agent-desktop/target/release/mimorii-agent-desktop.exe --version
           $expectedVersion = "mimorii-agent-desktop ${{ needs.metadata.outputs.version }}"
           if ($actualVersion -ne $expectedVersion) {
             throw "Unexpected Windows agent version: $actualVersion"
           }
+          $uiVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo(
+            "apps/agent-desktop-ui/target/release/mimorii-agent-desktop-ui.exe"
+          ).ProductVersion
+          if ($uiVersion -ne "${{ needs.metadata.outputs.version }}") {
+            throw "Unexpected Windows agent UI version: $uiVersion"
+          }
 
-      - name: Package Windows agent
+      - name: Sign in to Azure
+        uses: Azure/login@93381592711f247e165c389ebb30b596c84cdc48
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign Windows agent
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\apps\agent-desktop\target\release\mimorii-agent-desktop.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Mimorii Agent
+          description-url: https://github.com/pureportal/mimorii
+
+      - name: Sign Windows agent UI
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\apps\agent-desktop-ui\target\release\mimorii-agent-desktop-ui.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Mimorii Agent
+          description-url: https://github.com/pureportal/mimorii
+
+      - name: Verify signed Windows agent
+        shell: pwsh
+        run: |
+          $paths = @(
+            "apps/agent-desktop/target/release/mimorii-agent-desktop.exe",
+            "apps/agent-desktop-ui/target/release/mimorii-agent-desktop-ui.exe"
+          )
+          foreach ($path in $paths) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $path
+            if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
+              throw "Windows agent signature is invalid or not timestamped: $path ($($signature.Status))"
+            }
+          }
+
+      - name: Build Windows installer
         id: windows_agent_artifacts
         shell: pwsh
         run: |
@@ -448,15 +523,37 @@ jobs:
             throw "Windows agent asset name could not be resolved."
           }
           $outputDirectory = $env:MIMORII_ARTIFACT_DIR
-          $packageDirectory = Join-Path $env:RUNNER_TEMP "mimorii-agent-windows-x64"
           $artifactPath = Join-Path $outputDirectory $artifactName
-          Remove-Item -LiteralPath $packageDirectory -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $packageDirectory, $outputDirectory -Force | Out-Null
-          Copy-Item `
-            -LiteralPath "apps/agent-desktop/target/release/mimorii-agent-desktop.exe" `
-            -Destination $packageDirectory
-          Compress-Archive -Path "$packageDirectory/*" -DestinationPath $artifactPath -CompressionLevel Optimal
+          node scripts/build-windows-agent-installer.mjs `
+            --skip-agent-build `
+            --version "${{ needs.metadata.outputs.version }}" `
+            --output $outputDirectory
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $artifactPath)) {
+            throw "Windows installer was not produced: $artifactPath"
+          }
           "artifact_path=$artifactPath" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Sign Windows installer
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ steps.windows_agent_artifacts.outputs.artifact_path }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Mimorii Agent
+          description-url: https://github.com/pureportal/mimorii
+
+      - name: Verify signed Windows installer
+        shell: pwsh
+        run: |
+          $path = "${{ steps.windows_agent_artifacts.outputs.artifact_path }}"
+          $signature = Get-AuthenticodeSignature -LiteralPath $path
+          if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
+            throw "Windows installer signature is invalid or not timestamped: $($signature.Status)"
+          }
 
       - name: Name Windows artifact
         id: artifact

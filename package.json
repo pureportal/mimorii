@@ -31,6 +31,7 @@
     "agent-desktop:check": "cargo check --manifest-path apps/agent-desktop/Cargo.toml",
     "agent-desktop:test": "cargo test --manifest-path apps/agent-desktop/Cargo.toml",
     "agent-desktop:build": "cargo build --release --manifest-path apps/agent-desktop/Cargo.toml",
+    "agent-desktop:windows-installer": "node scripts/build-windows-agent-installer.mjs",
     "agent-mobile:check": "cargo check --manifest-path apps/agent-mobile/Cargo.toml",
     "agent-mobile:test": "cargo test --manifest-path apps/agent-mobile/Cargo.toml",
     "agent-mobile:build": "cargo build --release --manifest-path apps/agent-mobile/Cargo.toml",

@@ -1,0 +1,167 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="Mimorii Agent"
+           Manufacturer="Mimorii"
+           Version="$(var.ProductVersion)"
+           ProductCode="$(var.ProductCode)"
+           UpgradeCode="c5472495-7d8b-477a-8f43-7102b91121a9"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Language="1033"
+           Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Mimorii Agent is already installed."
+                  Schedule="afterInstallInitialize" />
+    <MediaTemplate EmbedCab="yes" />
+    <util:CloseApplication Id="ClosePortableAgent"
+                           Target="mimorii-agent-desktop.exe"
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           Timeout="5"
+                           TerminateProcess="0"
+                           RebootPrompt="no"
+                           Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+    <util:CloseApplication Id="CloseAgentUi"
+                           Target="mimorii-agent-desktop-ui.exe"
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           Timeout="5"
+                           TerminateProcess="0"
+                           RebootPrompt="no" />
+
+    <Property Id="AGENTDATADIRECTORY" Secure="yes">
+      <RegistrySearch Id="AgentDataDirectorySearch"
+                      Root="HKLM"
+                      Key="Software\Mimorii\Agent"
+                      Name="DataDirectory"
+                      Type="raw"
+                      Bitness="always64" />
+    </Property>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Mimorii Agent">
+        <Component Id="AgentExecutableComponent"
+                   Guid="25d924a8-d4c0-45a6-968e-e5094a16a626"
+                   Bitness="always64">
+          <File Id="AgentExecutable"
+                Source="$(var.AgentExecutable)"
+                Name="mimorii-agent-desktop.exe"
+                KeyPath="yes" />
+          <ServiceInstall Id="MimoriiAgentService"
+                          Name="MimoriiAgent"
+                          DisplayName="Mimorii Agent"
+                          Description="Collects host metrics and runs monitoring checks."
+                          Type="ownProcess"
+                          Start="auto"
+                          ErrorControl="normal"
+                          Account="NT SERVICE\MimoriiAgent"
+                          Arguments="windows-service">
+            <util:ServiceConfig FirstFailureActionType="restart"
+                                SecondFailureActionType="restart"
+                                ThirdFailureActionType="restart"
+                                ResetPeriodInDays="1"
+                                RestartServiceDelayInSeconds="10" />
+          </ServiceInstall>
+          <ServiceControl Id="MimoriiAgentServiceControl"
+                          Name="MimoriiAgent"
+                          Start="install"
+                          Stop="both"
+                          Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+
+        <Component Id="AgentUiComponent"
+                   Guid="86918200-5791-48cf-9d56-abcacc3b23d7"
+                   Bitness="always64">
+          <File Id="AgentUiExecutable"
+                Source="$(var.AgentUiExecutable)"
+                Name="mimorii-agent-desktop-ui.exe"
+                KeyPath="yes">
+            <Shortcut Id="AgentUiShortcut"
+                      Directory="MimoriiProgramMenuFolder"
+                      Name="Mimorii Agent"
+                      Description="Manage Mimorii Agent"
+                      Advertise="yes"
+                      WorkingDirectory="INSTALLFOLDER" />
+          </File>
+          <RemoveFolder Id="RemoveMimoriiProgramMenuFolder"
+                        Directory="MimoriiProgramMenuFolder"
+                        On="uninstall" />
+        </Component>
+
+        <Component Id="PathComponent"
+                   Guid="cbda5ad6-59ec-4585-ab36-7cfa51de722c"
+                   Bitness="always64">
+          <Environment Id="AgentPath"
+                       Name="PATH"
+                       Value="[INSTALLFOLDER]"
+                       Action="set"
+                       Part="last"
+                       Permanent="no"
+                       System="yes" />
+          <RegistryValue Root="HKLM"
+                         Key="Software\Mimorii\Agent"
+                         Name="PathRegistered"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="MimoriiProgramMenuFolder" Name="Mimorii" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="MimoriiDataDirectory" Name="Mimorii">
+        <Directory Id="AgentDataDirectory" Name="Agent">
+          <Component Id="AgentDataComponent"
+                     Guid="c44d905e-405a-4b20-bed1-1a1bf348e17f"
+                     Bitness="always64">
+            <CreateFolder>
+              <PermissionEx Sddl="D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-80-3802376569-3136133371-2121416282-4072350139-2819318073)" />
+            </CreateFolder>
+            <RegistryValue Root="HKLM"
+                           Key="Software\Mimorii\Agent"
+                           Name="DataDirectory"
+                           Type="string"
+                           Value="[AgentDataDirectory]"
+                           KeyPath="yes" />
+            <util:RemoveFolderEx Id="RemoveAgentData"
+                                 Property="AGENTDATADIRECTORY"
+                                 On="uninstall"
+                                 Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <CustomAction Id="StopLegacyStartupTask"
+                  Directory="SystemFolder"
+                  ExeCommand="&quot;[SystemFolder]schtasks.exe&quot; /End /TN &quot;Mimorii Agent Desktop&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <CustomAction Id="RemoveLegacyStartupTask"
+                  Directory="SystemFolder"
+                  ExeCommand="&quot;[SystemFolder]schtasks.exe&quot; /Delete /F /TN &quot;Mimorii Agent Desktop&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="StopLegacyStartupTask"
+              Before="RemoveLegacyStartupTask"
+              Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+      <Custom Action="RemoveLegacyStartupTask"
+              Before="InstallServices"
+              Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+    </InstallExecuteSequence>
+
+    <Feature Id="AgentFeature" Title="Mimorii Agent" Level="1">
+      <ComponentRef Id="AgentExecutableComponent" />
+      <ComponentRef Id="AgentUiComponent" />
+      <ComponentRef Id="PathComponent" />
+      <ComponentRef Id="AgentDataComponent" />
+    </Feature>
+  </Package>
+</Wix>

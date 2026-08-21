@@ -8,7 +8,7 @@ Each GitHub release publishes four packages and one checksum manifest:
 | ----------------------------------- | ---------------------------------------- |
 | Mimorii Agent for Android           | `mimorii-agent-android.apk`              |
 | Mimorii Agent for Ubuntu/Debian x64 | `mimorii-agent-ubuntu-debian-x64.tar.gz` |
-| Mimorii Agent for Windows x64       | `mimorii-agent-windows-x64.zip`          |
+| Mimorii Agent for Windows x64       | `mimorii-agent-windows-x64.msi`          |
 | Mimorii Client for Android          | `mimorii-client-android.apk`             |
 | SHA-256 checksums                   | `mimorii-sha256-checksums.txt`           |
 
@@ -17,7 +17,7 @@ release version, while downloads through GitHub's latest-release route remain st
 
 - <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-android.apk>
 - <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-ubuntu-debian-x64.tar.gz>
-- <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-windows-x64.zip>
+- <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-windows-x64.msi>
 - <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-client-android.apk>
 - <https://github.com/pureportal/mimorii/releases/latest/download/mimorii-sha256-checksums.txt>
 
@@ -32,10 +32,20 @@ uses `app.mimorii.monitor` and packages the web client as an Android app. The ag
 `app.mimorii.agent` and enables the Android device-status collector. Both APKs are signed, aligned
 for 16 KiB pages, and include `arm64-v8a`, `armeabi-v7a`, and `x86_64` native libraries.
 
+See [Android applications](android-apps.md) for startup separation, native capabilities,
+background scheduling, permissions, and platform limits.
+
 The Linux archive is a statically linked x64 agent build for Ubuntu and Debian. It contains one
-executable, `mimorii-agent-desktop`, with its executable mode preserved. The Windows archive
-contains one x64 executable, `mimorii-agent-desktop.exe`. Both agents can install their user-level
-startup service with `mimorii-agent-desktop service install`.
+executable, `mimorii-agent-desktop`, with its executable mode preserved. Install its user service
+with `mimorii-agent-desktop service install`.
+
+The Windows MSI is a per-machine WiX installer. It installs the CLI and graphical controls in
+`Program Files`, adds the CLI directory to the machine `PATH`, and starts the `MimoriiAgent`
+Windows service under its isolated virtual service account. The graphical controls operate that
+service through the installed CLI and never start another Agent runtime. Configuration and pending snapshots are protected in
+`C:\ProgramData\Mimorii\Agent`. Run enrollment from an administrator terminal. The running service
+applies valid configuration changes automatically. Major upgrades preserve configuration; a full
+uninstall removes the service, files, data, and owned `PATH` entry.
 
 ## Version releases
 
@@ -63,10 +73,23 @@ Configure these Actions secrets:
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password                       |
 | `ANDROID_KEY_ALIAS`         | Release key alias                       |
 | `ANDROID_KEY_PASSWORD`      | Keystore key password                   |
+| `AZURE_CLIENT_ID`           | OIDC signing application client ID      |
+| `AZURE_TENANT_ID`           | Microsoft Entra tenant ID               |
+| `AZURE_SUBSCRIPTION_ID`     | Azure subscription ID                   |
 
 The Android release key must remain unchanged for application updates. Keep an offline backup
 outside GitHub. The workflow decodes the key only on the ephemeral Android runner and removes it
 after the build.
+
+Configure these Actions variables for Windows Artifact Signing:
+
+- `AZURE_ARTIFACT_SIGNING_ENDPOINT`
+- `AZURE_ARTIFACT_SIGNING_ACCOUNT`
+- `AZURE_ARTIFACT_SIGNING_PROFILE`
+
+Give the OIDC service principal the Artifact Signing Certificate Profile Signer role. Release
+builds sign and timestamp the agent executable before embedding it in the MSI, then sign and
+timestamp the MSI.
 
 Android push is optional. Configure all four Actions variables or leave all four unset:
 
@@ -74,6 +97,8 @@ Android push is optional. Configure all four Actions variables or leave all four
 - `MIMORII_FIREBASE_APPLICATION_ID`
 - `MIMORII_FIREBASE_PROJECT_ID`
 - `MIMORII_FIREBASE_SENDER_ID`
+
+The values come from the Firebase Android application for package `app.mimorii.monitor`. The server separately needs Firebase Application Default Credentials; those credentials must never be compiled into an APK or stored in Actions variables. See [Notifications](notifications.md) for the exact Firebase, VAPID, Docker, certificate, and test setup.
 
 ## Local checks
 
@@ -109,3 +134,14 @@ Build and test the desktop agent for the current platform with:
 cargo build --locked --release --manifest-path apps/agent-desktop/Cargo.toml
 cargo test --locked --manifest-path apps/agent-desktop/Cargo.toml
 ```
+
+On Windows, install .NET 8 and build the WiX 6 installer with:
+
+```powershell
+pnpm agent-desktop:windows-installer
+```
+
+The Windows CI job builds a baseline and current MSI, then runs
+`apps/agent-desktop/installer/windows/Test-Installer.ps1` to verify installation, service startup
+and recovery, `PATH`, live enrollment and reconfiguration, rejected updates, upgrade, reinstall,
+and uninstall.

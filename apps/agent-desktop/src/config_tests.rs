@@ -1,6 +1,8 @@
 use std::fs;
 
-use super::{AgentConfig, collection_path, config_path, normalize_server_url};
+use super::{
+    AgentConfig, ConfigRefresh, ConfigWatcher, collection_path, config_path, normalize_server_url,
+};
 use crate::test_support::temporary_path;
 
 fn valid_key() -> String {
@@ -54,6 +56,8 @@ fn accepts_local_http_and_explicit_remote_http() {
 fn rejects_invalid_protocols_and_implicit_remote_http() {
     assert!(normalize_server_url("not a URL", false).is_err());
     assert!(normalize_server_url("ftp://observe.example.com", false).is_err());
+    assert!(normalize_server_url("https://", false).is_err());
+    assert!(normalize_server_url("https://user:secret@observe.example.com", false).is_err());
     let error = normalize_server_url("http://10.0.0.4:4310", false).unwrap_err();
     assert_eq!(
         error.to_string(),
@@ -150,7 +154,63 @@ fn load_reports_missing_and_invalid_configuration() {
         error.to_string(),
         "target policy contains an invalid hostname pattern"
     );
+
+    let invalid_key = temporary_path("invalid-key.json");
+    fs::create_dir_all(invalid_key.parent().unwrap()).unwrap();
+    let mut config = AgentConfig::new("https://observe.example.com", &valid_key(), false).unwrap();
+    config.agent_key = "mim_agent_short".to_owned();
+    fs::write(&invalid_key, serde_json::to_vec(&config).unwrap()).unwrap();
+    let error = AgentConfig::load_from(&invalid_key).unwrap_err();
+    assert_eq!(error.to_string(), "agent key is invalid");
     fs::remove_dir_all(invalid.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn watcher_applies_valid_updates_and_retains_the_last_valid_configuration() {
+    let path = temporary_path("agent-desktop.json");
+    let mut watcher = ConfigWatcher::new(path.clone());
+    assert!(matches!(watcher.refresh(), ConfigRefresh::Rejected(_)));
+    assert_eq!(watcher.refresh(), ConfigRefresh::Unchanged);
+
+    let first = AgentConfig::new("https://one.example.com", &valid_key(), false).unwrap();
+    first.save_to(&path).unwrap();
+    assert_eq!(watcher.refresh(), ConfigRefresh::Applied);
+    assert_eq!(watcher.active(), Some(&first));
+
+    fs::write(&path, "invalid").unwrap();
+    assert!(matches!(watcher.refresh(), ConfigRefresh::Rejected(_)));
+    assert_eq!(watcher.active(), Some(&first));
+    assert_eq!(watcher.refresh(), ConfigRefresh::Unchanged);
+
+    let second_key = format!("mim_agent_{}", "b".repeat(32));
+    let second = AgentConfig::new("https://two.example.com", &second_key, false).unwrap();
+    second.save_to(&path).unwrap();
+    assert_eq!(watcher.refresh(), ConfigRefresh::Applied);
+    assert_eq!(watcher.active(), Some(&second));
+    assert_eq!(watcher.refresh(), ConfigRefresh::Unchanged);
+
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn replacing_configuration_is_atomic_and_removes_staging_files() {
+    let path = temporary_path("agent-desktop.json");
+    let first = AgentConfig::new("https://one.example.com", &valid_key(), false).unwrap();
+    first.save_to(&path).unwrap();
+    let second_key = format!("mim_agent_{}", "b".repeat(32));
+    let second = AgentConfig::new("https://two.example.com", &second_key, false).unwrap();
+    second.save_to(&path).unwrap();
+
+    assert_eq!(AgentConfig::load_from(&path).unwrap(), second);
+    assert!(fs::read_dir(path.parent().unwrap()).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".tmp")
+    }));
+
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 target/
+apps/agent-desktop/installer/windows/bin/
+apps/agent-desktop/installer/windows/obj/
 .machdoch/
 secrets/
 **/google-services.json

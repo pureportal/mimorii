@@ -86,10 +86,25 @@ PostgreSQL data stays in a Docker volume. Back it up regularly, and do not use `
 
 ## Monitor a private server
 
-Create a collector in Mimorii and copy its one-time enrollment key. On the Linux or Windows machine where the Mimorii agent is installed, run:
+Create a collector in Mimorii and copy its enrollment key.
+
+On Windows, install the MSI and run these commands from an administrator PowerShell terminal:
 
 ```bash
-mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <one-time-key>
+mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <enrollment-key>
+mimorii-agent-desktop doctor
+```
+
+The installer starts the Windows service automatically. Enrollment is applied to the running
+service without a restart.
+
+The **Mimorii Agent** Start menu application provides status, enrollment, service controls, and
+diagnostics through that same CLI and service.
+
+On Linux, enroll and start the user service:
+
+```bash
+mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <enrollment-key>
 mimorii-agent-desktop service install
 mimorii-agent-desktop doctor
 ```
@@ -100,7 +115,10 @@ For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agen
 
 ## Monitor an Android device
 
-Open Mimorii Agent on Android, add an Android device collector, and connect it from the creation dialog. Android reports device status on a best-effort WorkManager schedule. It does not run active monitoring checks.
+Add an Android device collector in the Mimorii Client and copy its enrollment code. Open the
+separate Mimorii Agent application and paste the code to activate it. Android reports device status
+on a best-effort WorkManager schedule. It does not run active monitoring checks. See
+[Android applications](docs/android-apps.md) for permissions and platform limits.
 
 ## Monitor a scheduled job
 
@@ -120,7 +138,7 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 - Keep the default single Mimorii application instance unless you provide external scheduler coordination.
 - Review the privacy, email, analytics, and retention settings before opening a public deployment.
 
-For optional email, push notification, analytics, retention, and advanced monitoring settings, use the values documented in [`.env.example`](.env.example).
+For optional email, analytics, retention, and advanced monitoring settings, use the values documented in [`.env.example`](.env.example). Browser and Android delivery setup is documented in [Notifications](docs/notifications.md).
 
 ## Native releases
 
