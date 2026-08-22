@@ -7,6 +7,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Copy, KeyRound, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { MobileDeviceStatusSummary } from "../components/mobile-device-status-summary";
@@ -348,6 +349,15 @@ function CreateAgentDialog({
               </>
             ) : (
               <>
+                <div className="mx-auto rounded-2xl bg-white p-2">
+                  <QRCodeSVG
+                    value={enrollmentCode}
+                    size={220}
+                    level="M"
+                    marginSize={4}
+                    title="Enrollment QR code"
+                  />
+                </div>
                 <div className="rounded-2xl border border-line bg-night p-4 font-mono text-xs leading-6 text-white break-all">
                   {enrollmentCode}
                 </div>

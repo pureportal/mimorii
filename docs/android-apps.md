@@ -32,6 +32,7 @@ The Agent manifest contains:
 | Permission               | Purpose                                           |
 | ------------------------ | ------------------------------------------------- |
 | `INTERNET`               | Verify enrollment and submit device status.       |
+| `CAMERA`                 | Scan agent enrollment QR codes.                   |
 | `ACCESS_NETWORK_STATE`   | Apply WorkManager's connected-network constraint. |
 | `RECEIVE_BOOT_COMPLETED` | Reconcile scheduled work after boot.              |
 | `WAKE_LOCK`              | Allow WorkManager to finish a scheduled worker.   |
@@ -39,6 +40,8 @@ The Agent manifest contains:
 The Client contains `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, FCM receive, and `POST_NOTIFICATIONS`. Android prompts only for notification permission, on Android 13 and newer, when push is enabled. The Client has no Agent worker or boot receiver. The Agent does not request `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, exact-alarm, location, or battery-optimization exemption permissions.
 
 The Client registers a Firebase Installation ID with the signed-in Mimorii account, refreshes that registration when Firebase rotates it, and removes it when notifications are disabled or the user signs out. FCM notification payloads can be displayed while the Client is backgrounded or closed; selecting one opens its incident or resource. See [Notifications](notifications.md) for Firebase credentials, build values, server setup, and end-to-end tests.
+
+The Client declares a Digital Asset Links credential association with `mimorii.app`. Supported Android credential providers can offer website credentials in the signed `app.mimorii.monitor` application. The website statement is served from `/.well-known/assetlinks.json` and must contain the SHA-256 fingerprint of the production signing certificate.
 
 ## Platform limits and recovery
 

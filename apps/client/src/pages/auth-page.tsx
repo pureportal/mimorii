@@ -73,8 +73,9 @@ export function AuthPage({
               <FieldLabel htmlFor="email">Email</FieldLabel>
               <Input
                 id="email"
+                name="email"
                 type="email"
-                autoComplete="email"
+                autoComplete={mode === "login" ? "username" : "email"}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
@@ -84,6 +85,7 @@ export function AuthPage({
               <FieldLabel htmlFor="password">Password</FieldLabel>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}

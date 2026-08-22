@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, apiAssetUrl, getServerUrl, setServerUrl } from "./api";
+import {
+  api,
+  apiAssetUrl,
+  defaultApiUrl,
+  getServerUrl,
+  normalizeServerUrl,
+  setServerUrl,
+} from "./api";
 
 describe("server URL configuration", () => {
   beforeEach(() => localStorage.clear());
@@ -16,6 +23,15 @@ describe("server URL configuration", () => {
     );
     expect(apiAssetUrl("/sponsors/company/favicon")).toBe(
       "https://monitor.example.com/mimorii/api/sponsors/company/favicon"
+    );
+  });
+
+  it("uses the Mimorii API instead of the Android WebView origin", () => {
+    expect(defaultApiUrl("android-client", new URL("http://tauri.localhost"))).toBe(
+      "https://mimorii.app/api"
+    );
+    expect(() => normalizeServerUrl("http://tauri.localhost/api", "android-client")).toThrow(
+      "Enter your Mimorii server URL"
     );
   });
 
@@ -48,5 +64,22 @@ describe("server URL configuration", () => {
     await expect(api("/dashboards/private")).rejects.toThrow("Sign in required");
     expect(unauthorized).not.toHaveBeenCalled();
     window.removeEventListener("mimorii:unauthorized", unauthorized);
+  });
+
+  it("replaces raw JSON parser failures with a recoverable server error", async () => {
+    setServerUrl("https://monitor.example.com");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<!doctype html><title>Not the API</title>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        })
+      )
+    );
+
+    await expect(api("/auth/login", { method: "POST", body: JSON.stringify({}) })).rejects.toThrow(
+      "Server returned an invalid response. Check the server URL."
+    );
   });
 });

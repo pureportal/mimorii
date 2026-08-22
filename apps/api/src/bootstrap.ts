@@ -54,6 +54,10 @@ function configureClientApplication(app: INestApplication): void {
   const indexPath = join(clientRoot, "index.html");
   if (!existsSync(indexPath)) throw new Error(`Client application not found at ${clientRoot}`);
 
+  app.use(
+    "/.well-known",
+    serveStatic(join(clientRoot, ".well-known"), { dotfiles: "allow", index: false })
+  );
   app.use(serveStatic(clientRoot, { index: false }));
   const expressApplication: Express = app.getHttpAdapter().getInstance();
   expressApplication.get("/{*path}", (request: Request, response: Response, next: NextFunction) => {

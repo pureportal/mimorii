@@ -4,15 +4,15 @@ import { AgentApp } from "./agent-app";
 import { createAgentEnrollmentCode } from "./lib/agent-enrollment";
 import type { MobileAgentState } from "./lib/mobile-agent";
 
-const { collectNowMock, enrollMock, openSettingsMock, stateMock, unenrollMock } = vi.hoisted(
-  () => ({
+const { collectNowMock, enrollMock, openSettingsMock, scanMock, stateMock, unenrollMock } =
+  vi.hoisted(() => ({
     collectNowMock: vi.fn(),
     enrollMock: vi.fn(),
     openSettingsMock: vi.fn(),
+    scanMock: vi.fn(),
     stateMock: vi.fn(),
     unenrollMock: vi.fn(),
-  })
-);
+  }));
 
 vi.mock("./lib/mobile-agent", () => ({
   collectMobileStatusNow: collectNowMock,
@@ -21,6 +21,8 @@ vi.mock("./lib/mobile-agent", () => ({
   openMobileAgentBackgroundSettings: openSettingsMock,
   unenrollMobileAgent: unenrollMock,
 }));
+
+vi.mock("./lib/enrollment-scanner", () => ({ scanEnrollmentCode: scanMock }));
 
 const inactive: MobileAgentState = {
   available: true,
@@ -55,6 +57,7 @@ describe("Android Agent experience", () => {
     enrollMock.mockReset();
     collectNowMock.mockReset();
     openSettingsMock.mockReset();
+    scanMock.mockReset();
     unenrollMock.mockReset();
     stateMock.mockResolvedValue(inactive);
     enrollMock.mockResolvedValue(active);
@@ -82,6 +85,25 @@ describe("Android Agent experience", () => {
     );
     expect(await screen.findByText("Field phone")).toBeVisible();
     expect(screen.queryByText("Sign in")).not.toBeInTheDocument();
+  });
+
+  it("scans the Client QR code and activates immediately", async () => {
+    const code = createAgentEnrollmentCode({
+      serverUrl: "https://monitor.example/api",
+      enrollmentKey: `mim_agent_${"b".repeat(32)}`,
+    });
+    scanMock.mockResolvedValue(code);
+
+    render(<AgentApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Scan QR" }));
+
+    await waitFor(() =>
+      expect(enrollMock).toHaveBeenCalledWith({
+        serverUrl: "https://monitor.example/api",
+        enrollmentKey: `mim_agent_${"b".repeat(32)}`,
+      })
+    );
+    expect(await screen.findByText("Field phone")).toBeVisible();
   });
 
   it("shows Android recovery only while background access is restricted", async () => {

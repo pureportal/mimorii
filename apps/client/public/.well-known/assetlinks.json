@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.get_login_creds"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.mimorii.monitor",
+      "sha256_cert_fingerprints": [
+        "51:4D:38:58:9C:C6:C3:FF:67:4C:5B:54:89:34:52:10:B6:7D:A8:D8:1A:A6:1A:E8:5F:3E:D8:80:E5:04:8B:14"
+      ]
+    }
+  }
+]

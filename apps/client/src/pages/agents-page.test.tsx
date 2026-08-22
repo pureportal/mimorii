@@ -2,7 +2,7 @@ import type { AgentSummary } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { parseAgentEnrollmentCode } from "../lib/agent-enrollment";
+import { createAgentEnrollmentCode, parseAgentEnrollmentCode } from "../lib/agent-enrollment";
 import { AgentsPage } from "./agents-page";
 
 const { apiMock, useAuthMock, writeTextMock } = vi.hoisted(() => ({
@@ -180,6 +180,36 @@ describe("AgentsPage confirmations", () => {
       serverUrl: "https://monitor.example",
       enrollmentKey: "mim_agent_reconnected_mobile_agent_key_123456",
     });
+  });
+
+  it("shows the Android enrollment code as both a QR code and copyable text", async () => {
+    const enrollmentKey = `mim_agent_${"c".repeat(32)}`;
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/agents" && options?.method === "POST") {
+        return Promise.resolve({ ...fieldPhone, enrollmentKey });
+      }
+      if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByText("No agents yet");
+    const addAgentButtons = screen.getAllByRole("button", { name: "Add agent" });
+    fireEvent.click(addAgentButtons[0]!);
+    fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "mobile" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Field phone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+
+    const qrCode = await screen.findByRole("img", { name: "Enrollment QR code" });
+    const enrollmentCode = createAgentEnrollmentCode({
+      serverUrl: "https://monitor.example",
+      enrollmentKey,
+    });
+    expect(qrCode).toBeVisible();
+    expect(screen.getByText(enrollmentCode)).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy enrollment code" }));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith(enrollmentCode));
   });
 });
 

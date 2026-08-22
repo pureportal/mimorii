@@ -1,4 +1,4 @@
-import { Activity, RefreshCw, Settings, Unplug } from "lucide-react";
+import { Activity, RefreshCw, ScanLine, Settings, Unplug } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ConfirmationDialog } from "./components/ui/confirmation-dialog";
 import { Button } from "./components/ui/button";
@@ -7,6 +7,7 @@ import { Field, FieldError, FieldLabel } from "./components/ui/field";
 import { Input } from "./components/ui/input";
 import { parseAgentEnrollmentCode } from "./lib/agent-enrollment";
 import { cn } from "./lib/cn";
+import { scanEnrollmentCode } from "./lib/enrollment-scanner";
 import { formatRelative } from "./lib/format";
 import {
   collectMobileStatusNow,
@@ -17,7 +18,7 @@ import {
   type MobileAgentState,
 } from "./lib/mobile-agent";
 
-type PendingAction = "activate" | "collect" | "settings" | "disconnect" | null;
+type PendingAction = "activate" | "scan" | "collect" | "settings" | "disconnect" | null;
 
 export function AgentApp() {
   const [state, setState] = useState<MobileAgentState | null>(null);
@@ -71,6 +72,22 @@ export function AgentApp() {
       setEnrollmentKey("");
     } catch (cause) {
       setError(message(cause, "Agent could not be activated"));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function scanAndActivate() {
+    setPending("scan");
+    setError("");
+    try {
+      const details = parseAgentEnrollmentCode(await scanEnrollmentCode());
+      const next = await enrollMobileAgent(details);
+      setState(next);
+      setEnrollmentCode("");
+      setEnrollmentKey("");
+    } catch (cause) {
+      setError(message(cause, "QR code could not be scanned"));
     } finally {
       setPending(null);
     }
@@ -215,9 +232,20 @@ export function AgentApp() {
                   />
                 </Field>
               )}
-              <Button type="submit" variant="coral" size="lg" disabled={pending !== null}>
-                {pending === "activate" ? "Activating…" : "Activate"}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="submit" variant="coral" size="lg" disabled={pending !== null}>
+                  {pending === "activate" ? "Activating…" : "Activate"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  disabled={pending !== null}
+                  onClick={() => void scanAndActivate()}
+                >
+                  <ScanLine /> {pending === "scan" ? "Scanning…" : "Scan QR"}
+                </Button>
+              </div>
               <button
                 type="button"
                 className="justify-self-center text-sm font-semibold text-muted"

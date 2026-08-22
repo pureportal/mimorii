@@ -7,6 +7,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_push::init());
     #[cfg(feature = "mobile-agent")]
     let builder = builder.plugin(tauri_plugin_agent_mobile::init());
+    #[cfg(all(feature = "mobile-agent", mobile))]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     builder
         .run(tauri::generate_context!())
         .expect("failed to run Mimorii");

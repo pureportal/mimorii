@@ -1,10 +1,8 @@
 import { trackSwetrixEvent } from "./swetrix";
+import { applicationRuntime, type ApplicationRuntime } from "./runtime";
 
 const DEFAULT_API_URL =
-  import.meta.env.VITE_API_URL ??
-  (window.location.protocol === "tauri:"
-    ? "http://localhost:4310/api"
-    : `${window.location.origin}/api`);
+  import.meta.env.VITE_API_URL?.trim() || defaultApiUrl(applicationRuntime, window.location);
 const SERVER_KEY = "mimorii.server";
 let accessToken: string | null = null;
 
@@ -19,19 +17,40 @@ export class ApiError extends Error {
 }
 
 export function getServerUrl(): string {
-  return localStorage.getItem(SERVER_KEY) ?? DEFAULT_API_URL;
+  const stored = localStorage.getItem(SERVER_KEY);
+  if (!stored) return DEFAULT_API_URL;
+  if (applicationRuntime === "android-client" && isInternalTauriUrl(stored)) {
+    localStorage.removeItem(SERVER_KEY);
+    return DEFAULT_API_URL;
+  }
+  return stored;
 }
 
 export function setServerUrl(value: string): string {
+  const normalized = normalizeServerUrl(value, applicationRuntime);
+  localStorage.setItem(SERVER_KEY, normalized);
+  return normalized;
+}
+
+export function defaultApiUrl(
+  runtime: ApplicationRuntime,
+  location: Pick<Location, "origin" | "protocol">
+): string {
+  if (runtime === "android-client") return "https://mimorii.app/api";
+  return location.protocol === "tauri:" ? "http://localhost:4310/api" : `${location.origin}/api`;
+}
+
+export function normalizeServerUrl(value: string, runtime: ApplicationRuntime): string {
   const parsed = new URL(value.trim());
   if (!new Set(["http:", "https:"]).has(parsed.protocol))
     throw new Error("Server must use HTTP or HTTPS");
+  if (runtime === "android-client" && parsed.hostname === "tauri.localhost") {
+    throw new Error("Enter your Mimorii server URL");
+  }
   parsed.pathname = parsed.pathname.replace(/\/$/, "");
   if (!parsed.pathname.endsWith("/api"))
     parsed.pathname = `${parsed.pathname}/api`.replace(/\/+/g, "/");
-  const normalized = parsed.toString().replace(/\/$/, "");
-  localStorage.setItem(SERVER_KEY, normalized);
-  return normalized;
+  return parsed.toString().replace(/\/$/, "");
 }
 
 export function setAccessToken(token: string | null): void {
@@ -64,11 +83,31 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     }
     throw await apiError(response, token);
   }
+  if (response.status === 204) {
+    if (method !== "GET") {
+      trackSwetrixEvent({ ev: "API_MUTATION_SUCCEEDED", meta: { method, scope } });
+    }
+    return undefined as T;
+  }
+  let result: T;
+  try {
+    result = (await response.json()) as T;
+  } catch {
+    if (method !== "GET") {
+      trackSwetrixEvent({
+        ev: "API_MUTATION_FAILED",
+        meta: { method, scope, status: response.status },
+      });
+    }
+    throw new ApiError(
+      response.status,
+      "Server returned an invalid response. Check the server URL."
+    );
+  }
   if (method !== "GET") {
     trackSwetrixEvent({ ev: "API_MUTATION_SUCCEEDED", meta: { method, scope } });
   }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  return result;
 }
 
 export async function apiBlob(path: string, options: RequestInit = {}): Promise<Blob> {
@@ -93,6 +132,14 @@ function apiScope(path: string): string {
   const segments = pathname.split("/").filter(Boolean);
   if (segments[0] === "teams") return segments[2] ?? "teams";
   return segments[0] ?? "unknown";
+}
+
+function isInternalTauriUrl(value: string): boolean {
+  try {
+    return new URL(value).hostname === "tauri.localhost";
+  } catch {
+    return false;
+  }
 }
 
 async function apiError(response: Response, token: string | null): Promise<ApiError> {

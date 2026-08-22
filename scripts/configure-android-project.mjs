@@ -1,4 +1,5 @@
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -6,7 +7,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,6 +30,8 @@ const manifestPath = join(androidDirectory, "app/src/main/AndroidManifest.xml");
 const buildPath = join(androidDirectory, "build.gradle.kts");
 const appBuildPath = join(androidDirectory, "app/build.gradle.kts");
 const stringsPath = join(androidDirectory, "app/src/main/res/values/strings.xml");
+const androidResourcesPath = join(androidDirectory, "app/src/main/res");
+const androidIconsPath = join(repoRoot, "apps/client/src-tauri/icons/android");
 const javaPackageDirectory = configureJavaPackage(
   join(androidDirectory, "app/src/main/java"),
   product.applicationId
@@ -68,10 +71,12 @@ let configuredManifest = manifest
   )
   .replace(/\s+android:enableOnBackInvokedCallback="[^"]*"/, "");
 configuredManifest = configureForegroundServicePermission(configuredManifest, productKey);
+configuredManifest = configureCredentialAssociation(configuredManifest, productKey);
 for (const [name, value] of [
   ["allowBackup", "false"],
   ["dataExtractionRules", "@xml/data_extraction_rules"],
   ["fullBackupContent", "@xml/backup_rules"],
+  ["roundIcon", "@mipmap/ic_launcher_round"],
 ]) {
   configuredManifest = setApplicationAttribute(configuredManifest, name, value);
 }
@@ -90,7 +95,7 @@ const configuredAppBuild = appBuild
     "isMinifyEnabled = true\n            isShrinkResources = true\n"
   )
   .replace(/applicationId = "[^"]+"/, `applicationId = "${product.applicationId}"`);
-const configuredStrings = strings
+let configuredStrings = strings
   .replace(
     /<string name="app_name">[\s\S]*?<\/string>/,
     `<string name="app_name">${product.displayName}</string>`
@@ -99,6 +104,9 @@ const configuredStrings = strings
     /<string name="main_activity_title">[\s\S]*?<\/string>/,
     `<string name="main_activity_title">${product.displayName}</string>`
   );
+configuredStrings = configureCredentialAssociationStrings(configuredStrings, productKey);
+
+copyAndroidIcons(androidIconsPath, androidResourcesPath);
 
 if (/leanback/i.test(configuredManifest)) {
   throw new Error("Generated Android manifest still declares Leanback TV support");
@@ -120,6 +128,19 @@ if (!configuredAppBuild.includes(`namespace = "${product.applicationId}"`)) {
 }
 if (!configuredStrings.includes(`>${product.displayName}</string>`)) {
   throw new Error(`Generated Android application name is not ${product.displayName}`);
+}
+const expectsCredentialAssociation = productKey === "client";
+const manifestHasCredentialAssociation = configuredManifest.includes(
+  'android:name="asset_statements"'
+);
+const stringsHaveCredentialAssociation = configuredStrings.includes(
+  "https://mimorii.app/.well-known/assetlinks.json"
+);
+if (
+  manifestHasCredentialAssociation !== expectsCredentialAssociation ||
+  stringsHaveCredentialAssociation !== expectsCredentialAssociation
+) {
+  throw new Error("Generated Android credential association does not match the selected product");
 }
 if (
   !configuredMainActivity.includes("enableEdgeToEdge()") ||
@@ -154,6 +175,41 @@ function configureForegroundServicePermission(value, selectedProduct) {
   );
 }
 
+function configureCredentialAssociation(value, selectedProduct) {
+  const configured = value.replace(
+    /\s*<meta-data\s+android:name="asset_statements"\s+android:resource="@string\/asset_statements"\s*\/>/g,
+    ""
+  );
+  if (selectedProduct !== "client") return configured;
+  return configured.replace(
+    /<application[\s\S]*?>/,
+    (application) =>
+      `${application}\n        <meta-data\n            android:name="asset_statements"\n            android:resource="@string/asset_statements" />`
+  );
+}
+
+function configureCredentialAssociationStrings(value, selectedProduct) {
+  const configured = value.replace(/\s*<string\s+name="asset_statements"[\s\S]*?<\/string>/g, "");
+  if (selectedProduct !== "client") return configured;
+  return configured.replace(
+    "</resources>",
+    '    <string name="asset_statements" translatable="false">[{\\"include\\":\\"https://mimorii.app/.well-known/assetlinks.json\\"}]</string>\n</resources>'
+  );
+}
+
+function copyAndroidIcons(sourceDirectory, destinationDirectory) {
+  cpSync(sourceDirectory, destinationDirectory, { recursive: true, force: true });
+  for (const sourcePath of filesIn(sourceDirectory)) {
+    const destinationPath = join(destinationDirectory, relative(sourceDirectory, sourcePath));
+    if (
+      !existsSync(destinationPath) ||
+      !readFileSync(sourcePath).equals(readFileSync(destinationPath))
+    ) {
+      throw new Error(`Generated Android icon does not match ${sourcePath}`);
+    }
+  }
+}
+
 function configureJavaPackage(javaDirectory, applicationId) {
   const productDirectories = Object.values(products)
     .map(({ applicationId: candidate }) => join(javaDirectory, ...candidate.split(".")))
@@ -171,22 +227,22 @@ function configureJavaPackage(javaDirectory, applicationId) {
     renameSync(currentDirectory, packageDirectory);
   }
 
-  for (const path of kotlinFilesIn(packageDirectory)) {
-    const source = readFileSync(path, "utf8");
+  for (const sourcePath of filesIn(packageDirectory).filter((path) => path.endsWith(".kt"))) {
+    const source = readFileSync(sourcePath, "utf8");
     const configured = Object.values(products).reduce(
       (value, candidate) => value.replaceAll(candidate.applicationId, applicationId),
       source
     );
-    writeIfChanged(path, configured);
+    writeIfChanged(sourcePath, configured);
   }
   return packageDirectory;
 }
 
-function kotlinFilesIn(directory) {
+function filesIn(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) return kotlinFilesIn(path);
-    return entry.isFile() && entry.name.endsWith(".kt") ? [path] : [];
+    const entryPath = join(directory, entry.name);
+    if (entry.isDirectory()) return filesIn(entryPath);
+    return entry.isFile() ? [entryPath] : [];
   });
 }
 

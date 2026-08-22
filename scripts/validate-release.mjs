@@ -15,6 +15,7 @@ const clientPackage = readJson("apps/client/package.json");
 const tauriConfig = readJson("apps/client/src-tauri/tauri.conf.json");
 const androidClientConfig = readJson("apps/client/src-tauri/tauri.android-client.conf.json");
 const androidAgentConfig = readJson("apps/client/src-tauri/tauri.android-agent.conf.json");
+const androidAssetLinks = readJson("apps/client/public/.well-known/assetlinks.json");
 const openApi = readJson("apps/api/openapi/mimorii.openapi.json");
 const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
 const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
@@ -28,6 +29,7 @@ const viteConfig = readFile("apps/client/vite.config.ts");
 const defaultCapability = readJson("apps/client/src-tauri/capabilities/default.json");
 const androidBuild = readFile("scripts/build-android-app.mjs");
 const androidProjectConfiguration = readFile("scripts/configure-android-project.mjs");
+const apiBootstrap = readFile("apps/api/src/bootstrap.ts");
 const releaseWorkflow = readFile(".github/workflows/release.yml");
 const distributionDocumentation = readFile("docs/release-distribution.md");
 const androidDocumentation = readFile("docs/android-apps.md");
@@ -94,9 +96,36 @@ expectEqual(
 );
 expectArrayEqual(
   androidAgentCapability.permissions,
-  ["agent-mobile:default"],
+  [
+    "agent-mobile:default",
+    "barcode-scanner:allow-check-permissions",
+    "barcode-scanner:allow-request-permissions",
+    "barcode-scanner:allow-scan",
+  ],
   "Android agent permissions"
 );
+expectArrayEqual(
+  androidAssetLinks[0]?.relation,
+  ["delegate_permission/common.get_login_creds"],
+  "Android website credential relation"
+);
+expectEqual(
+  androidAssetLinks[0]?.target?.namespace,
+  "android_app",
+  "Android website credential namespace"
+);
+expectEqual(
+  androidAssetLinks[0]?.target?.package_name,
+  "app.mimorii.monitor",
+  "Android website credential package"
+);
+if (
+  !androidAssetLinks[0]?.target?.sha256_cert_fingerprints?.[0]?.match(
+    /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/
+  )
+) {
+  throw new Error("Android website credential association needs a SHA-256 signing fingerprint");
+}
 
 for (const target of ["aarch64", "armv7", "x86_64"]) {
   if (!androidBuild.includes(`"${target}"`)) {
@@ -142,6 +171,24 @@ if (
   !androidProjectConfiguration.includes("android.permission.FOREGROUND_SERVICE")
 ) {
   throw new Error("Android Agent must remove WorkManager's unused foreground-service permission");
+}
+if (
+  !androidProjectConfiguration.includes("copyAndroidIcons") ||
+  !androidProjectConfiguration.includes('"roundIcon", "@mipmap/ic_launcher_round"')
+) {
+  throw new Error("Android builds must install the Mimorii launcher icons");
+}
+if (
+  !androidProjectConfiguration.includes("configureCredentialAssociation") ||
+  !androidProjectConfiguration.includes("https://mimorii.app/.well-known/assetlinks.json")
+) {
+  throw new Error("Android Client must declare the Mimorii credential association");
+}
+if (
+  !apiBootstrap.includes('"/.well-known"') ||
+  !apiBootstrap.includes('join(clientRoot, ".well-known")')
+) {
+  throw new Error("The website must serve Android credential association files");
 }
 for (const buildGeneratedFile of ["tauri.settings.gradle", "tauri.build.gradle.kts"]) {
   if (androidProjectConfiguration.includes(buildGeneratedFile)) {
@@ -204,7 +251,10 @@ if (
   !clientCargo.includes(
     'tauri-plugin-agent-mobile = { path = "../../agent-mobile", optional = true }'
   ) ||
-  !clientCargo.includes('mobile-agent = ["dep:tauri-plugin-agent-mobile"]') ||
+  !clientCargo.includes(
+    'mobile-agent = ["dep:tauri-plugin-agent-mobile", "dep:tauri-plugin-barcode-scanner"]'
+  ) ||
+  !clientCargo.includes('tauri-plugin-barcode-scanner = { version = "2.4", optional = true }') ||
   !clientCargo.includes('client-app = ["dep:tauri-plugin-push"]') ||
   !clientCargo.includes('tauri-plugin-push = { path = "plugins/push", optional = true }')
 ) {
@@ -213,6 +263,7 @@ if (
 if (
   !tauriEntryPoint.includes('#[cfg(feature = "mobile-agent")]') ||
   !tauriEntryPoint.includes("builder.plugin(tauri_plugin_agent_mobile::init())") ||
+  !tauriEntryPoint.includes("builder.plugin(tauri_plugin_barcode_scanner::init())") ||
   !tauriEntryPoint.includes('#[cfg(feature = "client-app")]') ||
   !tauriEntryPoint.includes("builder.plugin(tauri_plugin_push::init())")
 ) {
