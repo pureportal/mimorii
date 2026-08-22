@@ -159,7 +159,13 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       timestamp
     );
 
-    const sponsors = await request(app.getHttpServer()).get("/api/sponsors").expect(200);
+    const communityOrigin = "https://community.example";
+    const sponsors = await request(app.getHttpServer())
+      .get("/api/sponsors")
+      .set("Origin", communityOrigin)
+      .expect(200);
+    expect(sponsors.headers["access-control-allow-origin"]).toBe("*");
+    expect(sponsors.headers["cross-origin-resource-policy"]).toBe("cross-origin");
     expect(sponsors.body).toEqual([
       {
         tier: "platinum",
@@ -181,6 +187,16 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       { tier: "gold", sponsors: [] },
       { tier: "silver", sponsors: [] },
     ]);
+
+    const sponsorPreflight = await request(app.getHttpServer())
+      .options("/api/sponsors/applications")
+      .set("Origin", communityOrigin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "content-type")
+      .expect(204);
+    expect(sponsorPreflight.headers["access-control-allow-origin"]).toBe("*");
+    expect(sponsorPreflight.headers["access-control-allow-methods"]).toContain("POST");
+    expect(sponsorPreflight.headers["access-control-allow-headers"]).toContain("Content-Type");
 
     await request(app.getHttpServer())
       .post("/api/sponsors/applications")
@@ -346,6 +362,17 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     if (!stored) throw new Error("Tour profile was not persisted");
     const storedTourIds: unknown = JSON.parse(stored.acknowledged_tour_ids);
     expect(storedTourIds).toEqual(["overview", "checks"]);
+  });
+
+  it("allows client applications to save tour progress through CORS", async () => {
+    const preflight = await request(app.getHttpServer())
+      .options("/api/auth/profile/tour-acknowledgements/overview")
+      .set("origin", "http://localhost:5180")
+      .set("access-control-request-method", "PUT")
+      .set("access-control-request-headers", "authorization")
+      .expect(204);
+
+    expect(preflight.headers["access-control-allow-methods"]).toContain("PUT");
   });
 
   it("runs direct checks and persists availability history", async () => {

@@ -14,6 +14,7 @@ import {
   type Response,
 } from "express";
 import { AppModule } from "./app.module.js";
+import { allowedCorsMethods, configuredCorsOrigins } from "./cors.js";
 import { setupSwagger } from "./openapi/swagger.js";
 
 export async function createApplication(): Promise<INestApplication> {
@@ -31,19 +32,33 @@ export async function createApplication(): Promise<INestApplication> {
       validationError: { target: false, value: false },
     })
   );
-  const configuredOrigins = (process.env.MIMORII_CORS_ORIGINS ?? "http://localhost:5180")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  configureSponsorshipCors(app);
   app.enableCors({
-    origin: configuredOrigins,
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    origin: configuredCorsOrigins(),
+    methods: allowedCorsMethods,
     allowedHeaders: ["Authorization", "Content-Type", "X-Dashboard-Key"],
     maxAge: 86_400,
   });
   setupSwagger(app);
   configureClientApplication(app);
   return app;
+}
+
+function configureSponsorshipCors(app: INestApplication): void {
+  app.use("/api/sponsors", (request: Request, response: Response, next: NextFunction) => {
+    response.set({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    });
+    if (request.method === "OPTIONS") {
+      response.status(204).end();
+      return;
+    }
+    next();
+  });
 }
 
 function configureClientApplication(app: INestApplication): void {
