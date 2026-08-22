@@ -49,7 +49,7 @@ const navigationIcons: Record<NavigationItemId, LucideIcon> = {
   resources: Network,
   checks: Activity,
   heartbeats: RadioTower,
-  collectors: Bot,
+  agents: Bot,
   incidents: Siren,
   maintenance: CalendarClock,
   alerting: BellRing,

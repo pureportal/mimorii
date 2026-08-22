@@ -355,10 +355,10 @@
           "markdownDescription": "Denies the unenroll command without any pre-configured scope."
         },
         {
-          "description": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`",
+          "description": "Mimorii mobile agent permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Mimorii mobile collector permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`"
+          "markdownDescription": "Mimorii mobile agent permissions\n#### This default permission set includes:\n\n- `allow-status`\n- `allow-enroll`\n- `allow-collect-now`\n- `allow-open-background-settings`\n- `allow-unenroll`"
         }
       ]
     }

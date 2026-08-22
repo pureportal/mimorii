@@ -6,15 +6,15 @@ import {
 } from "@nestjs/common";
 import {
   agentCollectionInterval,
-  collectorCapabilitiesByKind,
+  agentCapabilitiesByKind,
   mobileAgentCollectionInterval,
   type AgentHeartbeatResponse,
   type AgentPollResponse,
   type AgentSummary,
   type AgentTask,
   type CheckType,
-  type CollectorCapability,
-  type CollectorKind,
+  type AgentCapability,
+  type AgentKind,
   type HostSnapshot,
   type MobileDeviceStatus,
 } from "@mimorii/contracts";
@@ -39,7 +39,7 @@ interface AgentRow {
   id: string;
   team_id: string;
   name: string;
-  kind: CollectorKind;
+  kind: AgentKind;
   collection_interval_seconds: number;
   platform: string | null;
   version: string | null;
@@ -89,7 +89,7 @@ export class AgentsService {
       input.kind,
       input.collectionIntervalSeconds
     );
-    const capabilities = [...collectorCapabilitiesByKind[input.kind]];
+    const capabilities = [...agentCapabilitiesByKind[input.kind]];
     await this.database.run(
       `INSERT INTO agents
        (id, team_id, name, key_hash, kind, capabilities_json, collection_interval_seconds,
@@ -189,9 +189,9 @@ export class AgentsService {
     await this.access.require(userId, teamId, "viewer");
     const agent = await this.requireRow(teamId, id);
     if (agent.kind !== "desktop") {
-      throw new BadRequestException("Mobile collectors do not submit host snapshots");
+      throw new BadRequestException("Mobile agents do not submit host snapshots");
     }
-    const capabilities = JSON.parse(agent.capabilities_json) as CollectorCapability[];
+    const capabilities = JSON.parse(agent.capabilities_json) as AgentCapability[];
     if (!capabilities.includes("host") && !capabilities.includes("disk")) return [];
     const rows = await this.database.all<{ snapshot_json: string }>(
       `SELECT snapshot_json FROM host_snapshots WHERE agent_id = ?
@@ -206,14 +206,14 @@ export class AgentsService {
     await this.access.require(userId, teamId, "viewer");
     const agent = await this.requireRow(teamId, id);
     if (agent.kind !== "mobile") {
-      throw new BadRequestException("Desktop collectors do not submit mobile device status");
+      throw new BadRequestException("Desktop agents do not submit mobile device status");
     }
     return this.mobileDeviceStatuses.latest(id);
   }
 
   async poll(agent: AuthenticatedAgent, limit = 25): Promise<AgentPollResponse> {
     if (agent.kind !== "desktop") {
-      throw new ForbiddenException("Collector does not support active checks");
+      throw new ForbiddenException("Agent does not support active checks");
     }
     const now = new Date().toISOString();
     const rows = await this.database.all<TaskRow>(
@@ -257,20 +257,20 @@ export class AgentsService {
     input: AgentHeartbeatDto
   ): Promise<AgentHeartbeatResponse> {
     if (agent.kind !== "desktop") {
-      throw new ForbiddenException("Collector does not support desktop heartbeats");
+      throw new ForbiddenException("Agent does not support desktop heartbeats");
     }
-    const capabilities = [...new Set(input.capabilities)] as CollectorCapability[];
+    const capabilities = [...new Set(input.capabilities)] as AgentCapability[];
     if (
       capabilities.some(
-        (capability) => !collectorCapabilitiesByKind.desktop.includes(capability as CheckType)
+        (capability) => !agentCapabilitiesByKind.desktop.includes(capability as CheckType)
       )
     ) {
-      throw new BadRequestException("Desktop collector capabilities are invalid");
+      throw new BadRequestException("Desktop agent capabilities are invalid");
     }
     const reportsHostTelemetry = input.snapshots.length > 0;
     const supportsHostTelemetry = capabilities.includes("host") || capabilities.includes("disk");
     if (reportsHostTelemetry !== supportsHostTelemetry) {
-      throw new BadRequestException("Collector telemetry does not match its capabilities");
+      throw new BadRequestException("Agent telemetry does not match its capabilities");
     }
     const receivedAt = new Date().toISOString();
     const snapshots = input.snapshots.map((snapshot) =>
@@ -345,7 +345,7 @@ export class AgentsService {
     agentId: string,
     input: AgentTaskResultDto,
     receivedAt: string,
-    capabilities: CollectorCapability[]
+    capabilities: AgentCapability[]
   ): Promise<boolean> {
     const task = await this.database.get<TaskRow & { type: CheckType }>(
       `SELECT at.*, c.type FROM agent_tasks at JOIN checks c ON c.id = at.check_id
@@ -431,13 +431,13 @@ export class AgentsService {
       platform: row.platform,
       version: row.version,
       lastSeenAt: row.last_seen_at,
-      capabilities: JSON.parse(row.capabilities_json) as CollectorCapability[],
+      capabilities: JSON.parse(row.capabilities_json) as AgentCapability[],
       deviceStatus,
       createdAt: row.created_at,
     };
   }
 
-  private collectionInterval(kind: CollectorKind, requested?: number): number {
+  private collectionInterval(kind: AgentKind, requested?: number): number {
     const limits = kind === "mobile" ? mobileAgentCollectionInterval : agentCollectionInterval;
     const interval = requested ?? limits.defaultSeconds;
     if (interval < limits.minimumSeconds || interval > limits.maximumSeconds) {

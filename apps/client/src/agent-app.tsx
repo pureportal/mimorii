@@ -10,17 +10,17 @@ import { cn } from "./lib/cn";
 import { formatRelative } from "./lib/format";
 import {
   collectMobileStatusNow,
-  enrollMobileCollector,
-  mobileCollectorState,
+  enrollMobileAgent,
+  mobileAgentState,
   openMobileAgentBackgroundSettings,
-  unenrollMobileCollector,
-  type MobileCollectorState,
-} from "./lib/mobile-collector";
+  unenrollMobileAgent,
+  type MobileAgentState,
+} from "./lib/mobile-agent";
 
 type PendingAction = "activate" | "collect" | "settings" | "disconnect" | null;
 
 export function AgentApp() {
-  const [state, setState] = useState<MobileCollectorState | null>(null);
+  const [state, setState] = useState<MobileAgentState | null>(null);
   const [enrollmentCode, setEnrollmentCode] = useState("");
   const [manual, setManual] = useState(false);
   const [serverUrl, setServerUrl] = useState("");
@@ -33,7 +33,7 @@ export function AgentApp() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      setState(await mobileCollectorState());
+      setState(await mobileAgentState());
       setError("");
     } catch (cause) {
       setError(message(cause, "Agent status is unavailable"));
@@ -65,7 +65,7 @@ export function AgentApp() {
       const details = manual
         ? { serverUrl: serverUrl.trim(), enrollmentKey: enrollmentKey.trim() }
         : parseAgentEnrollmentCode(enrollmentCode);
-      const next = await enrollMobileCollector(details);
+      const next = await enrollMobileAgent(details);
       setState(next);
       setEnrollmentCode("");
       setEnrollmentKey("");
@@ -104,7 +104,7 @@ export function AgentApp() {
     setPending("disconnect");
     setError("");
     try {
-      setState(await unenrollMobileCollector());
+      setState(await unenrollMobileAgent());
       setDisconnectOpen(false);
     } catch (cause) {
       setError(message(cause, "Agent could not be disconnected"));
@@ -249,7 +249,7 @@ function AgentStatusCard({
   refreshing,
   onRefresh,
 }: {
-  state: MobileCollectorState | null;
+  state: MobileAgentState | null;
   refreshing: boolean;
   onRefresh: () => Promise<void>;
 }) {
@@ -271,9 +271,7 @@ function AgentStatusCard({
           )}
         />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold">
-            {state?.collectorName ?? "Android agent"}
-          </p>
+          <p className="font-display text-lg font-bold">{state?.agentName ?? "Android agent"}</p>
           <p className="mt-1 text-sm text-muted">{status}</p>
         </div>
         <Button

@@ -1,13 +1,13 @@
 import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
-import type { CollectorCapability, CollectorKind } from "@mimorii/contracts";
+import type { AgentCapability, AgentKind } from "@mimorii/contracts";
 import type { Request } from "express";
 
 export interface AuthenticatedAgent {
   id: string;
   teamId: string;
   name: string;
-  kind: CollectorKind;
-  capabilities: CollectorCapability[];
+  kind: AgentKind;
+  capabilities: AgentCapability[];
   collectionIntervalSeconds: number;
 }
 

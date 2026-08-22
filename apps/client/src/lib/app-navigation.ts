@@ -9,7 +9,7 @@ export const appPaths = {
   resource: `${relativeAppPath(appRoutes.resources)}/:id`,
   checks: relativeAppPath(appRoutes.checks),
   heartbeats: relativeAppPath(appRoutes.heartbeats),
-  collectors: relativeAppPath(appRoutes.collectors),
+  agents: relativeAppPath(appRoutes.agents),
   incidents: relativeAppPath(appRoutes.incidents),
   maintenance: relativeAppPath(appRoutes.maintenance),
   alertChannels: relativeAppPath(appRoutes.alertChannels),
@@ -36,7 +36,7 @@ export type NavigationItemId =
   | "resources"
   | "checks"
   | "heartbeats"
-  | "collectors"
+  | "agents"
   | "incidents"
   | "maintenance"
   | "alerting"
@@ -77,7 +77,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
       { id: "resources", label: "Resources", to: appRoutes.resources },
       { id: "checks", label: "Checks", to: appRoutes.checks, exact: true },
       { id: "heartbeats", label: "Heartbeats", to: appRoutes.heartbeats, exact: true },
-      { id: "collectors", label: "Collectors", to: appRoutes.collectors, exact: true },
+      { id: "agents", label: "Agents", to: appRoutes.agents, exact: true },
     ],
   },
   {

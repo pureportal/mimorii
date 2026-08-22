@@ -661,7 +661,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     ).toBe(true);
   });
 
-  it("registers a check-only collector without exposing host telemetry", async () => {
+  it("registers a check-only agent without exposing host telemetry", async () => {
     const account = await register("check-runner@example.com", "Check Runner");
     const teamId = account.teams[0]!.id;
     const authorization = `Bearer ${account.accessToken}`;
@@ -815,7 +815,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(200)
       .expect(({ body }) =>
         expect(body).toEqual({
-          collectorId: createdAgent.body.id,
+          agentId: createdAgent.body.id,
           name: "Field phone",
           kind: "mobile",
           collectionIntervalSeconds: 900,
@@ -823,7 +823,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       );
     const observedAt = new Date().toISOString();
     const status = {
-      collectorId: createdAgent.body.id,
+      agentId: createdAgent.body.id,
       submissionId: randomUUID(),
       schemaVersion: 1,
       observedAt,
@@ -834,7 +834,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         apiLevel: 36,
         securityPatch: "2026-08-05",
       },
-      collector: { appVersion: "0.1.0", buildNumber: 1 },
+      agent: { appVersion: "0.1.0", buildNumber: 1 },
       uptimeSeconds: 7_200,
       battery: {
         percent: 72,
@@ -867,7 +867,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     await request(app.getHttpServer())
       .post("/api/agent/device-status")
       .set("authorization", agentAuthorization)
-      .send({ ...status, collectorId: randomUUID(), submissionId: randomUUID() })
+      .send({ ...status, agentId: randomUUID(), submissionId: randomUUID() })
       .expect(403);
 
     await request(app.getHttpServer())

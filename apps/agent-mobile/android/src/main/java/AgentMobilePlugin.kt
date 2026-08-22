@@ -66,7 +66,7 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
         activity.runOnUiThread { invoke.resolve(state()) }
       } catch (error: Exception) {
         activity.runOnUiThread {
-          invoke.reject(error.message ?: "Android collector enrollment failed")
+          invoke.reject(error.message ?: "Android agent enrollment failed")
         }
       }
     }
@@ -77,7 +77,7 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
     try {
       if (AgentMobileStorage.enrollment(activity) == null) {
         AgentMobileScheduler.cancel(activity)
-        invoke.reject("Android collector is not enrolled")
+        invoke.reject("Android agent is not enrolled")
         return
       }
       AgentMobileScheduler.collectNow(activity)
@@ -112,7 +112,7 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
       AgentMobileStorage.clearEnrollment(activity)
       invoke.resolve(state())
     } catch (error: Exception) {
-      invoke.reject(error.message ?: "Android collector could not be disconnected")
+      invoke.reject(error.message ?: "Android agent could not be disconnected")
     }
   }
 
@@ -124,10 +124,10 @@ class AgentMobilePlugin(private val activity: Activity) : Plugin(activity) {
       put("available", true)
       put("enrolled", enrollment != null)
       put(
-        "collectorId",
-        enrollment?.collectorId ?: AgentMobileStorage.collectorId(activity) ?: JSONObject.NULL
+        "agentId",
+        enrollment?.agentId ?: AgentMobileStorage.agentId(activity) ?: JSONObject.NULL
       )
-      put("collectorName", enrollment?.collectorName ?: JSONObject.NULL)
+      put("agentName", enrollment?.agentName ?: JSONObject.NULL)
       put("serverUrl", enrollment?.serverUrl ?: JSONObject.NULL)
       put(
         "collectionIntervalSeconds",

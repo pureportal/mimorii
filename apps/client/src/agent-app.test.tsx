@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentApp } from "./agent-app";
 import { createAgentEnrollmentCode } from "./lib/agent-enrollment";
-import type { MobileCollectorState } from "./lib/mobile-collector";
+import type { MobileAgentState } from "./lib/mobile-agent";
 
 const { collectNowMock, enrollMock, openSettingsMock, stateMock, unenrollMock } = vi.hoisted(
   () => ({
@@ -14,19 +14,19 @@ const { collectNowMock, enrollMock, openSettingsMock, stateMock, unenrollMock } 
   })
 );
 
-vi.mock("./lib/mobile-collector", () => ({
+vi.mock("./lib/mobile-agent", () => ({
   collectMobileStatusNow: collectNowMock,
-  enrollMobileCollector: enrollMock,
-  mobileCollectorState: stateMock,
+  enrollMobileAgent: enrollMock,
+  mobileAgentState: stateMock,
   openMobileAgentBackgroundSettings: openSettingsMock,
-  unenrollMobileCollector: unenrollMock,
+  unenrollMobileAgent: unenrollMock,
 }));
 
-const inactive: MobileCollectorState = {
+const inactive: MobileAgentState = {
   available: true,
   enrolled: false,
-  collectorId: null,
-  collectorName: null,
+  agentId: null,
+  agentName: null,
   serverUrl: null,
   collectionIntervalSeconds: null,
   lastSubmittedAt: null,
@@ -39,11 +39,11 @@ const inactive: MobileCollectorState = {
   notificationPermissionRequired: false,
 };
 
-const active: MobileCollectorState = {
+const active: MobileAgentState = {
   ...inactive,
   enrolled: true,
-  collectorId: "22222222-2222-4222-8222-222222222222",
-  collectorName: "Field phone",
+  agentId: "22222222-2222-4222-8222-222222222222",
+  agentName: "Field phone",
   serverUrl: "https://monitor.example/api",
   collectionIntervalSeconds: 900,
   backgroundMode: "scheduled",

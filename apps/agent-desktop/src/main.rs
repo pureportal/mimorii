@@ -183,7 +183,7 @@ fn save_config(config: &AgentConfig) -> Result<std::path::PathBuf> {
 fn doctor() -> Result<()> {
     let config = AgentConfig::load()?;
     println!("configuration: ok");
-    println!("collector: ok");
+    println!("agent: ok");
     println!("{}", config.public_summary());
     ApiClient::new(config)?
         .verify()

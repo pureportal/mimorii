@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type {
   CheckStatus,
   CheckType,
-  CollectorCapability,
-  CollectorKind,
+  AgentCapability,
+  AgentKind,
   ResourceKind,
   ResourceSummary,
 } from "@mimorii/contracts";
@@ -228,7 +228,7 @@ export class ResourcesService {
   ): Promise<void> {
     if (!agentId) return;
     const agent = await this.database.get<{
-      kind: CollectorKind;
+      kind: AgentKind;
       capabilities_json: string;
     }>(
       `SELECT kind, capabilities_json FROM agents
@@ -238,10 +238,10 @@ export class ResourcesService {
     );
     if (!agent) throw new BadRequestException("Agent is unavailable");
     if (agent.kind !== "desktop") {
-      throw new BadRequestException("Mobile collectors cannot be assigned to resources");
+      throw new BadRequestException("Mobile agents cannot be assigned to resources");
     }
     if (!resourceId) return;
-    const capabilities = JSON.parse(agent.capabilities_json) as CollectorCapability[];
+    const capabilities = JSON.parse(agent.capabilities_json) as AgentCapability[];
     const checks = await this.database.all<{ type: CheckType }>(
       "SELECT type FROM checks WHERE resource_id = ? AND team_id = ?",
       resourceId,
@@ -249,7 +249,7 @@ export class ResourcesService {
     );
     const unsupported = checks.find((check) => !capabilities.includes(check.type));
     if (unsupported) {
-      throw new BadRequestException(`Collector does not support ${unsupported.type} checks`);
+      throw new BadRequestException(`Agent does not support ${unsupported.type} checks`);
     }
   }
 }

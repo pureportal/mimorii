@@ -2,7 +2,7 @@ import {
   agentCollectionInterval,
   mobileAgentCollectionInterval,
   type AgentSummary,
-  type CollectorKind,
+  type AgentKind,
 } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Copy, KeyRound, Plus, Smartphone, Trash2 } from "lucide-react";
@@ -31,7 +31,7 @@ interface AgentConfirmation {
   agent: AgentSummary;
 }
 
-function collectorPlatform(agent: AgentSummary): string {
+function agentPlatform(agent: AgentSummary): string {
   if (agent.deviceStatus) return agent.deviceStatus.device.model;
   if (agent.platform) return agent.platform;
   const runsNetworkChecks = agent.capabilities.some((capability) =>
@@ -43,7 +43,7 @@ function collectorPlatform(agent: AgentSummary): string {
   return runsNetworkChecks && !reportsHostTelemetry ? "Check runner" : "Not connected";
 }
 
-export function CollectorsPage() {
+export function AgentsPage() {
   const { activeTeam } = useAuth();
   const teamId = activeTeam!.id;
   const queryClient = useQueryClient();
@@ -64,9 +64,9 @@ export function CollectorsPage() {
     try {
       await api(`/teams/${teamId}/agents/${agent.id}`, { method: "DELETE" });
       await refresh();
-      toast.success("Collector revoked");
+      toast.success("Agent revoked");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Collector could not be revoked");
+      toast.error(error instanceof Error ? error.message : "Agent could not be revoked");
     } finally {
       setActionPending(false);
       setConfirmation(null);
@@ -104,13 +104,13 @@ export function CollectorsPage() {
 
   return (
     <div className="space-y-6">
-      <div data-guide-page="collectors-actions" className="flex justify-end">
+      <div data-guide-page="agents-actions" className="flex justify-end">
         <Button variant="coral" onClick={() => setCreateOpen(true)}>
-          <Plus /> Add collector
+          <Plus /> Add agent
         </Button>
       </div>
       {agents.data?.length ? (
-        <div data-guide-page="collectors-list" className="grid gap-4 xl:grid-cols-2">
+        <div data-guide-page="agents-list" className="grid gap-4 xl:grid-cols-2">
           {agents.data.map((agent) => {
             return (
               <Card key={agent.id} className="p-5">
@@ -125,7 +125,7 @@ export function CollectorsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-display font-bold">{agent.name}</p>
                     <p className="mt-1 truncate text-xs text-muted">
-                      {collectorPlatform(agent)} · {formatRelative(agent.lastSeenAt)}
+                      {agentPlatform(agent)} · {formatRelative(agent.lastSeenAt)}
                     </p>
                   </div>
                   <StatusBadge status={agent.status} />
@@ -159,16 +159,16 @@ export function CollectorsPage() {
         </div>
       ) : (
         <EmptyState
-          title="No collectors yet"
+          title="No agents yet"
           illustration="empty"
           action={
             <Button variant="coral" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus /> Add collector
+              <Plus /> Add agent
             </Button>
           }
         />
       )}
-      <CreateCollectorDialog
+      <CreateAgentDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         teamId={teamId}
@@ -182,14 +182,14 @@ export function CollectorsPage() {
         title={
           confirmation?.action === "rotate"
             ? `Rotate ${confirmation.agent.name}'s key?`
-            : `Revoke ${confirmation?.agent.name ?? "collector"}?`
+            : `Revoke ${confirmation?.agent.name ?? "agent"}?`
         }
         description={
           confirmation?.action === "rotate"
-            ? "The installed collector must be enrolled again."
+            ? "The installed agent must be enrolled again."
             : "Its current key will stop working."
         }
-        confirmLabel={confirmation?.action === "rotate" ? "Rotate key" : "Revoke collector"}
+        confirmLabel={confirmation?.action === "rotate" ? "Rotate key" : "Revoke agent"}
         pending={actionPending}
         onConfirm={() => {
           if (!confirmation) return;
@@ -259,7 +259,7 @@ function CollectionIntervalForm({
   );
 }
 
-function CreateCollectorDialog({
+function CreateAgentDialog({
   open,
   onOpenChange,
   teamId,
@@ -271,7 +271,7 @@ function CreateCollectorDialog({
   onCreated: () => Promise<unknown>;
 }) {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<CollectorKind>("desktop");
+  const [kind, setKind] = useState<AgentKind>("desktop");
   const [interval, setInterval] = useState(String(agentCollectionInterval.defaultSeconds));
   const [created, setCreated] = useState<CreatedAgent | null>(null);
   const [error, setError] = useState("");
@@ -295,7 +295,7 @@ function CreateCollectorDialog({
       setCreated(agent);
       await onCreated();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Collector could not be created");
+      setError(cause instanceof Error ? cause.message : "Agent could not be created");
     } finally {
       setBusy(false);
     }
@@ -326,7 +326,7 @@ function CreateCollectorDialog({
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
-        <DialogHeader title={created ? "Connect collector" : "Add collector"}>
+        <DialogHeader title={created ? "Connect agent" : "Add agent"}>
           {created ? "This enrollment is shown once." : undefined}
         </DialogHeader>
         {created ? (
@@ -373,12 +373,12 @@ function CreateCollectorDialog({
         ) : (
           <form className="grid gap-5" onSubmit={submit}>
             <Field>
-              <FieldLabel htmlFor="agent-kind">Collector</FieldLabel>
+              <FieldLabel htmlFor="agent-kind">Agent</FieldLabel>
               <Select
                 id="agent-kind"
                 value={kind}
                 onChange={(event) => {
-                  const nextKind: CollectorKind =
+                  const nextKind: AgentKind =
                     event.target.value === "mobile" ? "mobile" : "desktop";
                   setKind(nextKind);
                   setInterval(
@@ -423,7 +423,7 @@ function CreateCollectorDialog({
                 Cancel
               </Button>
               <Button type="submit" variant="coral" disabled={busy}>
-                {busy ? "Creating…" : "Create collector"}
+                {busy ? "Creating…" : "Create agent"}
               </Button>
             </div>
           </form>

@@ -147,7 +147,7 @@ jobs:
             apps/agent-desktop -> target
             apps/agent-desktop-ui -> target
 
-      - name: Test collector
+      - name: Test agent
         run: cargo test --locked --manifest-path apps/agent-desktop/Cargo.toml -- --test-threads=1
 
       - name: Build Windows agent

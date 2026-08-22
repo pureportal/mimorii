@@ -16,7 +16,7 @@ const mobileAgent: AuthenticatedAgent = {
 
 function deviceStatus(overrides: Partial<MobileDeviceStatusDto> = {}): MobileDeviceStatusDto {
   return {
-    collectorId: mobileAgent.id,
+    agentId: mobileAgent.id,
     submissionId: "11111111-1111-4111-8111-111111111111",
     schemaVersion: 1,
     observedAt: new Date().toISOString(),
@@ -27,7 +27,7 @@ function deviceStatus(overrides: Partial<MobileDeviceStatusDto> = {}): MobileDev
       apiLevel: 36,
       securityPatch: "2026-08-01",
     },
-    collector: { appVersion: "0.1.0", buildNumber: 1 },
+    agent: { appVersion: "0.1.0", buildNumber: 1 },
     uptimeSeconds: 600,
     battery: {
       percent: 75,
@@ -145,7 +145,7 @@ describe("MobileDeviceStatusService", () => {
     expect(run).toHaveBeenCalledOnce();
   });
 
-  it("rejects desktop collectors", async () => {
+  it("rejects desktop agents", async () => {
     const { run, service } = createService();
 
     await expect(
@@ -154,14 +154,11 @@ describe("MobileDeviceStatusService", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("rejects a key for a different mobile collector", async () => {
+  it("rejects a key for a different mobile agent", async () => {
     const { run, service } = createService();
 
     await expect(
-      service.report(
-        mobileAgent,
-        deviceStatus({ collectorId: "22222222-2222-4222-8222-222222222222" })
-      )
+      service.report(mobileAgent, deviceStatus({ agentId: "22222222-2222-4222-8222-222222222222" }))
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(run).not.toHaveBeenCalled();
   });

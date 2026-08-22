@@ -5758,7 +5758,7 @@
             "type": "number",
             "minimum": 15,
             "maximum": 3600,
-            "description": "Defaults to 30 seconds for desktop collectors and 900 seconds for mobile collectors."
+            "description": "Defaults to 30 seconds for desktop agents and 900 seconds for mobile agents."
           }
         },
         "required": [
@@ -6015,7 +6015,7 @@
           "apiLevel"
         ]
       },
-      "MobileCollectorBuildDto": {
+      "MobileAgentBuildDto": {
         "type": "object",
         "properties": {
           "appVersion": {
@@ -6180,7 +6180,7 @@
       "MobileDeviceStatusDto": {
         "type": "object",
         "properties": {
-          "collectorId": {
+          "agentId": {
             "type": "string",
             "format": "uuid"
           },
@@ -6200,8 +6200,8 @@
           "device": {
             "$ref": "#/components/schemas/MobileDeviceIdentityDto"
           },
-          "collector": {
-            "$ref": "#/components/schemas/MobileCollectorBuildDto"
+          "agent": {
+            "$ref": "#/components/schemas/MobileAgentBuildDto"
           },
           "uptimeSeconds": {
             "type": "number",
@@ -6237,12 +6237,12 @@
           }
         },
         "required": [
-          "collectorId",
+          "agentId",
           "submissionId",
           "schemaVersion",
           "observedAt",
           "device",
-          "collector",
+          "agent",
           "uptimeSeconds",
           "battery",
           "memory",

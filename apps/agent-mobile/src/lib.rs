@@ -12,8 +12,8 @@ const PLUGIN_IDENTIFIER: &str = "app.mimorii.agentmobile";
 struct AgentMobileState {
     available: bool,
     enrolled: bool,
-    collector_id: Option<String>,
-    collector_name: Option<String>,
+    agent_id: Option<String>,
+    agent_name: Option<String>,
     server_url: Option<String>,
     collection_interval_seconds: Option<u64>,
     last_submitted_at: Option<String>,
@@ -32,8 +32,8 @@ fn status() -> AgentMobileState {
     AgentMobileState {
         available: false,
         enrolled: false,
-        collector_id: None,
-        collector_name: None,
+        agent_id: None,
+        agent_name: None,
         server_url: None,
         collection_interval_seconds: None,
         last_submitted_at: None,

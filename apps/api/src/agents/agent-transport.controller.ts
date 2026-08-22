@@ -21,7 +21,7 @@ export class AgentTransportController {
   @Get("enrollment")
   enrollment(@CurrentAgent() agent: AuthenticatedAgent): AgentEnrollment {
     return {
-      collectorId: agent.id,
+      agentId: agent.id,
       name: agent.name,
       kind: agent.kind,
       collectionIntervalSeconds: agent.collectionIntervalSeconds,

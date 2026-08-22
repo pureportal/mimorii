@@ -7,7 +7,7 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import org.json.JSONObject
 
-class AgentAuthenticationException : Exception("Collector key was rejected")
+class AgentAuthenticationException : Exception("Agent key was rejected")
 
 class PermanentSubmissionException(message: String) : Exception(message)
 

@@ -23,7 +23,7 @@ const staticPaths = new Set([
   appRoutes.resources,
   appRoutes.checks,
   appRoutes.heartbeats,
-  appRoutes.collectors,
+  appRoutes.agents,
   appRoutes.incidents,
   appRoutes.maintenance,
   appRoutes.alertChannels,

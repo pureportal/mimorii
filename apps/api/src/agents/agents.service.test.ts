@@ -45,7 +45,7 @@ function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
 }
 
 describe("AgentsService transport", () => {
-  it("rejects active-check polling from mobile collectors", async () => {
+  it("rejects active-check polling from mobile agents", async () => {
     const service = new AgentsService(
       {} as DatabaseService,
       {} as TeamAccessService,
@@ -57,10 +57,10 @@ describe("AgentsService transport", () => {
 
     await expect(
       service.poll({ ...agent, kind: "mobile", capabilities: ["device-status"] })
-    ).rejects.toThrow("Collector does not support active checks");
+    ).rejects.toThrow("Agent does not support active checks");
   });
 
-  it("rejects desktop heartbeats from mobile collectors", async () => {
+  it("rejects desktop heartbeats from mobile agents", async () => {
     const service = new AgentsService(
       {} as DatabaseService,
       {} as TeamAccessService,
@@ -80,7 +80,7 @@ describe("AgentsService transport", () => {
           capabilities: ["device-status"],
         }
       )
-    ).rejects.toThrow("Collector does not support desktop heartbeats");
+    ).rejects.toThrow("Agent does not support desktop heartbeats");
   });
 
   it("uses the mobile collection cadence when calculating freshness", async () => {
@@ -257,7 +257,7 @@ describe("AgentsService transport", () => {
         results: [],
         capabilities: ["http", "tcp", "dns"],
       })
-    ).rejects.toThrow("Collector telemetry does not match its capabilities");
+    ).rejects.toThrow("Agent telemetry does not match its capabilities");
     await expect(
       service.heartbeat(agent, {
         agentVersion: "2.1.0",
@@ -265,10 +265,10 @@ describe("AgentsService transport", () => {
         results: [],
         capabilities: ["http", "tcp", "dns", "host", "disk"],
       })
-    ).rejects.toThrow("Collector telemetry does not match its capabilities");
+    ).rejects.toThrow("Agent telemetry does not match its capabilities");
   });
 
-  it("does not return historical snapshots for a check-only collector", async () => {
+  it("does not return historical snapshots for a check-only agent", async () => {
     const all = vi.fn(async () => [{ snapshot_json: JSON.stringify(snapshot("now", 10)) }]);
     const service = new AgentsService(
       {

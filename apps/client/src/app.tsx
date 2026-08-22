@@ -12,8 +12,8 @@ const ProtectedLayout = lazy(() =>
     default: module.ProtectedLayout,
   }))
 );
-const CollectorsPage = lazy(() =>
-  import("./pages/agents-page").then((module) => ({ default: module.CollectorsPage }))
+const AgentsPage = lazy(() =>
+  import("./pages/agents-page").then((module) => ({ default: module.AgentsPage }))
 );
 const AuthPage = lazy(() =>
   import("./pages/auth-page").then((module) => ({ default: module.AuthPage }))
@@ -121,7 +121,7 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route path={appPaths.resource} element={<ResourceDetailPage />} />
           <Route path={appPaths.checks} element={<ChecksPage />} />
           <Route path={appPaths.heartbeats} element={<HeartbeatsPage />} />
-          <Route path={appPaths.collectors} element={<CollectorsPage />} />
+          <Route path={appPaths.agents} element={<AgentsPage />} />
           <Route path={appPaths.incidents} element={<OperationsPage view="incidents" />} />
           <Route path={appPaths.maintenance} element={<OperationsPage view="maintenance" />} />
           <Route path={appPaths.alertChannels} element={<NotificationsPage section="channels" />} />

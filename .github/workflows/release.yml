@@ -248,7 +248,7 @@ jobs:
         id: android_agent
         run: pnpm tauri:android:agent:release
 
-      - name: Test Android collector
+      - name: Test Android agent
         working-directory: apps/client/src-tauri/gen/android
         run: >-
           ./gradlew

@@ -1,6 +1,6 @@
 ## Default Permission
 
-Mimorii mobile collector permissions
+Mimorii mobile agent permissions
 
 #### This default permission set includes the following:
 

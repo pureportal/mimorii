@@ -14,7 +14,7 @@ export const appRoutes = {
   heartbeats: "/app/monitoring/heartbeats",
   heartbeatsForResource: (resourceId: string) =>
     `/app/monitoring/heartbeats?resourceId=${encodeURIComponent(resourceId)}`,
-  collectors: "/app/monitoring/collectors",
+  agents: "/app/monitoring/agents",
   incidents: "/app/operations/incidents",
   maintenance: "/app/operations/maintenance",
   alertChannels: "/app/operations/alerting/channels",
@@ -71,16 +71,16 @@ export type DashboardIncidentLimit = (typeof dashboardIncidentLimits)[number];
 export const agentStatuses = ["online", "stale", "offline", "never"] as const;
 export type AgentStatus = (typeof agentStatuses)[number];
 
-export const collectorKinds = ["desktop", "mobile"] as const;
-export type CollectorKind = (typeof collectorKinds)[number];
+export const agentKinds = ["desktop", "mobile"] as const;
+export type AgentKind = (typeof agentKinds)[number];
 
-export const collectorCapabilities = [...checkTypes, "device-status"] as const;
-export type CollectorCapability = (typeof collectorCapabilities)[number];
+export const agentCapabilities = [...checkTypes, "device-status"] as const;
+export type AgentCapability = (typeof agentCapabilities)[number];
 
-export const collectorCapabilitiesByKind = {
+export const agentCapabilitiesByKind = {
   desktop: checkTypes,
   mobile: ["device-status"],
-} as const satisfies Record<CollectorKind, readonly CollectorCapability[]>;
+} as const satisfies Record<AgentKind, readonly AgentCapability[]>;
 
 export const agentCollectionInterval = {
   defaultSeconds: 30,
@@ -741,21 +741,21 @@ export interface AgentSummary {
   id: string;
   teamId: string;
   name: string;
-  kind: CollectorKind;
+  kind: AgentKind;
   collectionIntervalSeconds: number;
   status: AgentStatus;
   platform: string | null;
   version: string | null;
   lastSeenAt: string | null;
-  capabilities: CollectorCapability[];
+  capabilities: AgentCapability[];
   deviceStatus: MobileDeviceStatus | null;
   createdAt: string;
 }
 
 export interface AgentEnrollment {
-  collectorId: string;
+  agentId: string;
   name: string;
-  kind: CollectorKind;
+  kind: AgentKind;
   collectionIntervalSeconds: number;
 }
 
@@ -812,7 +812,7 @@ export interface MobileDeviceStatus {
     apiLevel: number;
     securityPatch: string | null;
   };
-  collector: {
+  agent: {
     appVersion: string;
     buildNumber: number;
   };

@@ -4,7 +4,7 @@ The Docker image runs HTTP, TCP, and DNS checks only. It does not collect or sub
 
 ## Run
 
-Create a desktop collector in Mimorii and copy its enrollment key. Save the configuration in an ignored `.env.agent` file:
+Create a desktop agent in Mimorii and copy its enrollment key. Save the configuration in an ignored `.env.agent` file:
 
 ```dotenv
 MIMORII_AGENT_SERVER=https://mimorii.example.com/api
@@ -39,4 +39,4 @@ MIMORII_AGENT_ALLOWED_CIDRS=10.20.0.0/16,172.30.0.0/24
 - With Docker Desktop on Windows, use `host.docker.internal` for a service on Windows. Resolve it inside the running container with `docker exec mimorii-agent getent ahosts host.docker.internal`, allow only the required gateway address or subnet, and restart the container. The service must listen on a reachable interface and Windows Firewall must allow the connection.
 - `host.docker.internal` is also available in the supplied Compose configuration on Linux. Set `MIMORII_AGENT_ALLOW_INSECURE_HTTP=true` when it is used to reach an HTTP-only local Mimorii server.
 
-Docker Desktop checks run through its Linux VM. Neither Docker Desktop nor Linux Docker makes this image a physical-host telemetry collector.
+Docker Desktop checks run through its Linux VM. Neither Docker Desktop nor Linux Docker makes this image a physical-host telemetry agent.

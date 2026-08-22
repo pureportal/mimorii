@@ -28,7 +28,7 @@ describe("application navigation", () => {
       appRoutes.resource("resource-1"),
       appRoutes.checks,
       appRoutes.heartbeats,
-      appRoutes.collectors,
+      appRoutes.agents,
       appRoutes.incidents,
       appRoutes.maintenance,
       appRoutes.alertHistory,

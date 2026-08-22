@@ -69,7 +69,7 @@ describe("ProtectedLayout navigation", () => {
       "page"
     );
     expect(within(desktop).getByText("Resource details")).toBeVisible();
-    expect(within(desktop).queryByText("Agents")).not.toBeInTheDocument();
+    expect(within(desktop).getByRole("link", { name: "Agents" })).toBeVisible();
     expect(within(desktop).queryByText("Analytics")).not.toBeInTheDocument();
     expect(screen.getByTestId("sponsor-favicon")).toBeInTheDocument();
   });
@@ -87,7 +87,7 @@ describe("ProtectedLayout navigation", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Navigation" });
     expect(within(dialog).getByLabelText("Workspace")).toHaveValue("team-1");
-    expect(within(dialog).getByRole("link", { name: "Collectors" })).toBeVisible();
+    expect(within(dialog).getByRole("link", { name: "Agents" })).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Alerting" })).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Shared dashboards" })).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "Sign out" })).toBeVisible();

@@ -21,15 +21,15 @@ import org.json.JSONObject
 data class AgentMobileEnrollment(
   val serverUrl: String,
   val enrollmentKey: String,
-  val collectorId: String,
-  val collectorName: String,
+  val agentId: String,
+  val agentName: String,
   val collectionIntervalSeconds: Long,
   val revision: String
 )
 
 data class PendingDeviceStatusSubmission(
   val id: String,
-  val collectorId: String,
+  val agentId: String,
   val payload: String
 )
 
@@ -37,12 +37,12 @@ object AgentMobileStorage {
   private const val PREFERENCES = "mimorii_agent_mobile"
   private const val SERVER_URL = "server_url"
   private const val ENROLLMENT_KEY = "enrollment_key"
-  private const val COLLECTOR_ID = "collector_id"
-  private const val COLLECTOR_NAME = "collector_name"
+  private const val AGENT_ID = "agent_id"
+  private const val AGENT_NAME = "agent_name"
   private const val COLLECTION_INTERVAL_SECONDS = "collection_interval_seconds"
   private const val ENROLLMENT_REVISION = "enrollment_revision"
   private const val PENDING_SUBMISSION_ID = "pending_submission_id"
-  private const val PENDING_SUBMISSION_COLLECTOR_ID = "pending_submission_collector_id"
+  private const val PENDING_SUBMISSION_AGENT_ID = "pending_submission_agent_id"
   private const val PENDING_SUBMISSION_PAYLOAD = "pending_submission_payload"
   private const val LAST_SUBMITTED_AT = "last_submitted_at"
   private const val LAST_ERROR = "last_error"
@@ -52,20 +52,20 @@ object AgentMobileStorage {
   @Synchronized
   fun saveEnrollment(context: Context, enrollment: AgentMobileEnrollment) {
     val preferences = preferences(context)
-    val previousCollectorId = collectorId(context)
+    val previousAgentId = agentId(context)
     val editor = preferences.edit()
       .putString(SERVER_URL, enrollment.serverUrl)
       .putString(ENROLLMENT_KEY, encrypt(enrollment.enrollmentKey))
-      .putString(COLLECTOR_ID, enrollment.collectorId)
-      .putString(COLLECTOR_NAME, enrollment.collectorName)
+      .putString(AGENT_ID, enrollment.agentId)
+      .putString(AGENT_NAME, enrollment.agentName)
       .putLong(COLLECTION_INTERVAL_SECONDS, enrollment.collectionIntervalSeconds)
       .putString(ENROLLMENT_REVISION, enrollment.revision)
       .remove(LAST_ERROR)
-    if (previousCollectorId != enrollment.collectorId) {
+    if (previousAgentId != enrollment.agentId) {
       editor.remove(LAST_SUBMITTED_AT)
       clearPendingSubmission(editor)
     }
-    persist(editor, "Mobile collector enrollment could not be saved")
+    persist(editor, "Mobile agent enrollment could not be saved")
   }
 
   @Synchronized
@@ -73,39 +73,39 @@ object AgentMobileStorage {
     val preferences = preferences(context)
     val hasCredentials = preferences.contains(SERVER_URL) ||
       preferences.contains(ENROLLMENT_KEY) ||
-      preferences.contains(COLLECTOR_NAME) ||
+      preferences.contains(AGENT_NAME) ||
       preferences.contains(COLLECTION_INTERVAL_SECONDS) ||
       preferences.contains(ENROLLMENT_REVISION)
     if (!hasCredentials) return null
     return try {
       val serverUrl = requireNotNull(preferences.getString(SERVER_URL, null))
       val encryptedKey = requireNotNull(preferences.getString(ENROLLMENT_KEY, null))
-      val collectorId = canonicalUuid(preferences.getString(COLLECTOR_ID, null))
-      val collectorName = requireNotNull(preferences.getString(COLLECTOR_NAME, null)).trim()
-      require(collectorName.isNotEmpty() && collectorName.length <= 100)
+      val agentId = canonicalUuid(preferences.getString(AGENT_ID, null))
+      val agentName = requireNotNull(preferences.getString(AGENT_NAME, null)).trim()
+      require(agentName.isNotEmpty() && agentName.length <= 100)
       val interval = preferences.getLong(COLLECTION_INTERVAL_SECONDS, 0)
       val revision = canonicalUuid(preferences.getString(ENROLLMENT_REVISION, null))
       require(interval in 900L..3_600L)
       AgentMobileEnrollment(
         serverUrl,
         decrypt(encryptedKey),
-        collectorId,
-        collectorName,
+        agentId,
+        agentName,
         interval,
         revision
       )
     } catch (_: Exception) {
       invalidateEnrollmentState(
         context,
-        "Saved enrollment could not be read; reconnect the mobile collector"
+        "Saved enrollment could not be read; reconnect the mobile agent"
       )
       null
     }
   }
 
   @Synchronized
-  fun collectorId(context: Context): String? =
-    preferences(context).getString(COLLECTOR_ID, null)?.let {
+  fun agentId(context: Context): String? =
+    preferences(context).getString(AGENT_ID, null)?.let {
       runCatching { canonicalUuid(it) }.getOrNull()
     }
 
@@ -117,25 +117,25 @@ object AgentMobileStorage {
   ): PendingDeviceStatusSubmission? {
     val preferences = preferences(context)
     if (!isCurrentEnrollment(preferences, enrollment)) return null
-    loadPendingSubmission(preferences, enrollment.collectorId)?.let { return it }
+    loadPendingSubmission(preferences, enrollment.agentId)?.let { return it }
 
     val submissionId = UUID.randomUUID().toString()
     val payload = payloadFactory(submissionId)
     val parsedPayload = JSONObject(payload)
     require(
       parsedPayload.optString("submissionId") == submissionId &&
-        parsedPayload.optString("collectorId") == enrollment.collectorId
+        parsedPayload.optString("agentId") == enrollment.agentId
     ) {
       "Device status submission identity is invalid"
     }
     persist(
       preferences.edit()
         .putString(PENDING_SUBMISSION_ID, submissionId)
-        .putString(PENDING_SUBMISSION_COLLECTOR_ID, enrollment.collectorId)
+        .putString(PENDING_SUBMISSION_AGENT_ID, enrollment.agentId)
         .putString(PENDING_SUBMISSION_PAYLOAD, payload),
       "Pending device status could not be saved"
     )
-    return PendingDeviceStatusSubmission(submissionId, enrollment.collectorId, payload)
+    return PendingDeviceStatusSubmission(submissionId, enrollment.agentId, payload)
   }
 
   @Synchronized
@@ -152,7 +152,7 @@ object AgentMobileStorage {
     val canonicalAcceptedAt = Timestamps.canonical(acceptedAt)
     val preferences = preferences(context)
     if (!isCurrentEnrollment(preferences, enrollment) ||
-      !isPendingSubmission(preferences, enrollment.collectorId, submissionId)
+      !isPendingSubmission(preferences, enrollment.agentId, submissionId)
     ) {
       return false
     }
@@ -174,7 +174,7 @@ object AgentMobileStorage {
   ): Boolean {
     val preferences = preferences(context)
     if (!isCurrentEnrollment(preferences, enrollment) ||
-      !isPendingSubmission(preferences, enrollment.collectorId, submissionId)
+      !isPendingSubmission(preferences, enrollment.agentId, submissionId)
     ) {
       return false
     }
@@ -215,14 +215,14 @@ object AgentMobileStorage {
     val editor = preferences(context).edit()
       .remove(SERVER_URL)
       .remove(ENROLLMENT_KEY)
-      .remove(COLLECTOR_ID)
-      .remove(COLLECTOR_NAME)
+      .remove(AGENT_ID)
+      .remove(AGENT_NAME)
       .remove(COLLECTION_INTERVAL_SECONDS)
       .remove(ENROLLMENT_REVISION)
       .remove(LAST_SUBMITTED_AT)
       .remove(LAST_ERROR)
     clearPendingSubmission(editor)
-    persist(editor, "Mobile collector enrollment could not be cleared")
+    persist(editor, "Mobile agent enrollment could not be cleared")
   }
 
   fun lastSubmittedAt(context: Context): String? =
@@ -235,50 +235,50 @@ object AgentMobileStorage {
     val editor = preferences.edit()
       .remove(SERVER_URL)
       .remove(ENROLLMENT_KEY)
-      .remove(COLLECTOR_NAME)
+      .remove(AGENT_NAME)
       .remove(COLLECTION_INTERVAL_SECONDS)
       .remove(ENROLLMENT_REVISION)
       .putString(LAST_ERROR, error.take(500))
-    if (collectorId(context) == null) {
-      editor.remove(COLLECTOR_ID)
+    if (agentId(context) == null) {
+      editor.remove(AGENT_ID)
       clearPendingSubmission(editor)
     }
-    persist(editor, "Mobile collector recovery state could not be saved")
+    persist(editor, "Mobile agent recovery state could not be saved")
   }
 
   private fun loadPendingSubmission(
     preferences: SharedPreferences,
-    collectorId: String
+    agentId: String
   ): PendingDeviceStatusSubmission? = runCatching {
     val submissionId = canonicalUuid(preferences.getString(PENDING_SUBMISSION_ID, null))
-    val pendingCollectorId = canonicalUuid(
-      preferences.getString(PENDING_SUBMISSION_COLLECTOR_ID, null)
+    val pendingAgentId = canonicalUuid(
+      preferences.getString(PENDING_SUBMISSION_AGENT_ID, null)
     )
-    require(pendingCollectorId == collectorId)
+    require(pendingAgentId == agentId)
     val payload = requireNotNull(preferences.getString(PENDING_SUBMISSION_PAYLOAD, null))
     val parsedPayload = JSONObject(payload)
     require(parsedPayload.optString("submissionId") == submissionId)
-    require(parsedPayload.optString("collectorId") == collectorId)
-    PendingDeviceStatusSubmission(submissionId, pendingCollectorId, payload)
+    require(parsedPayload.optString("agentId") == agentId)
+    PendingDeviceStatusSubmission(submissionId, pendingAgentId, payload)
   }.getOrNull()
 
   private fun isCurrentEnrollment(
     preferences: SharedPreferences,
     enrollment: AgentMobileEnrollment
   ): Boolean = preferences.getString(ENROLLMENT_REVISION, null) == enrollment.revision &&
-    preferences.getString(COLLECTOR_ID, null) == enrollment.collectorId
+    preferences.getString(AGENT_ID, null) == enrollment.agentId
 
   private fun isPendingSubmission(
     preferences: SharedPreferences,
-    collectorId: String,
+    agentId: String,
     submissionId: String
-  ): Boolean = preferences.getString(PENDING_SUBMISSION_COLLECTOR_ID, null) == collectorId &&
+  ): Boolean = preferences.getString(PENDING_SUBMISSION_AGENT_ID, null) == agentId &&
     preferences.getString(PENDING_SUBMISSION_ID, null) == submissionId
 
   private fun clearPendingSubmission(editor: SharedPreferences.Editor): SharedPreferences.Editor =
     editor
       .remove(PENDING_SUBMISSION_ID)
-      .remove(PENDING_SUBMISSION_COLLECTOR_ID)
+      .remove(PENDING_SUBMISSION_AGENT_ID)
       .remove(PENDING_SUBMISSION_PAYLOAD)
 
   private fun persist(editor: SharedPreferences.Editor, error: String) {

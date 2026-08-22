@@ -1,11 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import type {
-  AgentTask,
-  CheckConfig,
-  CollectorCapability,
-  CollectorKind,
-} from "@mimorii/contracts";
+import type { AgentTask, CheckConfig, AgentCapability, AgentKind } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
@@ -15,7 +10,7 @@ import { ResultsService } from "./results.service.js";
 
 interface ScheduledCheckRow extends CheckRow {
   agent_id: string | null;
-  agent_kind: CollectorKind | null;
+  agent_kind: AgentKind | null;
   agent_capabilities_json: string | null;
 }
 
@@ -70,7 +65,7 @@ export class CheckOrchestratorService {
     if (!check) throw new NotFoundException("Check not found");
     if (check.agent_id) {
       if (!this.supportsAssignedCheck(check)) {
-        throw new BadRequestException("Assigned collector does not support this check");
+        throw new BadRequestException("Assigned agent does not support this check");
       }
       const task = await this.queueAgentTask(check, true);
       return { queued: true, taskId: task?.id ?? null };
@@ -140,7 +135,7 @@ export class CheckOrchestratorService {
 
   private supportsAssignedCheck(check: ScheduledCheckRow): boolean {
     if (check.agent_kind !== "desktop" || !check.agent_capabilities_json) return false;
-    const capabilities = JSON.parse(check.agent_capabilities_json) as CollectorCapability[];
+    const capabilities = JSON.parse(check.agent_capabilities_json) as AgentCapability[];
     return capabilities.includes(check.type);
   }
 

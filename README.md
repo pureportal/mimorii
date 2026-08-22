@@ -5,7 +5,7 @@
 
 ![Mimorii monitoring websites, services, and servers](apps/client/public/art/mimorii-hero.png)
 
-Mimorii is a self-hosted home for uptime, server health, incidents, and reliability. It watches public services directly and uses outbound-only collectors for private networks, so you can see what is healthy without opening inbound access to your servers.
+Mimorii is a self-hosted home for uptime, server health, incidents, and reliability. It watches public services directly and uses outbound-only agents for private networks, so you can see what is healthy without opening inbound access to your servers.
 
 ## What Mimorii watches
 
@@ -13,7 +13,7 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 - TCP ports and DNS records
 - CPU, memory, load, disks, and discovered server technologies
 - Scheduled jobs and backups through heartbeat URLs
-- Services inside private networks through Linux and Windows collectors
+- Services inside private networks through Linux and Windows agents
 - Android device availability, battery, memory, storage, connectivity, power, and thermal state
 
 ## From signal to response
@@ -86,7 +86,7 @@ PostgreSQL data stays in a Docker volume. Back it up regularly, and do not use `
 
 ## Monitor a private server
 
-Create a collector in Mimorii and copy its enrollment key.
+Create an agent in Mimorii and copy its enrollment key.
 
 On Windows, install the MSI and run these commands from an administrator PowerShell terminal:
 
@@ -109,13 +109,13 @@ mimorii-agent-desktop service install
 mimorii-agent-desktop doctor
 ```
 
-The collector sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
+The agent sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
 
 For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). It runs HTTP, TCP, and DNS checks without reporting container or Docker VM telemetry as physical-host data. Use the native agent for host monitoring.
 
 ## Monitor an Android device
 
-Add an Android device collector in the Mimorii Client and copy its enrollment code. Open the
+Add an Android device agent in the Mimorii Client and copy its enrollment code. Open the
 separate Mimorii Agent application and paste the code to activate it. Android reports device status
 on a best-effort WorkManager schedule. It does not run active monitoring checks. See
 [Android applications](docs/android-apps.md) for permissions and platform limits.
@@ -132,8 +132,8 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 
 ## Run Mimorii safely
 
-- Put Mimorii behind HTTPS before exposing it to the internet or enrolling remote collectors.
-- Keep `.env`, database backups, collector keys, API tokens, and notification credentials private.
+- Put Mimorii behind HTTPS before exposing it to the internet or enrolling remote agents.
+- Keep `.env`, database backups, agent keys, API tokens, and notification credentials private.
 - Back up PostgreSQL and test that the backup can be restored.
 - Keep the default single Mimorii application instance unless you provide external scheduler coordination.
 - Review the privacy, email, analytics, and retention settings before opening a public deployment.

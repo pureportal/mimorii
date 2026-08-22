@@ -145,7 +145,7 @@ export const guideTopics: readonly GuideTopic[] = [
         items: [
           "Every resource, its current state, check count, last result, and tags.",
           "Search across names, addresses, and tags.",
-          "Quick setup for a website, a TCP port, or a server connected through a collector.",
+          "Quick setup for a website, a TCP port, or a server connected through an agent.",
         ],
       },
       {
@@ -199,13 +199,13 @@ export const guideTopics: readonly GuideTopic[] = [
         items: [
           "The target, tags, status, and maintenance state at the top.",
           "Latency history for any attached check, plus compact check and heartbeat lists.",
-          "CPU, memory, load, volumes, network, and technology details when a collector supplies them.",
+          "CPU, memory, load, volumes, network, and technology details when an agent supplies them.",
         ],
       },
       {
         title: "What you can change",
         items: [
-          "Edit the name, target, description, tags, or collector connection.",
+          "Edit the name, target, description, tags, or agent connection.",
           "Open Manage checks or Manage heartbeats with this resource already selected.",
         ],
       },
@@ -243,7 +243,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "Available checks",
         items: [
           "HTTP for pages and APIs, TCP for open ports, and DNS for records.",
-          "Server health and disk usage when a collector supplies machine data.",
+          "Server health and disk usage when an agent supplies machine data.",
           "Timing, timeout, failure, and recovery settings under Advanced.",
         ],
       },
@@ -321,12 +321,12 @@ export const guideTopics: readonly GuideTopic[] = [
     ],
   },
   {
-    id: "collectors",
-    title: "Collectors",
+    id: "agents",
+    title: "Agents",
     group: "monitoring",
-    summary: "Desktop collectors monitor systems; Android collectors report device status.",
-    to: appRoutes.collectors,
-    exactPaths: [appRoutes.collectors],
+    summary: "Desktop agents monitor systems; Android agents report device status.",
+    to: appRoutes.agents,
+    exactPaths: [appRoutes.agents],
     keywords: [
       "agent",
       "android",
@@ -337,19 +337,19 @@ export const guideTopics: readonly GuideTopic[] = [
       "key",
       "collection",
     ],
-    navigationId: "collectors",
+    navigationId: "agents",
     sections: [
       {
         title: "When to use one",
         items: [
-          "Monitor server health or run checks from another network with a desktop collector.",
+          "Monitor server health or run checks from another network with a desktop agent.",
           "Report an Android device's battery, memory, storage, connectivity, power, and thermal state.",
         ],
       },
       {
-        title: "Collector controls",
+        title: "Agent controls",
         items: [
-          "Add a collector and connect it on the selected desktop or Android device.",
+          "Add an agent and connect it on the selected desktop or Android device.",
           "Change how often it reports, rotate its enrollment key, or revoke it.",
         ],
       },
@@ -360,21 +360,21 @@ export const guideTopics: readonly GuideTopic[] = [
         text: "The Mimorii server runs the check itself.",
       },
       {
-        title: "Collector",
-        text: "A desktop collector runs checks; an Android collector reports device status.",
+        title: "Agent",
+        text: "A desktop agent runs checks; an Android agent reports device status.",
       },
     ],
     tour: [
       {
-        target: '[data-guide-page="collectors-actions"]',
-        title: "Add a collector",
-        content: "Create a desktop or Android collector and connect it on the target device.",
+        target: '[data-guide-page="agents-actions"]',
+        title: "Add an agent",
+        content: "Create a desktop or Android agent and connect it on the target device.",
       },
       {
-        target: '[data-guide-page="collectors-list"]',
+        target: '[data-guide-page="agents-list"]',
         title: "Connection state",
         content:
-          "Each card shows where the collector runs, when it last reported, and its collection interval.",
+          "Each card shows where the agent runs, when it last reported, and its collection interval.",
       },
     ],
   },
@@ -948,9 +948,9 @@ export const guideWorkflows: readonly GuideWorkflow[] = [
       },
       {
         title: "Choose where it runs",
-        text: "Keep Agent set to Direct for a check from the Mimorii server, or choose a collector for another location.",
-        to: appRoutes.collectors,
-        action: "View collectors",
+        text: "Keep Agent set to Direct for a check from the Mimorii server, or choose an agent for another location.",
+        to: appRoutes.agents,
+        action: "View agents",
       },
       {
         title: "Set expectations",
@@ -969,24 +969,24 @@ export const guideWorkflows: readonly GuideWorkflow[] = [
   {
     id: "monitor-server",
     title: "Monitor a server",
-    summary: "Connect a collector, add the server, and inspect its machine health.",
-    keywords: ["server", "collector", "cpu", "memory", "disk", "agent"],
+    summary: "Connect an agent, add the server, and inspect its machine health.",
+    keywords: ["server", "agent", "cpu", "memory", "disk"],
     steps: [
       {
-        title: "Create a collector",
-        text: "Open Collectors, choose Add collector, give it a recognizable name, and create it.",
-        to: appRoutes.collectors,
-        action: "Add collector",
+        title: "Create an agent",
+        text: "Open Agents, choose Add agent, give it a recognizable name, and create it.",
+        to: appRoutes.agents,
+        action: "Add agent",
       },
       {
         title: "Enroll the machine",
         text: "Copy the command shown once and run it on the server you want to monitor.",
-        to: appRoutes.collectors,
-        action: "Open collectors",
+        to: appRoutes.agents,
+        action: "Open agents",
       },
       {
         title: "Add the server resource",
-        text: "In Resources, choose Server, select the connected collector, and save the resource.",
+        text: "In Resources, choose Server, select the connected agent, and save the resource.",
         to: appRoutes.newResource,
         action: "Add server",
       },

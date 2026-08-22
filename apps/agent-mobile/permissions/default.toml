@@ -1,5 +1,5 @@
 [default]
-description = "Mimorii mobile collector permissions"
+description = "Mimorii mobile agent permissions"
 permissions = [
   "allow-status",
   "allow-enroll",

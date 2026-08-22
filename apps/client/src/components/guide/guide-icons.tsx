@@ -28,7 +28,7 @@ const icons: Record<string, LucideIcon> = {
   "resource-details": Server,
   checks: Activity,
   heartbeats: RadioTower,
-  collectors: Bot,
+  agents: Bot,
   incidents: Siren,
   maintenance: CalendarClock,
   "alert-channels": BellRing,

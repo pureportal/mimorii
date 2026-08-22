@@ -29,7 +29,7 @@ creation.
 
 The Android agent and client are separate applications that can be installed together. The client
 uses `app.mimorii.monitor` and packages the web client as an Android app. The agent uses
-`app.mimorii.agent` and enables the Android device-status collector. Both APKs are signed, aligned
+`app.mimorii.agent` and enables the Android device-status agent. Both APKs are signed, aligned
 for 16 KiB pages, and include `arm64-v8a`, `armeabi-v7a`, and `x86_64` native libraries.
 
 See [Android applications](android-apps.md) for startup separation, native capabilities,

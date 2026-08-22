@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import type { CollectorCapability, CollectorKind } from "@mimorii/contracts";
+import type { AgentCapability, AgentKind } from "@mimorii/contracts";
 import type { Request } from "express";
 import { hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -9,7 +9,7 @@ interface AgentRow {
   id: string;
   team_id: string;
   name: string;
-  kind: CollectorKind;
+  kind: AgentKind;
   capabilities_json: string;
   collection_interval_seconds: number;
 }
@@ -36,7 +36,7 @@ export class AgentGuard implements CanActivate {
       teamId: row.team_id,
       name: row.name,
       kind: row.kind,
-      capabilities: JSON.parse(row.capabilities_json) as CollectorCapability[],
+      capabilities: JSON.parse(row.capabilities_json) as AgentCapability[],
       collectionIntervalSeconds: row.collection_interval_seconds,
     };
     (request as AgentRequest).agent = agent;

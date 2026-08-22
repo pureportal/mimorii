@@ -17,7 +17,7 @@ data class DeviceIdentity(
     .putNullable("securityPatch", securityPatch)
 }
 
-data class CollectorBuild(
+data class AgentBuild(
   val appVersion: String,
   val buildNumber: Long
 ) {
@@ -92,7 +92,7 @@ data class PowerStatus(
 data class DeviceStatus(
   val observedAt: String,
   val device: DeviceIdentity,
-  val collector: CollectorBuild,
+  val agent: AgentBuild,
   val uptimeSeconds: Long,
   val battery: BatteryStatus,
   val memory: MemoryStatus,
@@ -105,7 +105,7 @@ data class DeviceStatus(
     .put("schemaVersion", 1)
     .put("observedAt", observedAt)
     .put("device", device.toJson())
-    .put("collector", collector.toJson())
+    .put("agent", agent.toJson())
     .put("uptimeSeconds", uptimeSeconds)
     .put("battery", battery.toJson())
     .put("memory", memory.toJson())

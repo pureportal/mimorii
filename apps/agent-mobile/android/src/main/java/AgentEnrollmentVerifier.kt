@@ -58,9 +58,9 @@ internal fun enrollmentFromResponse(
   } catch (error: Exception) {
     throw IllegalArgumentException("Server returned invalid enrollment", error)
   }
-  require(parsed.optString("kind") == "mobile") { "Enrollment is not for an Android collector" }
-  val collectorId = try {
-    UUID.fromString(parsed.getString("collectorId")).toString()
+  require(parsed.optString("kind") == "mobile") { "Enrollment is not for an Android agent" }
+  val agentId = try {
+    UUID.fromString(parsed.getString("agentId")).toString()
   } catch (error: Exception) {
     throw IllegalArgumentException("Server returned invalid enrollment", error)
   }
@@ -75,8 +75,8 @@ internal fun enrollmentFromResponse(
   return AgentMobileEnrollment(
     serverUrl = serverUrl,
     enrollmentKey = enrollmentKey,
-    collectorId = collectorId,
-    collectorName = name,
+    agentId = agentId,
+    agentName = name,
     collectionIntervalSeconds = interval,
     revision = UUID.randomUUID().toString()
   )

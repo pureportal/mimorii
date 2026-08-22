@@ -54,7 +54,7 @@ class MobileDeviceIdentityDto {
   securityPatch!: string | null;
 }
 
-class MobileCollectorBuildDto {
+class MobileAgentBuildDto {
   @ApiProperty({ maxLength: 40 })
   @IsString()
   @Length(1, 40)
@@ -174,7 +174,7 @@ class MobilePowerStatusDto {
 export class MobileDeviceStatusDto {
   @ApiProperty({ format: "uuid" })
   @IsUUID("4")
-  collectorId!: string;
+  agentId!: string;
 
   @ApiProperty({ format: "uuid" })
   @IsUUID("4")
@@ -193,10 +193,10 @@ export class MobileDeviceStatusDto {
   @Type(() => MobileDeviceIdentityDto)
   device!: MobileDeviceIdentityDto;
 
-  @ApiProperty({ type: MobileCollectorBuildDto })
+  @ApiProperty({ type: MobileAgentBuildDto })
   @ValidateNested()
-  @Type(() => MobileCollectorBuildDto)
-  collector!: MobileCollectorBuildDto;
+  @Type(() => MobileAgentBuildDto)
+  agent!: MobileAgentBuildDto;
 
   @ApiProperty({ minimum: 0 })
   @IsNumber()

@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   agentCollectionInterval,
-  collectorCapabilities,
-  collectorKinds,
-  type CollectorKind,
+  agentCapabilities,
+  agentKinds,
+  type AgentKind,
 } from "@mimorii/contracts";
 import { Type } from "class-transformer";
 import {
@@ -29,15 +29,14 @@ export class CreateAgentDto {
   @Length(1, 100)
   name!: string;
 
-  @ApiProperty({ enum: collectorKinds })
-  @IsIn(collectorKinds)
-  kind!: CollectorKind;
+  @ApiProperty({ enum: agentKinds })
+  @IsIn(agentKinds)
+  kind!: AgentKind;
 
   @ApiPropertyOptional({
     minimum: agentCollectionInterval.minimumSeconds,
     maximum: agentCollectionInterval.maximumSeconds,
-    description:
-      "Defaults to 30 seconds for desktop collectors and 900 seconds for mobile collectors.",
+    description: "Defaults to 30 seconds for desktop agents and 900 seconds for mobile agents.",
   })
   @IsOptional()
   @IsInt()
@@ -240,6 +239,6 @@ export class AgentHeartbeatDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(20)
-  @IsIn(collectorCapabilities, { each: true })
+  @IsIn(agentCapabilities, { each: true })
   capabilities!: string[];
 }

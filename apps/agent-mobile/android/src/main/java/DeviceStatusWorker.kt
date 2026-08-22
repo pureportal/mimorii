@@ -26,7 +26,7 @@ class DeviceStatusWorker(
       ) { submissionId ->
         DeviceStatusCollector.collect(applicationContext)
           .toJson()
-          .put("collectorId", enrollment.collectorId)
+          .put("agentId", enrollment.agentId)
           .put("submissionId", submissionId)
           .toString()
       } ?: return Result.success()
@@ -71,7 +71,7 @@ class DeviceStatusWorker(
       val invalidated = AgentMobileStorage.invalidateEnrollment(
         applicationContext,
         enrollment,
-        error.message ?: "Collector key was rejected"
+        error.message ?: "Agent key was rejected"
       )
       if (invalidated) AgentMobileScheduler.cancel(applicationContext)
       Result.failure()

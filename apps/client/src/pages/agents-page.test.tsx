@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseAgentEnrollmentCode } from "../lib/agent-enrollment";
-import { CollectorsPage } from "./agents-page";
+import { AgentsPage } from "./agents-page";
 
 const { apiMock, useAuthMock, writeTextMock } = vi.hoisted(() => ({
   apiMock: vi.fn(),
@@ -49,7 +49,7 @@ const fieldPhone: AgentSummary = {
   createdAt: "2026-08-13T07:00:00.000Z",
 };
 
-describe("CollectorsPage confirmations", () => {
+describe("AgentsPage confirmations", () => {
   beforeEach(() => {
     apiMock.mockReset();
     useAuthMock.mockReset();
@@ -78,7 +78,7 @@ describe("CollectorsPage confirmations", () => {
 
   afterEach(cleanup);
 
-  it("identifies a connected collector that only runs checks", async () => {
+  it("identifies a connected agent that only runs checks", async () => {
     apiMock.mockImplementation((path: string) => {
       if (path === "/teams/team-1/agents") {
         return Promise.resolve([
@@ -114,7 +114,7 @@ describe("CollectorsPage confirmations", () => {
     expect(
       screen.getByRole("alertdialog", { name: "Rotate Warehouse relay's key?" })
     ).toBeInTheDocument();
-    expect(screen.getByText("The installed collector must be enrolled again.")).toBeVisible();
+    expect(screen.getByText("The installed agent must be enrolled again.")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
@@ -164,7 +164,7 @@ describe("CollectorsPage confirmations", () => {
       if (path === "/teams/team-1/agents") return Promise.resolve([fieldPhone]);
       if (path.endsWith("/rotate-key")) {
         return Promise.resolve({
-          enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
+          enrollmentKey: "mim_agent_reconnected_mobile_agent_key_123456",
         });
       }
       return Promise.reject(new Error(`Unexpected API request: ${path}`));
@@ -178,7 +178,7 @@ describe("CollectorsPage confirmations", () => {
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledOnce());
     expect(parseAgentEnrollmentCode(writeTextMock.mock.calls[0]![0])).toEqual({
       serverUrl: "https://monitor.example",
-      enrollmentKey: "mim_agent_reconnected_mobile_collector_key_123456",
+      enrollmentKey: "mim_agent_reconnected_mobile_agent_key_123456",
     });
   });
 });
@@ -189,7 +189,7 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CollectorsPage />
+      <AgentsPage />
     </QueryClientProvider>
   );
 }

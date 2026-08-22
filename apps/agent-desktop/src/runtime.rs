@@ -266,7 +266,7 @@ impl CollectionWorker {
         }
         self.interval_sender
             .send(interval)
-            .context("local collector stopped")?;
+            .context("local agent stopped")?;
         self.interval = interval;
         Ok(())
     }
@@ -275,7 +275,7 @@ impl CollectionWorker {
         match self.error_receiver.try_recv() {
             Ok(error) => Err(error),
             Err(TryRecvError::Empty) => Ok(()),
-            Err(TryRecvError::Disconnected) => bail!("local collector stopped"),
+            Err(TryRecvError::Disconnected) => bail!("local agent stopped"),
         }
     }
 }

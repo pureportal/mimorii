@@ -9,7 +9,7 @@ The build selects separate Vite entries, Cargo features, Tauri capabilities, app
 
 ## Agent background model
 
-The Agent uses a native Kotlin Tauri plugin. Enrollment is verified with the server before the collector identity, interval, and encrypted credential are committed. Android Keystore protects the encryption key; app backup and device transfer exclude Agent state.
+The Agent uses a native Kotlin Tauri plugin. Enrollment is verified with the server before the agent identity, interval, and encrypted credential are committed. Android Keystore protects the encryption key; app backup and device transfer exclude Agent state.
 
 Device status is short, periodic, deferrable work, so the Agent uses WorkManager 2.11.2 instead of a foreground service:
 

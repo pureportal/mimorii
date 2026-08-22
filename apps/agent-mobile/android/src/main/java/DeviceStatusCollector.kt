@@ -31,7 +31,7 @@ object DeviceStatusCollector {
         apiLevel = Build.VERSION.SDK_INT,
         securityPatch = optionalText(Build.VERSION.SECURITY_PATCH, 40)
       ),
-      collector = CollectorBuild(
+      agent = AgentBuild(
         appVersion = requiredText(
           requireNotNull(packageInfo.versionName) { "Application version is unavailable" },
           "Application version",

@@ -23,10 +23,10 @@ export class MobileDeviceStatusService {
     input: MobileDeviceStatusDto
   ): Promise<MobileDeviceStatusResponse> {
     if (agent.kind !== "mobile") {
-      throw new ForbiddenException("Collector does not support mobile device status");
+      throw new ForbiddenException("Agent does not support mobile device status");
     }
-    if (input.collectorId !== agent.id) {
-      throw new ForbiddenException("Collector identity does not match key");
+    if (input.agentId !== agent.id) {
+      throw new ForbiddenException("Agent identity does not match key");
     }
     this.validateTotals(input);
     const receivedAt = new Date().toISOString();
@@ -63,13 +63,13 @@ export class MobileDeviceStatusService {
         `UPDATE agents SET platform = ?, version = ?, capabilities_json = ?,
          last_seen_at = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL`,
         `Android ${status.device.androidRelease}`.slice(0, 100),
-        status.collector.appVersion.slice(0, 40),
+        status.agent.appVersion.slice(0, 40),
         JSON.stringify(["device-status"]),
         receivedAt,
         receivedAt,
         agent.id
       );
-      if (update.changes === 0) throw new ForbiddenException("Collector key was rejected");
+      if (update.changes === 0) throw new ForbiddenException("Agent key was rejected");
       return submissionAcceptedAt;
     });
 
@@ -123,9 +123,9 @@ export class MobileDeviceStatusService {
         apiLevel: input.device.apiLevel,
         securityPatch: input.device.securityPatch ?? null,
       },
-      collector: {
-        appVersion: input.collector.appVersion,
-        buildNumber: input.collector.buildNumber,
+      agent: {
+        appVersion: input.agent.appVersion,
+        buildNumber: input.agent.buildNumber,
       },
       uptimeSeconds: input.uptimeSeconds,
       battery: {

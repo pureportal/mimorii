@@ -3,8 +3,8 @@ import type {
   CheckConfig,
   CheckSummary,
   CheckType,
-  CollectorCapability,
-  CollectorKind,
+  AgentCapability,
+  AgentKind,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
@@ -241,14 +241,12 @@ export class ChecksService {
   private async validateExecution(type: CheckType, config: CheckConfig, agentId: string | null) {
     if (agentId) {
       const agent = await this.database.get<{
-        kind: CollectorKind;
+        kind: AgentKind;
         capabilities_json: string;
       }>("SELECT kind, capabilities_json FROM agents WHERE id = ? AND revoked_at IS NULL", agentId);
-      const capabilities = agent
-        ? (JSON.parse(agent.capabilities_json) as CollectorCapability[])
-        : [];
+      const capabilities = agent ? (JSON.parse(agent.capabilities_json) as AgentCapability[]) : [];
       if (agent?.kind !== "desktop" || !capabilities.includes(type)) {
-        throw new BadRequestException(`Assigned collector does not support ${type} checks`);
+        throw new BadRequestException(`Assigned agent does not support ${type} checks`);
       }
       return;
     }

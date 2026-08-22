@@ -34,18 +34,18 @@ class AgentMobileStorageTest {
 
   @Test
   fun pendingSubmissionSurvivesRetriesAndStaleWorkersCannotChangeCurrentState() {
-    val collectorId = UUID.randomUUID().toString()
-    val currentEnrollment = enrollment(collectorId, UUID.randomUUID().toString())
-    val staleEnrollment = enrollment(collectorId, UUID.randomUUID().toString())
+    val agentId = UUID.randomUUID().toString()
+    val currentEnrollment = enrollment(agentId, UUID.randomUUID().toString())
+    val staleEnrollment = enrollment(agentId, UUID.randomUUID().toString())
     preferences().edit()
-      .putString("collector_id", collectorId)
+      .putString("agent_id", agentId)
       .putString("enrollment_revision", currentEnrollment.revision)
       .commit()
     var payloadsCreated = 0
     val payloadFactory = { submissionId: String ->
       payloadsCreated += 1
       JSONObject()
-        .put("collectorId", collectorId)
+        .put("agentId", agentId)
         .put("submissionId", submissionId)
         .put("value", payloadsCreated)
         .toString()
@@ -75,11 +75,11 @@ class AgentMobileStorageTest {
     assertEquals(currentEnrollment.revision, preferences().getString("enrollment_revision", null))
 
     assertTrue(
-      AgentMobileStorage.invalidateEnrollment(context, currentEnrollment, "Collector key was rejected")
+      AgentMobileStorage.invalidateEnrollment(context, currentEnrollment, "Agent key was rejected")
     )
     assertNull(preferences().getString("enrollment_revision", null))
-    assertEquals(collectorId, AgentMobileStorage.collectorId(context))
-    val reconnectedEnrollment = enrollment(collectorId, UUID.randomUUID().toString())
+    assertEquals(agentId, AgentMobileStorage.agentId(context))
+    val reconnectedEnrollment = enrollment(agentId, UUID.randomUUID().toString())
     preferences().edit()
       .putString("enrollment_revision", reconnectedEnrollment.revision)
       .commit()
@@ -92,10 +92,10 @@ class AgentMobileStorageTest {
 
   @Test
   fun completingSubmissionAtomicallyClearsPendingPayloadAndError() {
-    val collectorId = UUID.randomUUID().toString()
-    val enrollment = enrollment(collectorId, UUID.randomUUID().toString())
+    val agentId = UUID.randomUUID().toString()
+    val enrollment = enrollment(agentId, UUID.randomUUID().toString())
     preferences().edit()
-      .putString("collector_id", collectorId)
+      .putString("agent_id", agentId)
       .putString("enrollment_revision", enrollment.revision)
       .putString("last_error", "Network unavailable")
       .commit()
@@ -103,7 +103,7 @@ class AgentMobileStorageTest {
     val payloadFactory = { submissionId: String ->
       payloadsCreated += 1
       JSONObject()
-        .put("collectorId", collectorId)
+        .put("agentId", agentId)
         .put("submissionId", submissionId)
         .toString()
     }
@@ -133,18 +133,18 @@ class AgentMobileStorageTest {
 
   @Test
   fun staleEnrollmentCannotCreateOrReplacePendingState() {
-    val collectorId = UUID.randomUUID().toString()
-    val currentEnrollment = enrollment(collectorId, UUID.randomUUID().toString())
-    val staleEnrollment = enrollment(collectorId, UUID.randomUUID().toString())
+    val agentId = UUID.randomUUID().toString()
+    val currentEnrollment = enrollment(agentId, UUID.randomUUID().toString())
+    val staleEnrollment = enrollment(agentId, UUID.randomUUID().toString())
     preferences().edit()
-      .putString("collector_id", collectorId)
+      .putString("agent_id", agentId)
       .putString("enrollment_revision", currentEnrollment.revision)
       .commit()
     var payloadsCreated = 0
     val payloadFactory = { submissionId: String ->
       payloadsCreated += 1
       JSONObject()
-        .put("collectorId", collectorId)
+        .put("agentId", agentId)
         .put("submissionId", submissionId)
         .toString()
     }
@@ -162,14 +162,14 @@ class AgentMobileStorageTest {
 
   @Test
   fun invalidPendingIdentityIsReplacedBeforeSubmission() {
-    val collectorId = UUID.randomUUID().toString()
-    val enrollment = enrollment(collectorId, UUID.randomUUID().toString())
+    val agentId = UUID.randomUUID().toString()
+    val enrollment = enrollment(agentId, UUID.randomUUID().toString())
     val staleSubmissionId = UUID.randomUUID().toString()
     preferences().edit()
-      .putString("collector_id", collectorId)
+      .putString("agent_id", agentId)
       .putString("enrollment_revision", enrollment.revision)
       .putString("pending_submission_id", staleSubmissionId)
-      .putString("pending_submission_collector_id", collectorId)
+      .putString("pending_submission_agent_id", agentId)
       .putString(
         "pending_submission_payload",
         JSONObject().put("submissionId", staleSubmissionId).toString()
@@ -181,7 +181,7 @@ class AgentMobileStorageTest {
       AgentMobileStorage.pendingSubmission(context, enrollment) { submissionId ->
         payloadsCreated += 1
         JSONObject()
-          .put("collectorId", collectorId)
+          .put("agentId", agentId)
           .put("submissionId", submissionId)
           .toString()
       }
@@ -202,11 +202,11 @@ class AgentMobileStorageTest {
     }
   }
 
-  private fun enrollment(collectorId: String, revision: String) = AgentMobileEnrollment(
+  private fun enrollment(agentId: String, revision: String) = AgentMobileEnrollment(
     serverUrl = "https://monitor.example/api",
     enrollmentKey = "mim_agent_test_key_that_is_long_enough_for_enrollment",
-    collectorId = collectorId,
-    collectorName = "Test phone",
+    agentId = agentId,
+    agentName = "Test phone",
     collectionIntervalSeconds = 900,
     revision = revision
   )

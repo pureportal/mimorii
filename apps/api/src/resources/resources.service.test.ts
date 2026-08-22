@@ -65,7 +65,7 @@ describe("ResourcesService agent assignment", () => {
     expect(requireAccess).toHaveBeenNthCalledWith(2, "member-1", "team-1", "admin");
   });
 
-  it("does not assign mobile collectors to resources", async () => {
+  it("does not assign mobile agents to resources", async () => {
     const requireAccess = vi.fn(async () => ({}));
     const database = {
       get: vi

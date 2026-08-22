@@ -20,26 +20,26 @@ class AgentMobilePluginTest {
   @Test
   fun rejectsCleartextRemoteServers() {
     assertThrows(IllegalArgumentException::class.java) {
-      normalizeMobileServerUrl("http://collector.example.com")
+      normalizeMobileServerUrl("http://agent.example.com")
     }
   }
 
   @Test
   fun acceptsVerifiedMobileEnrollment() {
-    val collectorId = UUID.randomUUID().toString()
+    val agentId = UUID.randomUUID().toString()
     val enrollment = enrollmentFromResponse(
       "https://monitor.example/api",
       "mim_agent_test_key_that_is_long_enough_for_enrollment",
       """{
-        "collectorId":"$collectorId",
+        "agentId":"$agentId",
         "name":"Field phone",
         "kind":"mobile",
         "collectionIntervalSeconds":900
       }"""
     )
 
-    assertEquals(collectorId, enrollment.collectorId)
-    assertEquals("Field phone", enrollment.collectorName)
+    assertEquals(agentId, enrollment.agentId)
+    assertEquals("Field phone", enrollment.agentName)
     assertEquals(900L, enrollment.collectionIntervalSeconds)
   }
 
@@ -50,7 +50,7 @@ class AgentMobilePluginTest {
         "https://monitor.example/api",
         "mim_agent_test_key_that_is_long_enough_for_enrollment",
         """{
-          "collectorId":"${UUID.randomUUID()}",
+          "agentId":"${UUID.randomUUID()}",
           "name":"Office host",
           "kind":"desktop",
           "collectionIntervalSeconds":900

@@ -105,7 +105,7 @@ export function GuideHome({
             number="2"
             icon={Activity}
             title="Collect health signals"
-            text="Checks test resources, heartbeats follow scheduled jobs, and collectors reach servers and private networks."
+            text="Checks test resources, heartbeats follow scheduled jobs, and agents reach servers and private networks."
           />
           <Concept
             number="3"
