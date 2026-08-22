@@ -66,7 +66,10 @@ export function CheckDialog({
 
   useEffect(() => {
     if (!open) return;
-    setResourceId(initial?.resourceId ?? defaultResourceId ?? resources[0]?.id ?? "");
+    const selectedResource = resources.find(
+      (resource) => resource.id === (initial?.resourceId || defaultResourceId)
+    );
+    setResourceId(selectedResource?.id ?? resources[0]?.id ?? "");
     setName(initial?.name ?? "Availability");
     setType(initial?.type ?? "http");
     setInterval(String(initial?.intervalSeconds ?? 60));
