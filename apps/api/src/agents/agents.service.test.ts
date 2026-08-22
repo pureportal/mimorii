@@ -44,7 +44,62 @@ function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
   };
 }
 
-describe("AgentsService transport", () => {
+describe("AgentsService", () => {
+  it("renames an agent without changing its collection interval", async () => {
+    const currentAgent = {
+      id: "agent-1",
+      team_id: "team-1",
+      name: "Relay",
+      kind: "desktop",
+      collection_interval_seconds: 45,
+      platform: "linux",
+      version: "2.1.0",
+      capabilities_json: '["http","tcp","dns"]',
+      last_seen_at: "2026-08-13T08:00:00.000Z",
+      revoked_at: null,
+      created_at: "2026-08-13T07:00:00.000Z",
+    } as const;
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce(currentAgent)
+      .mockResolvedValueOnce({ ...currentAgent, name: "Production relay" });
+    const run = vi.fn(async () => ({ changes: 1 }));
+    const requireAccess = vi.fn(async () => ({}));
+    const record = vi.fn(async () => undefined);
+    const service = new AgentsService(
+      { get, run } as unknown as DatabaseService,
+      { require: requireAccess } as unknown as TeamAccessService,
+      { record } as unknown as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses
+    );
+
+    const response = await service.update("user-1", "team-1", "agent-1", {
+      name: "  Production relay  ",
+    });
+
+    expect(requireAccess).toHaveBeenCalledWith("user-1", "team-1", "admin");
+    expect(run).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE agents SET name = ?"),
+      "Production relay",
+      45,
+      expect.any(String),
+      "agent-1",
+      "team-1"
+    );
+    expect(record).toHaveBeenCalledWith({
+      teamId: "team-1",
+      userId: "user-1",
+      action: "agent.updated",
+      subjectType: "agent",
+      subjectId: "agent-1",
+      metadata: { name: "Production relay", collectionIntervalSeconds: 45 },
+    });
+    expect(response.name).toBe("Production relay");
+    expect(response.collectionIntervalSeconds).toBe(45);
+  });
+
   it("rejects active-check polling from mobile agents", async () => {
     const service = new AgentsService(
       {} as DatabaseService,

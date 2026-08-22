@@ -5,7 +5,7 @@ import {
   type AgentKind,
 } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Copy, KeyRound, Plus, Smartphone, Trash2 } from "lucide-react";
+import { Bot, Copy, KeyRound, Pencil, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ export function AgentsPage() {
   const teamId = activeTeam!.id;
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentSummary | null>(null);
   const [confirmation, setConfirmation] = useState<AgentConfirmation | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const agents = useQuery({
@@ -134,9 +135,11 @@ export function AgentsPage() {
                 {agent.kind === "mobile" && agent.deviceStatus ? (
                   <MobileDeviceStatusSummary status={agent.deviceStatus} />
                 ) : null}
-                <div className="mt-5 flex flex-col gap-4 border-t border-line pt-4 sm:flex-row sm:items-end">
-                  <CollectionIntervalForm agent={agent} teamId={teamId} onSaved={refresh} />
-                  <div className="flex flex-wrap justify-end gap-1 sm:ml-auto">
+                <div className="mt-5 flex flex-wrap justify-end gap-1 border-t border-line pt-4">
+                  <Button variant="ghost" size="sm" onClick={() => setEditingAgent(agent)}>
+                    <Pencil /> Edit
+                  </Button>
+                  <div className="flex flex-wrap justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -175,6 +178,16 @@ export function AgentsPage() {
         teamId={teamId}
         onCreated={refresh}
       />
+      {editingAgent ? (
+        <EditAgentDialog
+          agent={editingAgent}
+          teamId={teamId}
+          onOpenChange={(open) => {
+            if (!open) setEditingAgent(null);
+          }}
+          onSaved={refresh}
+        />
+      ) : null}
       <ConfirmationDialog
         open={Boolean(confirmation)}
         onOpenChange={(open) => {
@@ -202,61 +215,83 @@ export function AgentsPage() {
   );
 }
 
-function CollectionIntervalForm({
+function EditAgentDialog({
   agent,
   teamId,
+  onOpenChange,
   onSaved,
 }: {
   agent: AgentSummary;
   teamId: string;
+  onOpenChange: (open: boolean) => void;
   onSaved: () => Promise<unknown>;
 }) {
+  const [name, setName] = useState(agent.name);
   const [interval, setInterval] = useState(String(agent.collectionIntervalSeconds));
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const limits = agent.kind === "mobile" ? mobileAgentCollectionInterval : agentCollectionInterval;
-
-  useEffect(() => setInterval(String(agent.collectionIntervalSeconds)), [agent]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
+    setError("");
     try {
       await api(`/teams/${teamId}/agents/${agent.id}`, {
         method: "PATCH",
-        ...jsonBody({ collectionIntervalSeconds: Number(interval) }),
+        ...jsonBody({ name, collectionIntervalSeconds: Number(interval) }),
       });
       await onSaved();
-      toast.success("Collection interval saved");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Collection interval could not be saved"
-      );
+      toast.success("Agent saved");
+      onOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Agent could not be saved");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form className="flex items-end gap-2" onSubmit={submit}>
-      <Field>
-        <FieldLabel htmlFor={`agent-interval-${agent.id}`}>
-          Collection interval · seconds
-        </FieldLabel>
-        <Input
-          id={`agent-interval-${agent.id}`}
-          className="w-28"
-          type="number"
-          min={limits.minimumSeconds}
-          max={limits.maximumSeconds}
-          value={interval}
-          onChange={(event) => setInterval(event.target.value)}
-          required
-        />
-      </Field>
-      <Button type="submit" variant="outline" size="sm" disabled={busy}>
-        Save
-      </Button>
-    </form>
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader title="Edit agent" />
+        <form className="grid gap-5" onSubmit={submit}>
+          <Field>
+            <FieldLabel htmlFor={`agent-name-${agent.id}`}>Name</FieldLabel>
+            <Input
+              id={`agent-name-${agent.id}`}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              maxLength={100}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`agent-interval-${agent.id}`}>
+              Collection interval · seconds
+            </FieldLabel>
+            <Input
+              id={`agent-interval-${agent.id}`}
+              type="number"
+              min={limits.minimumSeconds}
+              max={limits.maximumSeconds}
+              value={interval}
+              onChange={(event) => setInterval(event.target.value)}
+              required
+            />
+          </Field>
+          <FieldError>{error}</FieldError>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={busy}>
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

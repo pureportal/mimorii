@@ -547,9 +547,12 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     await request(app.getHttpServer())
       .patch(`/api/teams/${teamId}/agents/${createdAgent.body.id}`)
       .set("authorization", authorization)
-      .send({ collectionIntervalSeconds: 60 })
+      .send({ name: "Production network", collectionIntervalSeconds: 60 })
       .expect(200)
-      .expect(({ body }) => expect(body.collectionIntervalSeconds).toBe(60));
+      .expect(({ body }) => {
+        expect(body.name).toBe("Production network");
+        expect(body.collectionIntervalSeconds).toBe(60);
+      });
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)

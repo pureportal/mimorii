@@ -137,26 +137,39 @@ describe("AgentsPage confirmations", () => {
     expect(writeTextMock).toHaveBeenCalledWith("new-enrollment-key");
   });
 
-  it("saves the agent collection interval through Mimorii", async () => {
-    apiMock.mockImplementation((path: string) => {
-      if (path === "/teams/team-1/agents") return Promise.resolve([warehouseRelay]);
+  it("renames an agent and saves its collection interval", async () => {
+    let currentAgent = warehouseRelay;
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/agents") return Promise.resolve([currentAgent]);
       if (path.endsWith("/snapshots?limit=100")) return Promise.resolve([]);
-      if (path === "/teams/team-1/agents/agent-1") return Promise.resolve(warehouseRelay);
+      if (path === "/teams/team-1/agents/agent-1" && options?.method === "PATCH") {
+        currentAgent = {
+          ...warehouseRelay,
+          name: "Production relay",
+          collectionIntervalSeconds: 45,
+        };
+        return Promise.resolve(currentAgent);
+      }
       return Promise.reject(new Error(`Unexpected API request: ${path}`));
     });
 
     renderPage();
 
-    const interval = await screen.findByRole("spinbutton", { name: /Collection interval/ });
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+      target: { value: "Production relay" },
+    });
+    const interval = screen.getByRole("spinbutton", { name: /Collection interval/ });
     fireEvent.change(interval, { target: { value: "45" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith("/teams/team-1/agents/agent-1", {
         method: "PATCH",
-        body: JSON.stringify({ collectionIntervalSeconds: 45 }),
+        body: JSON.stringify({ name: "Production relay", collectionIntervalSeconds: 45 }),
       })
     );
+    expect(await screen.findByText("Production relay")).toBeVisible();
   });
 
   it("copies a complete enrollment code when rotating an Android key", async () => {

@@ -18,6 +18,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -27,6 +28,7 @@ export class CreateAgentDto {
   @ApiProperty({ minLength: 1, maxLength: 100 })
   @IsString()
   @Length(1, 100)
+  @Matches(/\S/)
   name!: string;
 
   @ApiProperty({ enum: agentKinds })
@@ -46,14 +48,22 @@ export class CreateAgentDto {
 }
 
 export class UpdateAgentDto {
-  @ApiProperty({
+  @ApiPropertyOptional({ minLength: 1, maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  @Matches(/\S/)
+  name?: string;
+
+  @ApiPropertyOptional({
     minimum: agentCollectionInterval.minimumSeconds,
     maximum: agentCollectionInterval.maximumSeconds,
   })
+  @IsOptional()
   @IsInt()
   @Min(agentCollectionInterval.minimumSeconds)
   @Max(agentCollectionInterval.maximumSeconds)
-  collectionIntervalSeconds!: number;
+  collectionIntervalSeconds?: number;
 }
 
 export class DiskSnapshotDto {

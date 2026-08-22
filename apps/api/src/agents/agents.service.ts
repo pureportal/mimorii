@@ -119,13 +119,15 @@ export class AgentsService {
   async update(userId: string, teamId: string, id: string, input: UpdateAgentDto) {
     await this.access.require(userId, teamId, "admin");
     const agent = await this.requireRow(teamId, id);
-    const collectionIntervalSeconds = this.collectionInterval(
-      agent.kind,
-      input.collectionIntervalSeconds
-    );
+    const name = typeof input.name === "string" ? input.name.trim() : agent.name;
+    const collectionIntervalSeconds =
+      typeof input.collectionIntervalSeconds === "number"
+        ? this.collectionInterval(agent.kind, input.collectionIntervalSeconds)
+        : agent.collection_interval_seconds;
     await this.database.run(
-      `UPDATE agents SET collection_interval_seconds = ?, updated_at = ?
+      `UPDATE agents SET name = ?, collection_interval_seconds = ?, updated_at = ?
        WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
+      name,
       collectionIntervalSeconds,
       new Date().toISOString(),
       id,
@@ -137,7 +139,7 @@ export class AgentsService {
       action: "agent.updated",
       subjectType: "agent",
       subjectId: id,
-      metadata: { collectionIntervalSeconds },
+      metadata: { name, collectionIntervalSeconds },
     });
     return this.map(
       await this.requireRow(teamId, id),
