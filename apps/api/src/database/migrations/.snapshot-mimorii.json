@@ -1,5 +1,7 @@
 {
-  "namespaces": ["public"],
+  "namespaces": [
+    "public"
+  ],
   "name": "public",
   "tables": [
     {
@@ -81,7 +83,12 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "claimed", "completed", "expired"],
+          "enumItems": [
+            "pending",
+            "claimed",
+            "completed",
+            "expired"
+          ],
           "mappedType": "enum"
         },
         "issued_at": {
@@ -137,7 +144,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "agent_tasks_pkey",
@@ -145,7 +154,11 @@
           "primary": true
         },
         {
-          "columnNames": ["agent_id", "status", "issued_at"],
+          "columnNames": [
+            "agent_id",
+            "status",
+            "issued_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_agent_tasks_poll",
@@ -153,7 +166,10 @@
           "primary": false
         },
         {
-          "columnNames": ["status", "issued_at"],
+          "columnNames": [
+            "status",
+            "issued_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_agent_tasks_time",
@@ -164,20 +180,28 @@
       "checks": [],
       "foreignKeys": {
         "agent_tasks_agent_id_fkey": {
-          "columnNames": ["agent_id"],
+          "columnNames": [
+            "agent_id"
+          ],
           "constraintName": "agent_tasks_agent_id_fkey",
           "localTableName": "public.agent_tasks",
           "referencedTableName": "public.agents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "agent_tasks_check_id_fkey": {
-          "columnNames": ["check_id"],
+          "columnNames": [
+            "check_id"
+          ],
           "constraintName": "agent_tasks_check_id_fkey",
           "localTableName": "public.agent_tasks",
           "referencedTableName": "public.checks",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -392,7 +416,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["desktop", "mobile"],
+          "enumItems": [
+            "desktop",
+            "mobile"
+          ],
           "mappedType": "enum"
         }
       },
@@ -400,7 +427,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["key_hash"],
+          "columnNames": [
+            "key_hash"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "agents_key_hash_key",
@@ -408,7 +437,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "agents_pkey",
@@ -426,11 +457,15 @@
       ],
       "foreignKeys": {
         "agents_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "agents_team_id_fkey",
           "localTableName": "public.agents",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -573,7 +608,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "api_tokens_pkey",
@@ -581,7 +618,9 @@
           "primary": true
         },
         {
-          "columnNames": ["token_hash"],
+          "columnNames": [
+            "token_hash"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "api_tokens_token_hash_key",
@@ -589,7 +628,10 @@
           "primary": false
         },
         {
-          "columnNames": ["user_id", "created_at"],
+          "columnNames": [
+            "user_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_api_tokens_user",
@@ -600,11 +642,15 @@
       "checks": [],
       "foreignKeys": {
         "api_tokens_user_id_fkey": {
-          "columnNames": ["user_id"],
+          "columnNames": [
+            "user_id"
+          ],
           "constraintName": "api_tokens_user_id_fkey",
           "localTableName": "public.api_tokens",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -747,7 +793,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "audit_events_pkey",
@@ -755,7 +803,10 @@
           "primary": true
         },
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_audit_team_time",
@@ -763,7 +814,9 @@
           "primary": false
         },
         {
-          "columnNames": ["created_at"],
+          "columnNames": [
+            "created_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_audit_time",
@@ -774,20 +827,28 @@
       "checks": [],
       "foreignKeys": {
         "audit_events_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "audit_events_team_id_fkey",
           "localTableName": "public.audit_events",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "audit_events_user_id_fkey": {
-          "columnNames": ["user_id"],
+          "columnNames": [
+            "user_id"
+          ],
           "constraintName": "audit_events_user_id_fkey",
           "localTableName": "public.audit_events",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         }
@@ -842,7 +903,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["up", "degraded", "down"],
+          "enumItems": [
+            "up",
+            "degraded",
+            "down"
+          ],
           "mappedType": "enum"
         },
         "latency_ms": {
@@ -930,7 +995,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "check_results_pkey",
@@ -938,7 +1005,10 @@
           "primary": true
         },
         {
-          "columnNames": ["check_id", "checked_at"],
+          "columnNames": [
+            "check_id",
+            "checked_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_results_check_time",
@@ -946,7 +1016,9 @@
           "primary": false
         },
         {
-          "columnNames": ["checked_at"],
+          "columnNames": [
+            "checked_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_results_time",
@@ -957,11 +1029,15 @@
       "checks": [],
       "foreignKeys": {
         "check_results_check_id_fkey": {
-          "columnNames": ["check_id"],
+          "columnNames": [
+            "check_id"
+          ],
           "constraintName": "check_results_check_id_fkey",
           "localTableName": "public.check_results",
           "referencedTableName": "public.checks",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -1048,7 +1124,13 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["http", "tcp", "dns", "host", "disk"],
+          "enumItems": [
+            "http",
+            "tcp",
+            "dns",
+            "host",
+            "disk"
+          ],
           "mappedType": "enum"
         },
         "config_json": {
@@ -1160,7 +1242,13 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "up", "degraded", "down", "paused"],
+          "enumItems": [
+            "pending",
+            "up",
+            "degraded",
+            "down",
+            "paused"
+          ],
           "mappedType": "enum"
         },
         "consecutive_failures": {
@@ -1280,7 +1368,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "checks_pkey",
@@ -1288,7 +1378,10 @@
           "primary": true
         },
         {
-          "columnNames": ["enabled", "next_check_at"],
+          "columnNames": [
+            "enabled",
+            "next_check_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_checks_due",
@@ -1296,7 +1389,10 @@
           "primary": false
         },
         {
-          "columnNames": ["team_id", "resource_id"],
+          "columnNames": [
+            "team_id",
+            "resource_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_checks_team",
@@ -1332,20 +1428,28 @@
       ],
       "foreignKeys": {
         "checks_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "checks_resource_id_fkey",
           "localTableName": "public.checks",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "checks_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "checks_team_id_fkey",
           "localTableName": "public.checks",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -1416,7 +1520,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["metric", "uptime", "status", "incidents"],
+          "enumItems": [
+            "metric",
+            "uptime",
+            "status",
+            "incidents"
+          ],
           "mappedType": "enum"
         },
         "title": {
@@ -1488,7 +1597,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["dashboard_id", "position"],
+          "columnNames": [
+            "dashboard_id",
+            "position"
+          ],
           "composite": true,
           "constraint": true,
           "keyName": "dashboard_items_dashboard_id_position_key",
@@ -1497,7 +1609,9 @@
           "expression": "CREATE UNIQUE INDEX dashboard_items_dashboard_id_position_key ON public.dashboard_items USING btree (dashboard_id, \"position\")"
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "dashboard_items_pkey",
@@ -1505,7 +1619,10 @@
           "primary": true
         },
         {
-          "columnNames": ["dashboard_id", "position"],
+          "columnNames": [
+            "dashboard_id",
+            "position"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_dashboard_items_order",
@@ -1514,7 +1631,9 @@
           "expression": "CREATE INDEX idx_dashboard_items_order ON public.dashboard_items USING btree (dashboard_id, \"position\")"
         },
         {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_dashboard_items_resource",
@@ -1538,20 +1657,28 @@
       ],
       "foreignKeys": {
         "dashboard_items_dashboard_id_fkey": {
-          "columnNames": ["dashboard_id"],
+          "columnNames": [
+            "dashboard_id"
+          ],
           "constraintName": "dashboard_items_dashboard_id_fkey",
           "localTableName": "public.dashboard_items",
           "referencedTableName": "public.dashboards",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "dashboard_items_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "dashboard_items_resource_id_fkey",
           "localTableName": "public.dashboard_items",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -1638,7 +1765,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["public", "private", "protected"],
+          "enumItems": [
+            "public",
+            "private",
+            "protected"
+          ],
           "mappedType": "enum"
         },
         "access_key_hash": {
@@ -1710,7 +1841,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["access_key_hash"],
+          "columnNames": [
+            "access_key_hash"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "dashboards_access_key_unique",
@@ -1719,7 +1852,9 @@
           "expression": "CREATE UNIQUE INDEX dashboards_access_key_unique ON public.dashboards USING btree (access_key_hash) WHERE (access_key_hash IS NOT NULL)"
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "dashboards_pkey",
@@ -1727,7 +1862,9 @@
           "primary": true
         },
         {
-          "columnNames": ["lower(slug)"],
+          "columnNames": [
+            "lower(slug)"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "dashboards_slug_unique",
@@ -1736,7 +1873,10 @@
           "expression": "CREATE UNIQUE INDEX dashboards_slug_unique ON public.dashboards USING btree (lower(slug))"
         },
         {
-          "columnNames": ["team_id", "updated_at"],
+          "columnNames": [
+            "team_id",
+            "updated_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_dashboards_team",
@@ -1754,20 +1894,28 @@
       ],
       "foreignKeys": {
         "dashboards_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "dashboards_created_by_fkey",
           "localTableName": "public.dashboards",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "dashboards_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "dashboards_team_id_fkey",
           "localTableName": "public.dashboards",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -1822,7 +1970,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["started", "succeeded", "failed", "missed"],
+          "enumItems": [
+            "started",
+            "succeeded",
+            "failed",
+            "missed"
+          ],
           "mappedType": "enum"
         },
         "duration_ms": {
@@ -1910,7 +2063,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "heartbeat_events_pkey",
@@ -1918,7 +2073,9 @@
           "primary": true
         },
         {
-          "columnNames": ["received_at"],
+          "columnNames": [
+            "received_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_heartbeat_events_retention",
@@ -1926,7 +2083,10 @@
           "primary": false
         },
         {
-          "columnNames": ["heartbeat_id", "occurred_at"],
+          "columnNames": [
+            "heartbeat_id",
+            "occurred_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_heartbeat_events_time",
@@ -1944,11 +2104,15 @@
       ],
       "foreignKeys": {
         "heartbeat_events_heartbeat_id_fkey": {
-          "columnNames": ["heartbeat_id"],
+          "columnNames": [
+            "heartbeat_id"
+          ],
           "constraintName": "heartbeat_events_heartbeat_id_fkey",
           "localTableName": "public.heartbeat_events",
           "referencedTableName": "public.heartbeat_monitors",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -2115,7 +2279,12 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "up", "down", "paused"],
+          "enumItems": [
+            "pending",
+            "up",
+            "down",
+            "paused"
+          ],
           "mappedType": "enum"
         },
         "last_ping_at": {
@@ -2267,7 +2436,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "heartbeat_monitors_pkey",
@@ -2275,7 +2446,9 @@
           "primary": true
         },
         {
-          "columnNames": ["token_hash"],
+          "columnNames": [
+            "token_hash"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "heartbeat_monitors_token_hash_key",
@@ -2283,7 +2456,10 @@
           "primary": false
         },
         {
-          "columnNames": ["enabled", "next_expected_at"],
+          "columnNames": [
+            "enabled",
+            "next_expected_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_heartbeat_due",
@@ -2291,7 +2467,10 @@
           "primary": false
         },
         {
-          "columnNames": ["resource_id", "created_at"],
+          "columnNames": [
+            "resource_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_heartbeat_resource",
@@ -2299,7 +2478,10 @@
           "primary": false
         },
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_heartbeat_team",
@@ -2335,29 +2517,41 @@
       ],
       "foreignKeys": {
         "heartbeat_monitors_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "heartbeat_monitors_created_by_fkey",
           "localTableName": "public.heartbeat_monitors",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "heartbeat_monitors_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "heartbeat_monitors_resource_id_fkey",
           "localTableName": "public.heartbeat_monitors",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "heartbeat_monitors_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "heartbeat_monitors_team_id_fkey",
           "localTableName": "public.heartbeat_monitors",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -2452,7 +2646,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "host_snapshots_pkey",
@@ -2460,7 +2656,10 @@
           "primary": true
         },
         {
-          "columnNames": ["agent_id", "observed_at"],
+          "columnNames": [
+            "agent_id",
+            "observed_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_host_snapshots_agent_time",
@@ -2468,7 +2667,9 @@
           "primary": false
         },
         {
-          "columnNames": ["observed_at"],
+          "columnNames": [
+            "observed_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_host_snapshots_time",
@@ -2479,11 +2680,15 @@
       "checks": [],
       "foreignKeys": {
         "host_snapshots_agent_id_fkey": {
-          "columnNames": ["agent_id"],
+          "columnNames": [
+            "agent_id"
+          ],
           "constraintName": "host_snapshots_agent_id_fkey",
           "localTableName": "public.host_snapshots",
           "referencedTableName": "public.agents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -2530,7 +2735,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["incident_id", "resource_id"],
+          "columnNames": [
+            "incident_id",
+            "resource_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "incident_resources_pkey",
@@ -2541,20 +2749,28 @@
       "checks": [],
       "foreignKeys": {
         "incident_resources_incident_id_fkey": {
-          "columnNames": ["incident_id"],
+          "columnNames": [
+            "incident_id"
+          ],
           "constraintName": "incident_resources_incident_id_fkey",
           "localTableName": "public.incident_resources",
           "referencedTableName": "public.incidents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "incident_resources_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "incident_resources_resource_id_fkey",
           "localTableName": "public.incident_resources",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -2609,7 +2825,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["investigating", "identified", "monitoring", "resolved"],
+          "enumItems": [
+            "investigating",
+            "identified",
+            "monitoring",
+            "resolved"
+          ],
           "mappedType": "enum"
         },
         "message": {
@@ -2665,7 +2886,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["incident_id", "created_at"],
+          "columnNames": [
+            "incident_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_incident_updates_time",
@@ -2673,7 +2897,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "incident_updates_pkey",
@@ -2684,20 +2910,28 @@
       "checks": [],
       "foreignKeys": {
         "incident_updates_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "incident_updates_created_by_fkey",
           "localTableName": "public.incident_updates",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incident_updates_incident_id_fkey": {
-          "columnNames": ["incident_id"],
+          "columnNames": [
+            "incident_id"
+          ],
           "constraintName": "incident_updates_incident_id_fkey",
           "localTableName": "public.incident_updates",
           "referencedTableName": "public.incidents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -2752,7 +2986,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["automatic", "manual"],
+          "enumItems": [
+            "automatic",
+            "manual"
+          ],
           "mappedType": "enum"
         },
         "check_id": {
@@ -2816,7 +3053,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["minor", "major", "critical"],
+          "enumItems": [
+            "minor",
+            "major",
+            "critical"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -2832,7 +3073,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["investigating", "identified", "monitoring", "resolved"],
+          "enumItems": [
+            "investigating",
+            "identified",
+            "monitoring",
+            "resolved"
+          ],
           "mappedType": "enum"
         },
         "started_at": {
@@ -2984,7 +3230,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["check_id", "resolved_at"],
+          "columnNames": [
+            "check_id",
+            "resolved_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_incidents_check_open",
@@ -2992,7 +3241,10 @@
           "primary": false
         },
         {
-          "columnNames": ["check_id", "status"],
+          "columnNames": [
+            "check_id",
+            "status"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_incidents_check_status",
@@ -3000,7 +3252,10 @@
           "primary": false
         },
         {
-          "columnNames": ["heartbeat_id", "status"],
+          "columnNames": [
+            "heartbeat_id",
+            "status"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_incidents_heartbeat",
@@ -3008,7 +3263,9 @@
           "primary": false
         },
         {
-          "columnNames": ["heartbeat_id"],
+          "columnNames": [
+            "heartbeat_id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_incidents_heartbeat_open",
@@ -3017,7 +3274,10 @@
           "expression": "CREATE UNIQUE INDEX idx_incidents_heartbeat_open ON public.incidents USING btree (heartbeat_id) WHERE ((heartbeat_id IS NOT NULL) AND (status <> 'resolved'::text))"
         },
         {
-          "columnNames": ["team_id", "started_at"],
+          "columnNames": [
+            "team_id",
+            "started_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_incidents_team_time",
@@ -3025,7 +3285,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "incidents_pkey",
@@ -3036,56 +3298,80 @@
       "checks": [],
       "foreignKeys": {
         "incidents_check_id_fkey": {
-          "columnNames": ["check_id"],
+          "columnNames": [
+            "check_id"
+          ],
           "constraintName": "incidents_check_id_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.checks",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incidents_closing_result_id_fkey": {
-          "columnNames": ["closing_result_id"],
+          "columnNames": [
+            "closing_result_id"
+          ],
           "constraintName": "incidents_closing_result_id_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.check_results",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incidents_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "incidents_created_by_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incidents_heartbeat_id_fkey": {
-          "columnNames": ["heartbeat_id"],
+          "columnNames": [
+            "heartbeat_id"
+          ],
           "constraintName": "incidents_heartbeat_id_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.heartbeat_monitors",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incidents_opening_result_id_fkey": {
-          "columnNames": ["opening_result_id"],
+          "columnNames": [
+            "opening_result_id"
+          ],
           "constraintName": "incidents_opening_result_id_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.check_results",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "incidents_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "incidents_team_id_fkey",
           "localTableName": "public.incidents",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3140,7 +3426,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["started", "completed"],
+          "enumItems": [
+            "started",
+            "completed"
+          ],
           "mappedType": "enum"
         },
         "created_at": {
@@ -3164,7 +3453,11 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["maintenance_id", "occurrence_start", "event"],
+          "columnNames": [
+            "maintenance_id",
+            "occurrence_start",
+            "event"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "maintenance_occurrence_events_pkey",
@@ -3175,11 +3468,15 @@
       "checks": [],
       "foreignKeys": {
         "maintenance_occurrence_events_maintenance_id_fkey": {
-          "columnNames": ["maintenance_id"],
+          "columnNames": [
+            "maintenance_id"
+          ],
           "constraintName": "maintenance_occurrence_events_maintenance_id_fkey",
           "localTableName": "public.maintenance_occurrence_events",
           "referencedTableName": "public.maintenance_windows",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3226,7 +3523,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["resource_id", "maintenance_id"],
+          "columnNames": [
+            "resource_id",
+            "maintenance_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_maintenance_resources_resource",
@@ -3234,7 +3534,10 @@
           "primary": false
         },
         {
-          "columnNames": ["maintenance_id", "resource_id"],
+          "columnNames": [
+            "maintenance_id",
+            "resource_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "maintenance_resources_pkey",
@@ -3245,20 +3548,28 @@
       "checks": [],
       "foreignKeys": {
         "maintenance_resources_maintenance_id_fkey": {
-          "columnNames": ["maintenance_id"],
+          "columnNames": [
+            "maintenance_id"
+          ],
           "constraintName": "maintenance_resources_maintenance_id_fkey",
           "localTableName": "public.maintenance_resources",
           "referencedTableName": "public.maintenance_windows",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "maintenance_resources_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "maintenance_resources_resource_id_fkey",
           "localTableName": "public.maintenance_resources",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3361,7 +3672,12 @@
           "scale": null,
           "default": "'none'",
           "comment": null,
-          "enumItems": ["none", "daily", "weekly", "monthly"],
+          "enumItems": [
+            "none",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
           "mappedType": "enum"
         },
         "recurrence_until": {
@@ -3465,7 +3781,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "starts_at"],
+          "columnNames": [
+            "team_id",
+            "starts_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_maintenance_team_time",
@@ -3473,7 +3792,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "maintenance_windows_pkey",
@@ -3484,20 +3805,28 @@
       "checks": [],
       "foreignKeys": {
         "maintenance_windows_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "maintenance_windows_created_by_fkey",
           "localTableName": "public.maintenance_windows",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "maintenance_windows_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "maintenance_windows_team_id_fkey",
           "localTableName": "public.maintenance_windows",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3592,7 +3921,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["agent_id", "received_at"],
+          "columnNames": [
+            "agent_id",
+            "received_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_mobile_device_statuses_agent_time",
@@ -3600,7 +3932,9 @@
           "primary": false
         },
         {
-          "columnNames": ["received_at"],
+          "columnNames": [
+            "observed_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_mobile_device_statuses_time",
@@ -3608,7 +3942,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "mobile_device_statuses_pkey",
@@ -3619,11 +3955,15 @@
       "checks": [],
       "foreignKeys": {
         "mobile_device_statuses_agent_id_fkey": {
-          "columnNames": ["agent_id"],
+          "columnNames": [
+            "agent_id"
+          ],
           "constraintName": "mobile_device_statuses_agent_id_fkey",
           "localTableName": "public.mobile_device_statuses",
           "referencedTableName": "public.agents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3694,7 +4034,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["email", "webhook", "push"],
+          "enumItems": [
+            "email",
+            "webhook",
+            "push"
+          ],
           "mappedType": "enum"
         },
         "configuration_json": {
@@ -3782,7 +4126,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "enabled"],
+          "columnNames": [
+            "team_id",
+            "enabled"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_channels_team",
@@ -3790,7 +4137,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "notification_channels_pkey",
@@ -3801,20 +4150,28 @@
       "checks": [],
       "foreignKeys": {
         "notification_channels_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "notification_channels_created_by_fkey",
           "localTableName": "public.notification_channels",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "notification_channels_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "notification_channels_team_id_fkey",
           "localTableName": "public.notification_channels",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -3863,7 +4220,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -3917,7 +4274,11 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "delivered", "failed"],
+          "enumItems": [
+            "pending",
+            "delivered",
+            "failed"
+          ],
           "mappedType": "enum"
         },
         "attempts": {
@@ -4015,13 +4376,45 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "occurrence_key": {
+          "name": "occurrence_key",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "notification_deliveries",
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status", "next_attempt_at"],
+          "columnNames": [
+            "channel_id",
+            "event",
+            "occurrence_key"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "idx_notification_delivery_occurrence",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX idx_notification_delivery_occurrence ON public.notification_deliveries USING btree (channel_id, event, occurrence_key) WHERE (occurrence_key IS NOT NULL)"
+        },
+        {
+          "columnNames": [
+            "status",
+            "next_attempt_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_delivery_queue",
@@ -4029,7 +4422,10 @@
           "primary": false
         },
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_delivery_team",
@@ -4037,7 +4433,9 @@
           "primary": false
         },
         {
-          "columnNames": ["created_at"],
+          "columnNames": [
+            "created_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_notification_delivery_time",
@@ -4045,7 +4443,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "notification_deliveries_pkey",
@@ -4056,20 +4456,28 @@
       "checks": [],
       "foreignKeys": {
         "notification_deliveries_channel_id_fkey": {
-          "columnNames": ["channel_id"],
+          "columnNames": [
+            "channel_id"
+          ],
           "constraintName": "notification_deliveries_channel_id_fkey",
           "localTableName": "public.notification_deliveries",
           "referencedTableName": "public.notification_channels",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "notification_deliveries_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "notification_deliveries_team_id_fkey",
           "localTableName": "public.notification_deliveries",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -4140,7 +4548,11 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "delivered", "failed"],
+          "enumItems": [
+            "pending",
+            "delivered",
+            "failed"
+          ],
           "mappedType": "enum"
         },
         "attempts": {
@@ -4228,7 +4640,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status", "next_attempt_at"],
+          "columnNames": [
+            "status",
+            "next_attempt_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_endpoint_delivery_queue",
@@ -4236,7 +4651,10 @@
           "primary": false
         },
         {
-          "columnNames": ["delivery_id", "endpoint_id"],
+          "columnNames": [
+            "delivery_id",
+            "endpoint_id"
+          ],
           "composite": true,
           "constraint": true,
           "keyName": "notification_endpoint_deliveries_delivery_id_endpoint_id_key",
@@ -4244,7 +4662,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "notification_endpoint_deliveries_pkey",
@@ -4255,20 +4675,28 @@
       "checks": [],
       "foreignKeys": {
         "notification_endpoint_deliveries_delivery_id_fkey": {
-          "columnNames": ["delivery_id"],
+          "columnNames": [
+            "delivery_id"
+          ],
           "constraintName": "notification_endpoint_deliveries_delivery_id_fkey",
           "localTableName": "public.notification_endpoint_deliveries",
           "referencedTableName": "public.notification_deliveries",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "notification_endpoint_deliveries_endpoint_id_fkey": {
-          "columnNames": ["endpoint_id"],
+          "columnNames": [
+            "endpoint_id"
+          ],
           "constraintName": "notification_endpoint_deliveries_endpoint_id_fkey",
           "localTableName": "public.notification_endpoint_deliveries",
           "referencedTableName": "public.notification_endpoints",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -4323,7 +4751,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["web", "android"],
+          "enumItems": [
+            "web",
+            "android"
+          ],
           "mappedType": "enum"
         },
         "device_key_hash": {
@@ -4387,7 +4818,10 @@
           "scale": null,
           "default": "'active'",
           "comment": null,
-          "enumItems": ["active", "invalid"],
+          "enumItems": [
+            "active",
+            "invalid"
+          ],
           "mappedType": "enum"
         },
         "last_seen_at": {
@@ -4475,7 +4909,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["platform", "endpoint_hash"],
+          "columnNames": [
+            "platform",
+            "endpoint_hash"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_endpoint_hash",
@@ -4483,7 +4920,9 @@
           "primary": false
         },
         {
-          "columnNames": ["last_seen_at"],
+          "columnNames": [
+            "last_seen_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_notification_endpoints_retention",
@@ -4491,7 +4930,11 @@
           "primary": false
         },
         {
-          "columnNames": ["user_id", "status", "platform"],
+          "columnNames": [
+            "user_id",
+            "status",
+            "platform"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_endpoints_user",
@@ -4499,7 +4942,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "notification_endpoints_pkey",
@@ -4507,7 +4952,10 @@
           "primary": true
         },
         {
-          "columnNames": ["platform", "device_key_hash"],
+          "columnNames": [
+            "platform",
+            "device_key_hash"
+          ],
           "composite": true,
           "constraint": true,
           "keyName": "notification_endpoints_platform_device_key_hash_key",
@@ -4518,11 +4966,15 @@
       "checks": [],
       "foreignKeys": {
         "notification_endpoints_user_id_fkey": {
-          "columnNames": ["user_id"],
+          "columnNames": [
+            "user_id"
+          ],
           "constraintName": "notification_endpoints_user_id_fkey",
           "localTableName": "public.notification_endpoints",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -4681,7 +5133,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "enabled"],
+          "columnNames": [
+            "team_id",
+            "enabled"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_policies_team",
@@ -4689,7 +5144,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "notification_policies_pkey",
@@ -4700,20 +5157,28 @@
       "checks": [],
       "foreignKeys": {
         "notification_policies_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "notification_policies_created_by_fkey",
           "localTableName": "public.notification_policies",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "notification_policies_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "notification_policies_team_id_fkey",
           "localTableName": "public.notification_policies",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -4760,7 +5225,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["channel_id", "policy_id"],
+          "columnNames": [
+            "channel_id",
+            "policy_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_notification_policy_channels_channel",
@@ -4768,7 +5236,10 @@
           "primary": false
         },
         {
-          "columnNames": ["policy_id", "channel_id"],
+          "columnNames": [
+            "policy_id",
+            "channel_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "notification_policy_channels_pkey",
@@ -4779,20 +5250,28 @@
       "checks": [],
       "foreignKeys": {
         "notification_policy_channels_channel_id_fkey": {
-          "columnNames": ["channel_id"],
+          "columnNames": [
+            "channel_id"
+          ],
           "constraintName": "notification_policy_channels_channel_id_fkey",
           "localTableName": "public.notification_policy_channels",
           "referencedTableName": "public.notification_channels",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "notification_policy_channels_policy_id_fkey": {
-          "columnNames": ["policy_id"],
+          "columnNames": [
+            "policy_id"
+          ],
           "constraintName": "notification_policy_channels_policy_id_fkey",
           "localTableName": "public.notification_policy_channels",
           "referencedTableName": "public.notification_policies",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -4919,7 +5398,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "platform_settings_pkey",
@@ -4949,13 +5430,108 @@
       ],
       "foreignKeys": {
         "platform_settings_updated_by_fkey": {
-          "columnNames": ["updated_by"],
+          "columnNames": [
+            "updated_by"
+          ],
           "constraintName": "platform_settings_updated_by_fkey",
           "localTableName": "public.platform_settings",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "resource_id": {
+          "name": "resource_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "image_data": {
+          "name": "image_data",
+          "type": "bytea",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "blob"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "resource_images",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "resource_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "resource_images_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "resource_images_size_check",
+          "columnName": "image_data",
+          "definition": "CHECK ((octet_length(image_data) <= 1048576))",
+          "expression": "octet_length(image_data) <= 1048576"
+        }
+      ],
+      "foreignKeys": {
+        "resource_images_resource_id_fkey": {
+          "columnNames": [
+            "resource_id"
+          ],
+          "constraintName": "resource_images_resource_id_fkey",
+          "localTableName": "public.resource_images",
+          "referencedTableName": "public.resources",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
         }
       },
       "nativeEnums": {},
@@ -5024,7 +5600,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["server", "service", "endpoint"],
+          "enumItems": [
+            "server",
+            "service",
+            "endpoint"
+          ],
           "mappedType": "enum"
         },
         "target": {
@@ -5128,7 +5708,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_resources_team",
@@ -5136,7 +5719,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "resources_pkey",
@@ -5147,20 +5732,28 @@
       "checks": [],
       "foreignKeys": {
         "resources_agent_id_fkey": {
-          "columnNames": ["agent_id"],
+          "columnNames": [
+            "agent_id"
+          ],
           "constraintName": "resources_agent_id_fkey",
           "localTableName": "public.resources",
           "referencedTableName": "public.agents",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "resources_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "resources_team_id_fkey",
           "localTableName": "public.resources",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -5311,7 +5904,12 @@
           "scale": null,
           "default": "'no-data'",
           "comment": null,
-          "enumItems": ["met", "at-risk", "breached", "no-data"],
+          "enumItems": [
+            "met",
+            "at-risk",
+            "breached",
+            "no-data"
+          ],
           "mappedType": "enum"
         },
         "last_evaluated_at": {
@@ -5383,7 +5981,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_slo_team",
@@ -5391,7 +5992,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "service_level_objectives_pkey",
@@ -5427,38 +6030,54 @@
       ],
       "foreignKeys": {
         "service_level_objectives_check_id_fkey": {
-          "columnNames": ["check_id"],
+          "columnNames": [
+            "check_id"
+          ],
           "constraintName": "service_level_objectives_check_id_fkey",
           "localTableName": "public.service_level_objectives",
           "referencedTableName": "public.checks",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "service_level_objectives_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "service_level_objectives_created_by_fkey",
           "localTableName": "public.service_level_objectives",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "service_level_objectives_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "service_level_objectives_resource_id_fkey",
           "localTableName": "public.service_level_objectives",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "service_level_objectives_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "service_level_objectives_team_id_fkey",
           "localTableName": "public.service_level_objectives",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -5513,7 +6132,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["platinum", "gold", "silver"],
+          "enumItems": [
+            "platinum",
+            "gold",
+            "silver"
+          ],
           "mappedType": "enum"
         },
         "website_url": {
@@ -5633,7 +6256,11 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["tier", "display_order", "lower(name)"],
+          "columnNames": [
+            "tier",
+            "display_order",
+            "lower(name)"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_sponsors_public",
@@ -5642,7 +6269,9 @@
           "expression": "CREATE INDEX idx_sponsors_public ON public.sponsors USING btree (tier, display_order, lower(name)) WHERE (published_at IS NOT NULL)"
         },
         {
-          "columnNames": ["lower(name)"],
+          "columnNames": [
+            "lower(name)"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "sponsors_name_unique",
@@ -5651,7 +6280,9 @@
           "expression": "CREATE UNIQUE INDEX sponsors_name_unique ON public.sponsors USING btree (lower(name))"
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "sponsors_pkey",
@@ -5766,7 +6397,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["platinum", "gold", "silver"],
+          "enumItems": [
+            "platinum",
+            "gold",
+            "silver"
+          ],
           "mappedType": "enum"
         },
         "message": {
@@ -5814,7 +6449,11 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "approved", "declined"],
+          "enumItems": [
+            "pending",
+            "approved",
+            "declined"
+          ],
           "mappedType": "enum"
         },
         "reviewed_by": {
@@ -5854,7 +6493,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status", "submitted_at"],
+          "columnNames": [
+            "status",
+            "submitted_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_sponsorship_applications_status_time",
@@ -5862,7 +6504,9 @@
           "primary": false
         },
         {
-          "columnNames": ["submitted_at"],
+          "columnNames": [
+            "submitted_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_sponsorship_applications_time",
@@ -5870,7 +6514,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "sponsorship_applications_pkey",
@@ -5881,11 +6527,15 @@
       "checks": [],
       "foreignKeys": {
         "sponsorship_applications_reviewed_by_fkey": {
-          "columnNames": ["reviewed_by"],
+          "columnNames": [
+            "reviewed_by"
+          ],
           "constraintName": "sponsorship_applications_reviewed_by_fkey",
           "localTableName": "public.sponsorship_applications",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         }
@@ -5948,7 +6598,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status_page_id", "display_order"],
+          "columnNames": [
+            "status_page_id",
+            "display_order"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_status_page_resources_order",
@@ -5956,7 +6609,10 @@
           "primary": false
         },
         {
-          "columnNames": ["status_page_id", "resource_id"],
+          "columnNames": [
+            "status_page_id",
+            "resource_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "status_page_resources_pkey",
@@ -5967,20 +6623,28 @@
       "checks": [],
       "foreignKeys": {
         "status_page_resources_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "status_page_resources_resource_id_fkey",
           "localTableName": "public.status_page_resources",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "status_page_resources_status_page_id_fkey": {
-          "columnNames": ["status_page_id"],
+          "columnNames": [
+            "status_page_id"
+          ],
           "constraintName": "status_page_resources_status_page_id_fkey",
           "localTableName": "public.status_page_resources",
           "referencedTableName": "public.status_pages",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6139,7 +6803,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_status_pages_team",
@@ -6147,7 +6814,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "status_pages_pkey",
@@ -6155,7 +6824,9 @@
           "primary": true
         },
         {
-          "columnNames": ["lower(slug)"],
+          "columnNames": [
+            "lower(slug)"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "status_pages_slug_unique",
@@ -6167,20 +6838,28 @@
       "checks": [],
       "foreignKeys": {
         "status_pages_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "status_pages_created_by_fkey",
           "localTableName": "public.status_pages",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "set null"
         },
         "status_pages_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "status_pages_team_id_fkey",
           "localTableName": "public.status_pages",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6213,7 +6892,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6267,7 +6946,11 @@
           "scale": null,
           "default": "'pending'",
           "comment": null,
-          "enumItems": ["pending", "delivered", "failed"],
+          "enumItems": [
+            "pending",
+            "delivered",
+            "failed"
+          ],
           "mappedType": "enum"
         },
         "attempts": {
@@ -6349,13 +7032,45 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "occurrence_key": {
+          "name": "occurrence_key",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "status_subscriber_deliveries",
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status", "next_attempt_at"],
+          "columnNames": [
+            "subscriber_id",
+            "event",
+            "occurrence_key"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "idx_status_subscriber_delivery_occurrence",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX idx_status_subscriber_delivery_occurrence ON public.status_subscriber_deliveries USING btree (subscriber_id, event, occurrence_key) WHERE (occurrence_key IS NOT NULL)"
+        },
+        {
+          "columnNames": [
+            "status",
+            "next_attempt_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_status_subscriber_delivery_queue",
@@ -6363,7 +7078,9 @@
           "primary": false
         },
         {
-          "columnNames": ["created_at"],
+          "columnNames": [
+            "created_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_subscriber_delivery_time",
@@ -6371,7 +7088,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "status_subscriber_deliveries_pkey",
@@ -6382,11 +7101,15 @@
       "checks": [],
       "foreignKeys": {
         "status_subscriber_deliveries_subscriber_id_fkey": {
-          "columnNames": ["subscriber_id"],
+          "columnNames": [
+            "subscriber_id"
+          ],
           "constraintName": "status_subscriber_deliveries_subscriber_id_fkey",
           "localTableName": "public.status_subscriber_deliveries",
           "referencedTableName": "public.status_subscribers",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6513,7 +7236,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["status_page_id", "created_at"],
+          "columnNames": [
+            "status_page_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_status_subscribers_page",
@@ -6521,7 +7247,9 @@
           "primary": false
         },
         {
-          "columnNames": ["verification_expires_at"],
+          "columnNames": [
+            "verification_expires_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_status_subscribers_verification",
@@ -6530,7 +7258,10 @@
           "expression": "CREATE INDEX idx_status_subscribers_verification ON public.status_subscribers USING btree (verification_expires_at) WHERE (verified_at IS NULL)"
         },
         {
-          "columnNames": ["status_page_id", "lower(email)"],
+          "columnNames": [
+            "status_page_id",
+            "lower(email)"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "status_subscribers_page_email_unique",
@@ -6539,7 +7270,9 @@
           "expression": "CREATE UNIQUE INDEX status_subscribers_page_email_unique ON public.status_subscribers USING btree (status_page_id, lower(email))"
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "status_subscribers_pkey",
@@ -6547,7 +7280,9 @@
           "primary": true
         },
         {
-          "columnNames": ["token_hash"],
+          "columnNames": [
+            "token_hash"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "status_subscribers_token_hash_key",
@@ -6558,11 +7293,15 @@
       "checks": [],
       "foreignKeys": {
         "status_subscribers_status_page_id_fkey": {
-          "columnNames": ["status_page_id"],
+          "columnNames": [
+            "status_page_id"
+          ],
           "constraintName": "status_subscribers_status_page_id_fkey",
           "localTableName": "public.status_subscribers",
           "referencedTableName": "public.status_pages",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6633,7 +7372,11 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["admin", "member", "viewer"],
+          "enumItems": [
+            "admin",
+            "member",
+            "viewer"
+          ],
           "mappedType": "enum"
         },
         "token_hash": {
@@ -6705,7 +7448,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["team_id", "created_at"],
+          "columnNames": [
+            "team_id",
+            "created_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_team_invites_pending",
@@ -6713,7 +7459,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "team_invites_pkey",
@@ -6721,7 +7469,9 @@
           "primary": true
         },
         {
-          "columnNames": ["token_hash"],
+          "columnNames": [
+            "token_hash"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "team_invites_token_hash_key",
@@ -6732,20 +7482,28 @@
       "checks": [],
       "foreignKeys": {
         "team_invites_invited_by_fkey": {
-          "columnNames": ["invited_by"],
+          "columnNames": [
+            "invited_by"
+          ],
           "constraintName": "team_invites_invited_by_fkey",
           "localTableName": "public.team_invites",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "no action"
         },
         "team_invites_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "team_invites_team_id_fkey",
           "localTableName": "public.team_invites",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6800,7 +7558,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["owner", "admin", "member", "viewer"],
+          "enumItems": [
+            "owner",
+            "admin",
+            "member",
+            "viewer"
+          ],
           "mappedType": "enum"
         },
         "joined_at": {
@@ -6824,7 +7587,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["user_id"],
+          "columnNames": [
+            "user_id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_team_members_user",
@@ -6832,7 +7597,10 @@
           "primary": false
         },
         {
-          "columnNames": ["team_id", "user_id"],
+          "columnNames": [
+            "team_id",
+            "user_id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "team_members_pkey",
@@ -6843,20 +7611,28 @@
       "checks": [],
       "foreignKeys": {
         "team_members_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "team_members_team_id_fkey",
           "localTableName": "public.team_members",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "team_members_user_id_fkey": {
-          "columnNames": ["user_id"],
+          "columnNames": [
+            "user_id"
+          ],
           "constraintName": "team_members_user_id_fkey",
           "localTableName": "public.team_members",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -6967,7 +7743,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "teams_pkey",
@@ -6975,7 +7753,9 @@
           "primary": true
         },
         {
-          "columnNames": ["lower(slug)"],
+          "columnNames": [
+            "lower(slug)"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "teams_slug_unique",
@@ -6987,11 +7767,15 @@
       "checks": [],
       "foreignKeys": {
         "teams_created_by_fkey": {
-          "columnNames": ["created_by"],
+          "columnNames": [
+            "created_by"
+          ],
           "constraintName": "teams_created_by_fkey",
           "localTableName": "public.teams",
           "referencedTableName": "public.users",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "no action"
         }
@@ -7118,7 +7902,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["http", "agent"],
+          "enumItems": [
+            "http",
+            "agent"
+          ],
           "mappedType": "enum"
         },
         "first_seen_at": {
@@ -7158,7 +7945,10 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["resource_id", "last_seen_at"],
+          "columnNames": [
+            "resource_id",
+            "last_seen_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_technologies_resource",
@@ -7166,7 +7956,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "technology_observations_pkey",
@@ -7174,7 +7966,13 @@
           "primary": true
         },
         {
-          "columnNames": ["resource_id", "name", "category", "version", "source"],
+          "columnNames": [
+            "resource_id",
+            "name",
+            "category",
+            "version",
+            "source"
+          ],
           "composite": true,
           "constraint": true,
           "keyName": "technology_observations_resource_id_name_category_version_s_key",
@@ -7185,20 +7983,28 @@
       "checks": [],
       "foreignKeys": {
         "technology_observations_resource_id_fkey": {
-          "columnNames": ["resource_id"],
+          "columnNames": [
+            "resource_id"
+          ],
           "constraintName": "technology_observations_resource_id_fkey",
           "localTableName": "public.technology_observations",
           "referencedTableName": "public.resources",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         },
         "technology_observations_team_id_fkey": {
-          "columnNames": ["team_id"],
+          "columnNames": [
+            "team_id"
+          ],
           "constraintName": "technology_observations_team_id_fkey",
           "localTableName": "public.technology_observations",
           "referencedTableName": "public.teams",
-          "referencedColumnNames": ["id"],
+          "referencedColumnNames": [
+            "id"
+          ],
           "updateRule": "no action",
           "deleteRule": "cascade"
         }
@@ -7421,7 +8227,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["created_at"],
+          "columnNames": [
+            "created_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_users_created",
@@ -7429,7 +8237,10 @@
           "primary": false
         },
         {
-          "columnNames": ["is_global_admin", "disabled_at"],
+          "columnNames": [
+            "is_global_admin",
+            "disabled_at"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "idx_users_global_admin",
@@ -7438,7 +8249,9 @@
           "expression": "CREATE INDEX idx_users_global_admin ON public.users USING btree (is_global_admin, disabled_at) WHERE (is_global_admin = true)"
         },
         {
-          "columnNames": ["last_signed_in_at"],
+          "columnNames": [
+            "last_signed_in_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "idx_users_last_signed_in",
@@ -7447,7 +8260,9 @@
           "expression": "CREATE INDEX idx_users_last_signed_in ON public.users USING btree (last_signed_in_at DESC) WHERE (last_signed_in_at IS NOT NULL)"
         },
         {
-          "columnNames": ["lower(email)"],
+          "columnNames": [
+            "lower(email)"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "users_email_unique",
@@ -7456,7 +8271,9 @@
           "expression": "CREATE UNIQUE INDEX users_email_unique ON public.users USING btree (lower(email))"
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "users_pkey",
