@@ -72,6 +72,11 @@ expectArrayEqual(
   "Android client capabilities"
 );
 expectArrayEqual(defaultCapability.permissions, ["core:default"], "Shared application permissions");
+if (
+  !tauriConfig.app?.security?.csp?.includes("img-src 'self' asset: http://asset.localhost blob:")
+) {
+  throw new Error("Android Client CSP must allow authenticated blob image previews");
+}
 const androidClientCapability = androidClientConfig.app?.security?.capabilities?.[0];
 expectEqual(
   androidClientCapability?.identifier,
