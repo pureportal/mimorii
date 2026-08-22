@@ -72,6 +72,29 @@ fn http_head_requests_and_expected_statuses_are_supported() {
 }
 
 #[test]
+fn http_active_request_methods_are_supported() {
+    let methods = ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+    let server = http_server(methods.iter().map(|_| MockResponse::new(204, "")).collect());
+
+    for method in methods {
+        let result = crate::checks::tests::execute(
+            &http_task(
+                &format!("{}/health", server.url),
+                json!({ "method": method, "expectedStatuses": [204] }),
+            ),
+            &snapshot(),
+        );
+
+        assert_result(&result, CheckState::Up, None, Some(204));
+        let request = server
+            .requests
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert!(request.starts_with(&format!("{method} /health HTTP/1.1")));
+    }
+}
+
+#[test]
 fn http_check_reports_unexpected_status_content_and_headers() {
     let status_server = http_server(vec![MockResponse::new(500, "failure")]);
     let status =

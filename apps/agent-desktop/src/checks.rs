@@ -144,7 +144,17 @@ fn http_with_resolver(
     }
     let mut url = Url::parse(&config.url)?;
     let method = Method::from_str(&config.method)?;
-    if method != Method::GET && method != Method::HEAD {
+    if ![
+        Method::GET,
+        Method::HEAD,
+        Method::POST,
+        Method::PUT,
+        Method::PATCH,
+        Method::DELETE,
+        Method::OPTIONS,
+    ]
+    .contains(&method)
+    {
         bail!("HTTP method is not allowed");
     }
     let started = Instant::now();

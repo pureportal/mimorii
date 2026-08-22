@@ -1,3 +1,4 @@
+import { httpMethods } from "@mimorii/contracts";
 import type { CheckFields, UpdateCheckField } from "./check-form-config";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select, Textarea } from "./ui/input";
@@ -28,8 +29,9 @@ export function HttpCheckFields({ fields, update }: CheckFormFieldsProps) {
             value={fields.method}
             onChange={(event) => update("method", event.target.value)}
           >
-            <option>GET</option>
-            <option>HEAD</option>
+            {httpMethods.map((method) => (
+              <option key={method}>{method}</option>
+            ))}
           </Select>
         </Field>
         <Field>

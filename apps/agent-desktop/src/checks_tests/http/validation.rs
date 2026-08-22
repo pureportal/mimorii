@@ -59,7 +59,7 @@ fn http_check_validates_urls_credentials_and_methods() {
     );
 
     let method_server = http_server(Vec::new());
-    let method = http_task(&method_server.url, json!({ "method": "POST" }));
+    let method = http_task(&method_server.url, json!({ "method": "TRACE" }));
     let method_result = crate::checks::tests::execute(&method, &snapshot());
     assert_result(
         &method_result,

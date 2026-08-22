@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { httpMethods } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
 import { CheckConfigService } from "../src/checks/check-config.service.js";
 
@@ -15,11 +16,27 @@ describe("check configuration", () => {
     });
   });
 
-  it("rejects active HTTP methods and embedded credentials", () => {
+  it("accepts supported HTTP methods", () => {
+    for (const method of httpMethods) {
+      expect(service.validate("http", { url: "https://example.com/", method })).toMatchObject({
+        method,
+      });
+    }
+  });
+
+  it("rejects unsupported HTTP methods", () => {
+    expect(() =>
+      service.validate("http", {
+        url: "https://example.com/",
+        method: "TRACE",
+      })
+    ).toThrow(BadRequestException);
+  });
+
+  it("rejects embedded HTTP credentials", () => {
     expect(() =>
       service.validate("http", {
         url: "https://user:secret@example.com/",
-        method: "POST",
       })
     ).toThrow(BadRequestException);
   });

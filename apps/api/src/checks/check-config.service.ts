@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type {
-  CheckConfig,
-  CheckType,
-  DiskCheckConfig,
-  DnsCheckConfig,
-  HostCheckConfig,
-  HttpCheckConfig,
-  TcpCheckConfig,
+import {
+  httpMethods,
+  type CheckConfig,
+  type CheckType,
+  type DiskCheckConfig,
+  type DnsCheckConfig,
+  type HostCheckConfig,
+  type HttpCheckConfig,
+  type HttpMethod,
+  type TcpCheckConfig,
 } from "@mimorii/contracts";
 
 const dnsRecordTypes = new Set(["A", "AAAA", "CNAME", "MX", "NS", "SRV", "TXT"]);
@@ -42,7 +44,7 @@ export class CheckConfigService {
       this.invalid("HTTP URL must use HTTP or HTTPS without credentials");
     }
     const method = value.method ?? "GET";
-    if (method !== "GET" && method !== "HEAD") this.invalid("HTTP method is invalid");
+    if (!this.httpMethod(method)) this.invalid("HTTP method is invalid");
     const statuses = value.expectedStatuses ?? [200];
     if (
       !Array.isArray(statuses) ||
@@ -56,7 +58,7 @@ export class CheckConfigService {
       if (typeof value.responseContains !== "string" || value.responseContains.length > 512) {
         this.invalid("Response content match is invalid");
       }
-      if (method === "HEAD") this.invalid("Response content requires GET");
+      if (method === "HEAD") this.invalid("Response content is not available for HEAD");
     }
     const expectedHeaders = this.headers(value.expectedHeaders);
     const jsonPointer = value.jsonPointer;
@@ -68,7 +70,7 @@ export class CheckConfigService {
       ) {
         this.invalid("JSON pointer is invalid");
       }
-      if (method === "HEAD") this.invalid("JSON assertions require GET");
+      if (method === "HEAD") this.invalid("JSON assertions are not available for HEAD");
     }
     const hasExpectedJsonValue = Object.hasOwn(value, "expectedJsonValue");
     if (hasExpectedJsonValue) {
@@ -225,6 +227,10 @@ export class CheckConfigService {
 
   private percentage(value: unknown, label: string): number {
     return this.number(value, 1, 100, label);
+  }
+
+  private httpMethod(value: unknown): value is HttpMethod {
+    return typeof value === "string" && httpMethods.some((method) => method === value);
   }
 
   private criticalPercentage(value: unknown, warning: number, label: string): number {

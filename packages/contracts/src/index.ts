@@ -42,6 +42,9 @@ export type ResourceKind = (typeof resourceKinds)[number];
 export const checkTypes = ["http", "tcp", "dns", "host", "disk"] as const;
 export type CheckType = (typeof checkTypes)[number];
 
+export const httpMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+export type HttpMethod = (typeof httpMethods)[number];
+
 export const checkStatuses = ["pending", "up", "degraded", "down", "paused"] as const;
 export type CheckStatus = (typeof checkStatuses)[number];
 
@@ -309,7 +312,7 @@ export interface ResourceSummary {
 
 export interface HttpCheckConfig {
   url: string;
-  method: "GET" | "HEAD";
+  method: HttpMethod;
   expectedStatuses: number[];
   responseContains?: string;
   expectedHeaders?: Record<string, string>;

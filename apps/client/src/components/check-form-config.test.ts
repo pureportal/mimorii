@@ -5,7 +5,7 @@ describe("check form configuration", () => {
   it("round-trips HTTP assertions", () => {
     const fields = checkFields({
       url: "https://example.com/health",
-      method: "GET",
+      method: "PUT",
       expectedStatuses: [200, 204],
       expectedHeaders: { "content-type": "application/json" },
       jsonPointer: "/status",
@@ -16,6 +16,7 @@ describe("check form configuration", () => {
       validateTls: true,
     });
     expect(buildCheckConfig("http", fields)).toMatchObject({
+      method: "PUT",
       expectedStatuses: [200, 204],
       expectedHeaders: { "content-type": "application/json" },
       jsonPointer: "/status",
