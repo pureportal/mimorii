@@ -47,16 +47,26 @@ const configuredMainActivity = `package ${product.applicationId}
 import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    applySystemBarAppearance()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     enableEdgeToEdge()
+    applySystemBarAppearance()
+  }
+
+  private fun applySystemBarAppearance() {
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+      isAppearanceLightStatusBars = false
+      isAppearanceLightNavigationBars = false
+    }
   }
 }
 `;
@@ -144,7 +154,8 @@ if (
 }
 if (
   !configuredMainActivity.includes("enableEdgeToEdge()") ||
-  !configuredMainActivity.includes("onConfigurationChanged")
+  !configuredMainActivity.includes("onConfigurationChanged") ||
+  !configuredMainActivity.includes("applySystemBarAppearance")
 ) {
   throw new Error("Generated Android activity does not maintain edge-to-edge layout");
 }
