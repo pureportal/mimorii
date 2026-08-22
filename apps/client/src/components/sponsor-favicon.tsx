@@ -1,9 +1,8 @@
 import type { SponsorSummary } from "@mimorii/contracts";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState, type FocusEvent } from "react";
-import { apiAssetUrl } from "../lib/api";
 import { cn } from "../lib/cn";
-import { useSponsors } from "../lib/sponsors";
+import { sponsorUrl, useSponsors } from "../lib/sponsors";
 
 const rotationInterval = 8_000;
 
@@ -78,7 +77,7 @@ function SponsorFaviconLink({ sponsor }: { sponsor: SponsorWithFavicon }) {
       alt=""
       className="size-6 object-contain"
       height={24}
-      src={apiAssetUrl(
+      src={sponsorUrl(
         `/sponsors/${encodeURIComponent(sponsor.id)}/favicon?v=${encodeURIComponent(sponsor.faviconUpdatedAt)}`
       )}
       width={24}

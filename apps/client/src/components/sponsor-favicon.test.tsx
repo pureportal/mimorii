@@ -10,11 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../lib/sponsors", () => ({
+  sponsorUrl: (path: string) => `https://mimorii.app/api${path}`,
   useSponsors: () => ({ data: mocks.collections }),
-}));
-
-vi.mock("../lib/api", () => ({
-  apiAssetUrl: (path: string) => `/api${path}`,
 }));
 
 vi.mock("motion/react", () => ({
@@ -84,7 +81,7 @@ describe("SponsorFavicon", () => {
     expect(sponsorLink).toHaveAttribute("href", "https://first.example/");
     expect(sponsorLink.querySelector("img")).toHaveAttribute(
       "src",
-      "/api/sponsors/first/favicon?v=2026-08-14T10%3A00%3A00.000Z"
+      "https://mimorii.app/api/sponsors/first/favicon?v=2026-08-14T10%3A00%3A00.000Z"
     );
     expect(container.querySelectorAll("img")).toHaveLength(1);
     expect(container).not.toHaveTextContent(/First Sponsor|Platinum|Gold/);

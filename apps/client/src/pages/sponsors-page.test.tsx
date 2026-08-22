@@ -1,6 +1,6 @@
 import type { SponsorshipTierCollection } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,12 +8,23 @@ import { LandingPage } from "./landing-page";
 import { PrivacyProvider } from "../lib/privacy";
 import { SponsorsPage } from "./sponsors-page";
 
-const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
+const { sponsorApiMock, sponsorsMock } = vi.hoisted(() => ({
+  sponsorApiMock: vi.fn(),
+  sponsorsMock: {
+    data: [] as SponsorshipTierCollection[],
+    isError: false,
+    refetch: vi.fn(),
+  },
+}));
 
 vi.mock("../lib/api", () => ({
-  api: apiMock,
-  apiAssetUrl: (path: string) => `/api${path}`,
   jsonBody: (value: unknown) => ({ body: JSON.stringify(value) }),
+}));
+
+vi.mock("../lib/sponsors", () => ({
+  sponsorApi: sponsorApiMock,
+  sponsorUrl: (path: string) => `https://mimorii.app/api${path}`,
+  useSponsors: () => sponsorsMock,
 }));
 
 const sponsorFixtures: SponsorshipTierCollection[] = [
@@ -82,11 +93,14 @@ describe("sponsorship experience", () => {
   afterEach(cleanup);
 
   beforeEach(() => {
-    apiMock.mockReset();
-    apiMock.mockImplementation((path: string) => {
-      if (path === "/sponsors") return Promise.resolve(sponsorFixtures);
-      return Promise.resolve({ id: "application", submittedAt: "2026-08-12T12:00:00.000Z" });
+    sponsorApiMock.mockReset();
+    sponsorApiMock.mockResolvedValue({
+      id: "application",
+      submittedAt: "2026-08-12T12:00:00.000Z",
     });
+    sponsorsMock.data = sponsorFixtures;
+    sponsorsMock.isError = false;
+    sponsorsMock.refetch.mockReset();
   });
 
   it("shows every sponsor in its tier with distinct artwork", async () => {
@@ -97,7 +111,7 @@ describe("sponsorship experience", () => {
     expect(screen.getByText("Gold Partner")).toBeInTheDocument();
     expect(screen.getByText("Platinum Partner").closest("a")?.querySelector("img")).toHaveAttribute(
       "src",
-      "/api/sponsors/platinum-partner/favicon?v=2026-08-13T10%3A00%3A00.000Z"
+      "https://mimorii.app/api/sponsors/platinum-partner/favicon?v=2026-08-13T10%3A00%3A00.000Z"
     );
     const artwork = [
       screen.getByRole("img", { name: "Platinum cloud empress" }),
@@ -109,13 +123,12 @@ describe("sponsorship experience", () => {
 
   it("submits an application", async () => {
     renderPage(<SponsorsPage />);
-    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/sponsors"));
 
     fillApplication();
     fireEvent.click(screen.getByRole("button", { name: "Send application" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Application received");
-    const submission = apiMock.mock.calls.find(
+    const submission = sponsorApiMock.mock.calls.find(
       ([path, options]) => path === "/sponsors/applications" && options?.method === "POST"
     );
     expect(submission).toBeDefined();
@@ -130,12 +143,8 @@ describe("sponsorship experience", () => {
   });
 
   it("shows a recoverable submission error", async () => {
-    apiMock.mockImplementation((path: string) => {
-      if (path === "/sponsors") return Promise.resolve([]);
-      return Promise.reject(new Error("Application could not be sent"));
-    });
+    sponsorApiMock.mockRejectedValue(new Error("Application could not be sent"));
     renderPage(<SponsorsPage />);
-    await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/sponsors"));
 
     fillApplication();
     fireEvent.click(screen.getByRole("button", { name: "Send application" }));

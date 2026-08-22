@@ -2,8 +2,8 @@ import type { SponsorSummary } from "@mimorii/contracts";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
-import { apiAssetUrl } from "../lib/api";
 import { cn } from "../lib/cn";
+import { sponsorUrl } from "../lib/sponsors";
 import { Button } from "./ui/button";
 
 type CarouselApi = NonNullable<UseEmblaCarouselType[1]>;
@@ -147,7 +147,7 @@ export function SponsorCarousel({
 
 function SponsorCard({ sponsor, theme }: { sponsor: SponsorSummary; theme: "light" | "dark" }) {
   const faviconUrl = sponsor.faviconUpdatedAt
-    ? apiAssetUrl(
+    ? sponsorUrl(
         `/sponsors/${encodeURIComponent(sponsor.id)}/favicon?v=${encodeURIComponent(sponsor.faviconUpdatedAt)}`
       )
     : null;

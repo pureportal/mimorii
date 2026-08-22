@@ -8,8 +8,8 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select, Textarea } from "../components/ui/input";
-import { api, jsonBody } from "../lib/api";
-import { useSponsors } from "../lib/sponsors";
+import { jsonBody } from "../lib/api";
+import { sponsorApi, useSponsors } from "../lib/sponsors";
 import { isSponsorshipTier, sponsorshipTierDetails } from "../lib/sponsorship";
 
 export function SponsorsPage() {
@@ -32,7 +32,7 @@ export function SponsorsPage() {
     setError("");
     setSubmitting(true);
     try {
-      await api<SponsorshipApplicationReceipt>("/sponsors/applications", {
+      await sponsorApi<SponsorshipApplicationReceipt>("/sponsors/applications", {
         method: "POST",
         ...jsonBody({
           organizationName: value("organizationName"),
