@@ -1786,7 +1786,7 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "mimorii-client"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3182,7 +3182,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-agent-mobile"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "serde",
  "tauri",
@@ -3205,7 +3205,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-push"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "tauri",
  "tauri-plugin",
