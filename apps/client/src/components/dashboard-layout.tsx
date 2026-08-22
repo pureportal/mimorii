@@ -75,8 +75,8 @@ export function ProtectedLayout() {
       return <Navigate to={appRoutes.team} replace />;
     }
     return (
-      <div className="safe-page safe-page-footer min-h-dvh bg-canvas">
-        <header className="flex h-16 items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
+      <div className="safe-page-footer min-h-dvh bg-canvas">
+        <header className="flex h-[calc(4rem+var(--safe-area-top))] items-center justify-between border-b border-line bg-surface px-4 pt-[var(--safe-area-top)] sm:px-6">
           <Brand />
           <div className="flex items-center gap-1">
             <Button
@@ -119,7 +119,7 @@ export function ProtectedLayout() {
   const context = navigationContext(location.pathname);
 
   return (
-    <div className="safe-page min-h-dvh bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
+    <div className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       <aside className="safe-fixed-side fixed z-40 hidden w-[272px] border-r border-line bg-surface/94 px-3 py-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand className="px-3" />
         <div data-guide="workspace-switcher" className="relative mt-5 px-1">
@@ -184,7 +184,7 @@ export function ProtectedLayout() {
       </aside>
 
       <div className="min-w-0 lg:col-start-2">
-        <header className="safe-sticky-top sticky z-30 flex h-[68px] items-center justify-between border-b border-line bg-canvas/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[calc(4.25rem+var(--safe-area-top))] items-center justify-between border-b border-line bg-surface px-4 pt-[var(--safe-area-top)] sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Brand compact className="shrink-0 lg:hidden" />
             <div data-guide="page-heading" className="min-w-0">
@@ -345,7 +345,7 @@ function MobileNavigation({
   const [open, setOpen] = useState(false);
   const items = groups.flatMap((group) => group.items);
   const primary = items.filter((item) => mobilePrimaryItemIds.has(item.id));
-  const moreGroups = groups
+  const secondaryGroups = groups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => !mobilePrimaryItemIds.has(item.id)),
@@ -353,7 +353,7 @@ function MobileNavigation({
     .filter((group) => group.items.length > 0);
   const moreActive =
     location.pathname === appRoutes.account ||
-    moreGroups.some((group) =>
+    secondaryGroups.some((group) =>
       group.items.some((item) => isNavigationItemActive(location.pathname, item))
     );
 
@@ -405,9 +405,12 @@ function MobileNavigation({
       </nav>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="safe-dialog-bottom max-w-md rounded-[1.75rem] p-5 lg:hidden">
-          <DialogHeader title="Navigation" />
-          <div className="relative mb-5">
+        <DialogContent presentation="drawer" className="lg:hidden">
+          <DialogHeader
+            title="Navigation"
+            className="mb-0 flex h-14 items-center border-b border-line px-5 pr-12"
+          />
+          <div className="relative border-b border-line px-5 py-4">
             <Select
               aria-label="Workspace"
               value={activeTeamId}
@@ -420,15 +423,18 @@ function MobileNavigation({
                 </option>
               ))}
             </Select>
-            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <ChevronDown className="pointer-events-none absolute right-8 top-1/2 size-4 -translate-y-1/2 text-muted" />
           </div>
-          <nav aria-label="All destinations" className="space-y-5">
-            {moreGroups.map((group) => (
+          <nav
+            aria-label="All destinations"
+            className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4"
+          >
+            {groups.map((group) => (
               <section key={group.label}>
-                <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+                <h2 className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted/70">
                   {group.label}
                 </h2>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const Icon = navigationIcons[item.id];
                     const active = isNavigationItemActive(location.pathname, item);
@@ -440,10 +446,13 @@ function MobileNavigation({
                         aria-current={active ? "page" : undefined}
                         onClick={() => setOpen(false)}
                         className={cn(
-                          "flex min-h-12 items-center gap-3 rounded-xl border border-line px-3 text-sm font-semibold text-muted",
-                          active && "border-lavender bg-lavender-soft text-violet-strong shadow-sm"
+                          "relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
+                          active && "bg-lavender-soft font-semibold text-violet-strong"
                         )}
                       >
+                        {active ? (
+                          <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-violet-strong" />
+                        ) : null}
                         <Icon className="size-[18px] shrink-0" />
                         <span className="min-w-0 truncate">{item.label}</span>
                       </Link>
@@ -452,44 +461,42 @@ function MobileNavigation({
                 </div>
               </section>
             ))}
-            <section>
-              <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
-                Account
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  data-guide="guide-trigger"
-                  onClick={() => {
-                    setOpen(false);
-                    onGuideOpen();
-                  }}
-                  className="flex min-h-12 items-center gap-3 rounded-xl border border-line px-3 text-sm font-semibold text-muted"
-                >
-                  <CircleHelp className="size-[18px]" /> Guide
-                </button>
-                <Link
-                  to={appRoutes.account}
-                  aria-current={location.pathname === appRoutes.account ? "page" : undefined}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex min-h-12 items-center gap-3 rounded-xl border border-line px-3 text-sm font-semibold text-muted",
-                    location.pathname === appRoutes.account &&
-                      "border-lavender bg-lavender-soft text-violet-strong shadow-sm"
-                  )}
-                >
-                  <Settings className="size-[18px]" /> Account
-                </Link>
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="flex min-h-12 items-center gap-3 rounded-xl border border-line px-3 text-sm font-semibold text-muted"
-                >
-                  <LogOut className="size-[18px]" /> Sign out
-                </button>
-              </div>
-            </section>
           </nav>
+          <div className="space-y-0.5 border-t border-line p-3">
+            <button
+              type="button"
+              data-guide="guide-trigger"
+              onClick={() => {
+                setOpen(false);
+                onGuideOpen();
+              }}
+              className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink"
+            >
+              <CircleHelp className="size-[18px]" /> Guide
+            </button>
+            <Link
+              to={appRoutes.account}
+              aria-current={location.pathname === appRoutes.account ? "page" : undefined}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
+                location.pathname === appRoutes.account &&
+                  "bg-lavender-soft font-semibold text-violet-strong"
+              )}
+            >
+              <Settings className="size-[18px]" /> Account
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onSignOut();
+              }}
+              className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink"
+            >
+              <LogOut className="size-[18px]" /> Sign out
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

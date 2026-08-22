@@ -43,35 +43,32 @@ export function OverviewPage() {
   const allGood = data.down === 0 && data.degraded === 0 && data.heartbeatsDown === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <section
         data-guide-page="overview-status"
-        className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"
+        className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"
       >
         <div>
           <div className="flex items-center gap-2.5">
             <span
               className={`size-3 rounded-full ${allGood ? "bg-success shadow-[0_0_0_6px_rgba(53,186,134,.12)]" : "bg-danger shadow-[0_0_0_6px_rgba(217,74,101,.12)]"}`}
             />
-            <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">
+            <h2 className="font-display text-xl font-black tracking-tight sm:text-3xl">
               {allGood
                 ? "All systems operational"
                 : `${data.openIncidents} active incident${data.openIncidents === 1 ? "" : "s"}`}
             </h2>
           </div>
-          <p className="mt-2 text-sm text-muted">{activeTeam?.name}</p>
+          <p className="mt-1 text-xs text-muted">{activeTeam?.name}</p>
         </div>
-        <Button asChild variant="coral">
+        <Button asChild variant="coral" size="sm" className="self-start sm:self-auto">
           <Link to={appRoutes.newResource}>
             <Plus /> Add resource
           </Link>
         </Button>
       </section>
 
-      <section
-        data-guide-page="overview-metrics"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
+      <section data-guide-page="overview-metrics" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric
           icon={Gauge}
           label="Uptime · 24h"
@@ -113,25 +110,22 @@ export function OverviewPage() {
         </section>
       ) : null}
 
-      <section data-guide-page="overview-details" className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
+      <section data-guide-page="overview-details" className="grid gap-4 xl:grid-cols-[1.55fr_1fr]">
         <Card className="min-w-0">
-          <CardHeader>
-            <div>
-              <h3 className="font-display font-bold">Response time</h3>
-              <p className="mt-1 text-xs text-muted">Last 24 hours</p>
-            </div>
+          <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
+            <h3 className="font-display font-bold">Response time</h3>
             <Button asChild variant="ghost" size="sm">
               <Link to={appRoutes.reports}>
                 Reports <ArrowRight />
               </Link>
             </Button>
           </CardHeader>
-          <CardContent className="h-72 pl-1 sm:pl-3">
+          <CardContent className="h-56 px-2 pb-3 pt-0 sm:h-64 sm:px-4">
             {data.latencyTimeline.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={data.latencyTimeline}
-                  margin={{ top: 8, right: 12, left: -18, bottom: 0 }}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                 >
                   <defs>
                     <linearGradient id="latency" x1="0" y1="0" x2="0" y2="1">
@@ -155,7 +149,7 @@ export function OverviewPage() {
                     axisLine={false}
                     tickLine={false}
                     unit="ms"
-                    width={54}
+                    width={48}
                   />
                   <Tooltip
                     contentStyle={chartTooltipStyle}
@@ -188,7 +182,7 @@ export function OverviewPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
             <h3 className="font-display font-bold">Current state</h3>
             <Button asChild variant="ghost" size="sm">
               <Link to={appRoutes.resources}>
@@ -196,12 +190,12 @@ export function OverviewPage() {
               </Link>
             </Button>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="space-y-1 px-3 pb-3 pt-0 sm:p-5 sm:pt-2">
             {resources.data?.slice(0, 7).map((resource) => (
               <Link
                 key={resource.id}
                 to={appRoutes.resource(resource.id)}
-                className="flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-ink/4"
+                className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-ink/4"
               >
                 <ResourceImage
                   resource={resource}
@@ -246,14 +240,16 @@ function Metric({
     warning: "bg-warning/16 text-warning-strong",
   };
   return (
-    <Card className="p-5">
+    <Card className="min-w-0 p-4">
       <div className="flex items-center gap-3">
-        <span className={`grid size-10 place-items-center rounded-xl ${colors[tone]}`}>
-          <Icon className="size-5" />
+        <span className={`grid size-8 place-items-center rounded-lg ${colors[tone]}`}>
+          <Icon className="size-4" />
         </span>
-        <span className="text-sm font-medium text-muted">{label}</span>
+        <span className="min-w-0 text-xs font-medium leading-4 text-muted">{label}</span>
       </div>
-      <p className="mt-5 font-display text-3xl font-black tracking-tight">{value}</p>
+      <p className="mt-4 font-display text-[clamp(1.45rem,7vw,2rem)] font-black leading-none tracking-tight">
+        {value}
+      </p>
     </Card>
   );
 }

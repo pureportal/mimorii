@@ -74,7 +74,7 @@ describe("ProtectedLayout navigation", () => {
     expect(screen.getByTestId("sponsor-favicon")).toBeInTheDocument();
   });
 
-  it("keeps primary mobile tasks visible and groups every other destination in More", () => {
+  it("keeps primary mobile tasks visible and opens a grouped navigation drawer", () => {
     renderLayout(appRoutes.resource("resource-1"));
 
     const mobile = screen.getByRole("navigation", { name: "Mobile navigation" });
@@ -86,7 +86,9 @@ describe("ProtectedLayout navigation", () => {
     fireEvent.click(within(mobile).getByRole("button", { name: "Open navigation" }));
 
     const dialog = screen.getByRole("dialog", { name: "Navigation" });
+    expect(dialog).toHaveClass("inset-y-0");
     expect(within(dialog).getByLabelText("Workspace")).toHaveValue("team-1");
+    expect(within(dialog).getByRole("link", { name: "Overview" })).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Agents" })).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Alerting" })).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Shared dashboards" })).toBeVisible();

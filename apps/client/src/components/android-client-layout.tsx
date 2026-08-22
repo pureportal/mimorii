@@ -5,11 +5,8 @@ import { LoadingState } from "./page-state";
 
 export function AndroidClientLayout() {
   return (
-    <div
-      className="safe-page safe-page-footer flex min-h-dvh flex-col bg-canvas text-ink"
-      data-theme="light"
-    >
-      <header className="border-b border-line bg-surface/94 px-5 py-4 backdrop-blur-xl">
+    <div className="safe-page-footer flex min-h-dvh flex-col bg-canvas text-ink" data-theme="light">
+      <header className="flex h-[calc(4rem+var(--safe-area-top))] items-center border-b border-line bg-surface px-5 pt-[var(--safe-area-top)]">
         <div className="mx-auto max-w-lg">
           <Brand />
         </div>
