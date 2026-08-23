@@ -1,6 +1,6 @@
 # Docker check runner
 
-The Docker image runs HTTP, TCP, and DNS checks only. It does not collect or submit host snapshots. Use the native Linux or Windows agent when Mimorii needs CPU, memory, load, disk, network, process, uptime, operating-system, or technology telemetry from the physical host.
+The Docker image runs HTTP, TCP, DNS, ICMP, WAN, and database checks. It does not collect or submit host or Docker snapshots. Use the native Linux or Windows agent when Mimorii needs CPU, memory, load, disk, container, network, process, uptime, operating-system, or technology telemetry from the physical host.
 
 ## Run
 
@@ -14,7 +14,7 @@ MIMORII_AGENT_KEY=mim_agent_replace_with_the_enrollment_key
 Run the published image. Authenticate to GHCR first when the package is private:
 
 ```bash
-docker run -d --name mimorii-agent --restart unless-stopped --read-only --cap-drop ALL --security-opt no-new-privileges --env-file .env.agent ghcr.io/pureportal/mimorii-check-agent:latest
+docker run -d --name mimorii-agent --restart unless-stopped --read-only --cap-drop ALL --cap-add NET_RAW --security-opt no-new-privileges --env-file .env.agent ghcr.io/pureportal/mimorii-check-agent:latest
 ```
 
 To build from a checkout instead:
@@ -40,3 +40,5 @@ MIMORII_AGENT_ALLOWED_CIDRS=10.20.0.0/16,172.30.0.0/24
 - `host.docker.internal` is also available in the supplied Compose configuration on Linux. Set `MIMORII_AGENT_ALLOW_INSECURE_HTTP=true` when it is used to reach an HTTP-only local Mimorii server.
 
 Docker Desktop checks run through its Linux VM. Neither Docker Desktop nor Linux Docker makes this image a physical-host telemetry agent.
+
+`NET_RAW` is required for ICMP and WAN checks. Native Linux installations need either a kernel ping group range that includes the service user or `CAP_NET_RAW` on the agent executable. Direct API ICMP checks require the operating system `ping` executable; it is included in the Mimorii server image.

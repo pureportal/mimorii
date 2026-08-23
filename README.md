@@ -111,7 +111,7 @@ mimorii-agent-desktop doctor
 
 The agent sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
 
-For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). It runs HTTP, TCP, and DNS checks without reporting container or Docker VM telemetry as physical-host data. Use the native agent for host monitoring.
+For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). It runs HTTP, TCP, DNS, ICMP, WAN, and database checks without reporting container or Docker VM telemetry as physical-host data. Use the native agent for host and Docker monitoring. Deployment requirements for ICMP, Docker, and database checks are in [Monitoring checks](docs/monitoring-checks.md); the resource and execution terminology is defined in [Monitoring model](docs/monitoring-model.md).
 
 ## Monitor an Android device
 

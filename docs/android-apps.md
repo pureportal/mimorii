@@ -13,8 +13,9 @@ The Agent uses a native Kotlin Tauri plugin. Enrollment is verified with the ser
 
 Device status is short, periodic, deferrable work, so the Agent uses WorkManager 2.11.2 instead of a foreground service:
 
-- One unique periodic request schedules collection every 15 to 60 minutes.
-- One unique, network-constrained worker performs the device-status submission and retries transient failures.
+- One unique, network-constrained periodic worker performs collection every 15 to 60 minutes.
+- A separately named unique one-time request performs manual collection without replacing the periodic schedule.
+- The same collection worker performs device-status submissions and retries transient failures.
 - WorkManager persists its schedule across process recreation, application restart, and device reboot.
 - `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED` reconcile the persisted enrollment with the unique work after boot and upgrades.
 - Loading the Agent UI performs the same reconciliation.
