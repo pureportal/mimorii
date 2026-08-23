@@ -1463,7 +1463,7 @@ dependencies = [
 
 [[package]]
 name = "mimorii-agent-desktop-ui"
-version = "8.0.0"
+version = "8.0.1"
 dependencies = [
  "eframe",
  "serde",

@@ -1,6 +1,6 @@
 [package]
 name = "mimorii-agent-desktop-ui"
-version = "8.0.0"
+version = "8.0.1"
 description = "Mimorii Agent desktop controls"
 edition = "2024"
 license = "MIT"

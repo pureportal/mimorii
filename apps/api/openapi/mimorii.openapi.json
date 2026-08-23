@@ -4602,7 +4602,7 @@
   "info": {
     "title": "Mimorii API",
     "description": "Self-hosted uptime, server analytics, and relay-agent API.",
-    "version": "8.0.0",
+    "version": "8.0.1",
     "contact": {}
   },
   "tags": [
