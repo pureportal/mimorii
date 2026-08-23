@@ -88,7 +88,7 @@ class DeviceStatusWorker(
           message
         )
       }
-      Result.failure()
+      recordedFailureResult()
     } catch (error: IOException) {
       if (isStopped || reporter?.isCancelled() == true) return Result.success()
       AgentMobileStorage.recordError(
@@ -104,7 +104,7 @@ class DeviceStatusWorker(
         enrollment,
         error.message ?: "Device status collection failed"
       )
-      Result.failure()
+      recordedFailureResult()
     } finally {
       deactivateReporter(reporter)
     }
@@ -123,6 +123,13 @@ class DeviceStatusWorker(
   private fun deactivateReporter(reporter: DeviceStatusReporter?) {
     if (activeReporter === reporter) activeReporter = null
   }
+
+  private fun recordedFailureResult(): Result =
+    if (inputData.getBoolean(AgentMobileScheduler.PERIODIC_INPUT, false)) {
+      Result.success()
+    } else {
+      Result.failure()
+    }
 
   @Synchronized
   override fun onStopped() {
