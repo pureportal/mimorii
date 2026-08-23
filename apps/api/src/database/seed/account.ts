@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { agentCollectionInterval, termsVersion } from "@mimorii/contracts";
+import { agentCollectionInterval, checkTypes, termsVersion } from "@mimorii/contracts";
 import { createSecret, hashPassword, hashSecret } from "../../common/crypto.js";
 import type { DatabaseService } from "../database.service.js";
 import { assertSafeSeedCredentials, seedGlobalAdministrator } from "./global-admin.js";
@@ -101,7 +101,8 @@ export async function seedAccount(
   await seedGlobalAdministrator(database, user.id);
 
   const existing = await database.get<SeedAgent>(
-    "SELECT id FROM agents WHERE team_id = ? AND name = ? AND revoked_at IS NULL",
+    `SELECT a.id FROM agents a JOIN resources r ON r.id = a.resource_id
+     WHERE a.team_id = ? AND r.name = ? AND a.revoked_at IS NULL`,
     team.id,
     configuration.agentName
   );
@@ -111,11 +112,18 @@ export async function seedAccount(
   if (existing) {
     agentId = existing.id;
     await database.run(
+      "UPDATE resources SET name = ?, updated_at = ? WHERE id = ? AND team_id = ?",
+      configuration.agentName,
+      now,
+      existing.id,
+      team.id
+    );
+    await database.run(
       `UPDATE agents SET key_hash = ?, kind = 'desktop', capabilities_json = ?,
        collection_interval_seconds = ?, updated_at = ?
        WHERE id = ? AND team_id = ?`,
       hashSecret(enrollmentKey),
-      JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
+      JSON.stringify(checkTypes),
       configuration.agentIntervalSeconds,
       now,
       existing.id,
@@ -131,16 +139,26 @@ export async function seedAccount(
   } else {
     agentId = randomUUID();
     await database.run(
+      `INSERT INTO resources
+       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+       VALUES (?, ?, ?, 'host', NULL, '[]', ?, ?)`,
+      agentId,
+      team.id,
+      configuration.agentName,
+      now,
+      now
+    );
+    await database.run(
       `INSERT INTO agents
-       (id, team_id, name, key_hash, kind, capabilities_json, collection_interval_seconds,
+       (id, team_id, resource_id, key_hash, kind, capabilities_json, collection_interval_seconds,
         created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       agentId,
       team.id,
-      configuration.agentName,
+      agentId,
       hashSecret(enrollmentKey),
       "desktop",
-      JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
+      JSON.stringify(checkTypes),
       configuration.agentIntervalSeconds,
       now,
       now

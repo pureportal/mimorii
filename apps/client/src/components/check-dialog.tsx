@@ -1,5 +1,6 @@
 import {
   checkTypes,
+  type CheckExecution,
   type CheckSummary,
   type CheckType,
   type ResourceSummary,
@@ -13,10 +14,14 @@ import {
 } from "./check-form-config";
 import {
   DiskCheckFields,
+  DockerCheckFields,
+  DatabaseCheckFields,
   DnsCheckFields,
   HostCheckFields,
   HttpCheckFields,
+  IcmpCheckFields,
   TcpCheckFields,
+  WanCheckFields,
 } from "./check-form-fields";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
@@ -28,6 +33,8 @@ export interface CheckPayload {
   name: string;
   type: CheckType;
   config: Record<string, unknown>;
+  execution: CheckExecution;
+  secret?: string | null;
   intervalSeconds: number;
   timeoutMs: number;
   failureThreshold: number;
@@ -61,6 +68,9 @@ export function CheckDialog({
   const [failureThreshold, setFailureThreshold] = useState("2");
   const [recoveryThreshold, setRecoveryThreshold] = useState("1");
   const [enabled, setEnabled] = useState(true);
+  const [executionKind, setExecutionKind] = useState<"direct" | "agent">("direct");
+  const [agentId, setAgentId] = useState("");
+  const [secret, setSecret] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -77,6 +87,9 @@ export function CheckDialog({
     setFailureThreshold(String(initial?.failureThreshold ?? 2));
     setRecoveryThreshold(String(initial?.recoveryThreshold ?? 1));
     setEnabled(initial?.enabled ?? true);
+    setExecutionKind(initial?.execution.kind ?? "direct");
+    setAgentId(initial?.execution.kind === "agent" ? initial.execution.agentId : "");
+    setSecret("");
     setFields(checkFields(initial?.config));
     setError("");
   }, [defaultResourceId, initial, open, resources]);
@@ -95,6 +108,12 @@ export function CheckDialog({
         name,
         type,
         config: buildCheckConfig(type, fields),
+        execution: executionKind === "agent" ? { kind: "agent", agentId } : { kind: "direct" },
+        ...(secret
+          ? { secret }
+          : initial?.secretConfigured && type === "http" && !fields.secretHeaderName.trim()
+            ? { secret: null }
+            : {}),
         intervalSeconds: Number(interval),
         timeoutMs: Number(timeout),
         failureThreshold: Number(failureThreshold),
@@ -120,14 +139,26 @@ export function CheckDialog({
               <Select
                 id="check-resource"
                 value={resourceId}
-                onChange={(event) => setResourceId(event.target.value)}
+                onChange={(event) => {
+                  setResourceId(event.target.value);
+                  if (["host", "disk", "docker"].includes(type)) {
+                    const resource = resources.find((item) => item.id === event.target.value);
+                    if (resource?.agent) setAgentId(resource.agent.id);
+                  }
+                }}
                 required
               >
-                {resources.map((resource) => (
-                  <option key={resource.id} value={resource.id}>
-                    {resource.name}
-                  </option>
-                ))}
+                {resources
+                  .filter(
+                    (resource) =>
+                      !["host", "disk", "docker"].includes(type) ||
+                      resource.agent?.kind === "desktop"
+                  )
+                  .map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
               </Select>
             </Field>
             <Field>
@@ -148,22 +179,103 @@ export function CheckDialog({
               value={type}
               onChange={(event) => {
                 const next = checkTypes.find((value) => value === event.target.value);
-                if (next) setType(next);
+                if (next) {
+                  setType(next);
+                  if (["host", "disk", "docker"].includes(next)) {
+                    const resource =
+                      resources.find(
+                        (item) => item.id === resourceId && item.agent?.kind === "desktop"
+                      ) ?? resources.find((item) => item.agent?.kind === "desktop");
+                    if (resource?.agent) {
+                      setResourceId(resource.id);
+                      setExecutionKind("agent");
+                      setAgentId(resource.agent.id);
+                    }
+                  }
+                }
               }}
             >
               <option value="http">HTTP</option>
               <option value="tcp">TCP port</option>
               <option value="dns">DNS record</option>
-              <option value="host">Server health</option>
+              <option value="icmp">ICMP ping</option>
+              <option value="wan">WAN reachability</option>
+              <option value="host">Host health</option>
               <option value="disk">Disk usage</option>
+              <option value="docker">Docker</option>
+              <option value="database">Database</option>
             </Select>
           </Field>
 
           {type === "http" ? <HttpCheckFields fields={fields} update={update} /> : null}
           {type === "tcp" ? <TcpCheckFields fields={fields} update={update} /> : null}
           {type === "dns" ? <DnsCheckFields fields={fields} update={update} /> : null}
+          {type === "icmp" ? <IcmpCheckFields fields={fields} update={update} /> : null}
+          {type === "wan" ? <WanCheckFields fields={fields} update={update} /> : null}
           {type === "host" ? <HostCheckFields fields={fields} update={update} /> : null}
           {type === "disk" ? <DiskCheckFields fields={fields} update={update} /> : null}
+          {type === "docker" ? <DockerCheckFields fields={fields} update={update} /> : null}
+          {type === "database" ? <DatabaseCheckFields fields={fields} update={update} /> : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="check-execution">Execution</FieldLabel>
+              <Select
+                id="check-execution"
+                value={executionKind}
+                disabled={["host", "disk", "docker"].includes(type)}
+                onChange={(event) => {
+                  const kind = event.target.value === "agent" ? "agent" : "direct";
+                  setExecutionKind(kind);
+                  if (kind === "agent" && !agentId) {
+                    setAgentId(
+                      resources.find((resource) => resource.agent?.kind === "desktop")?.agent?.id ??
+                        ""
+                    );
+                  }
+                }}
+              >
+                <option value="direct">Direct</option>
+                <option value="agent">Agent</option>
+              </Select>
+            </Field>
+            {executionKind === "agent" ? (
+              <Field>
+                <FieldLabel htmlFor="check-agent">Agent</FieldLabel>
+                <Select
+                  id="check-agent"
+                  value={agentId}
+                  onChange={(event) => setAgentId(event.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select agent
+                  </option>
+                  {resources
+                    .filter((resource) => resource.agent?.kind === "desktop")
+                    .map((resource) => (
+                      <option key={resource.agent!.id} value={resource.agent!.id}>
+                        {resource.name}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            ) : null}
+            {type === "database" || (type === "http" && fields.secretHeaderName.trim()) ? (
+              <Field>
+                <FieldLabel htmlFor="check-secret">
+                  {type === "database" ? "Password" : "Secret header value"}
+                </FieldLabel>
+                <Input
+                  id="check-secret"
+                  type="password"
+                  value={secret}
+                  onChange={(event) => setSecret(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </Field>
+            ) : null}
+          </div>
 
           <AdvancedFields
             interval={interval}

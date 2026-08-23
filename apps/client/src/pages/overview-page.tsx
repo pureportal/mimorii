@@ -204,7 +204,7 @@ export function OverviewPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{resource.name}</p>
-                  <p className="truncate text-xs text-muted">{resource.target}</p>
+                  <p className="truncate text-xs capitalize text-muted">{resource.kind}</p>
                 </div>
                 <StatusBadge status={resource.status} />
               </Link>

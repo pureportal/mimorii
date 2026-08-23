@@ -30,13 +30,13 @@ export async function verifyDevelopmentSeed(
        ) AS configured_agent,
        (SELECT COUNT(*)::int FROM resources WHERE team_id = ?) AS resources,
        (SELECT COUNT(*)::int FROM checks WHERE team_id = ?) AS checks,
-       (SELECT COUNT(*)::int FROM checks c JOIN resources r ON r.id = c.resource_id
-        WHERE c.team_id = ? AND r.agent_id IS NULL) AS direct_checks,
-       (SELECT COUNT(*)::int FROM checks c JOIN resources r ON r.id = c.resource_id
-        WHERE c.team_id = ? AND r.agent_id IS NOT NULL) AS agent_checks,
-       (SELECT COUNT(*)::int FROM checks c JOIN resources r ON r.id = c.resource_id
-        WHERE c.team_id = ? AND r.agent_id IS NULL
-          AND jsonb_exists(c.config_json::jsonb, 'jsonPointer'))
+       (SELECT COUNT(*)::int FROM checks c
+        WHERE c.team_id = ? AND c.agent_id IS NULL) AS direct_checks,
+       (SELECT COUNT(*)::int FROM checks c
+        WHERE c.team_id = ? AND c.agent_id IS NOT NULL) AS agent_checks,
+       (SELECT COUNT(*)::int FROM checks c
+        WHERE c.team_id = ? AND c.agent_id IS NULL
+          AND jsonb_exists(c.config_json::jsonb, 'jsonAssertions'))
         AS mapped_direct_checks,
        (SELECT COUNT(*)::int FROM checks WHERE team_id = ? AND type = 'tcp') AS port_checks,
        (SELECT COUNT(DISTINCT type)::int FROM checks WHERE team_id = ?) AS check_types,
@@ -66,12 +66,12 @@ export async function verifyDevelopmentSeed(
     summary.owns_team &&
     summary.configured_agent &&
     summary.resources >= 12 &&
-    summary.checks >= 30 &&
+    summary.checks >= 39 &&
     summary.direct_checks >= 8 &&
     summary.agent_checks >= 20 &&
     summary.mapped_direct_checks >= 2 &&
     summary.port_checks >= 8 &&
-    summary.check_types === 5 &&
+    summary.check_types === 9 &&
     summary.check_results >= 250 &&
     summary.agents >= 5 &&
     summary.heartbeats >= 5 &&

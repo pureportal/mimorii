@@ -22,7 +22,8 @@ export class AgentTransportController {
   enrollment(@CurrentAgent() agent: AuthenticatedAgent): AgentEnrollment {
     return {
       agentId: agent.id,
-      name: agent.name,
+      resourceId: agent.resourceId,
+      resourceName: agent.resourceName,
       kind: agent.kind,
       collectionIntervalSeconds: agent.collectionIntervalSeconds,
     };

@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::{assert_result, snapshot, task};
-use crate::models::{CheckState, CheckType};
+use crate::models::{CheckState, CheckType, ContainerRuntimeSnapshot, ContainerSnapshot};
 
 fn host_config() -> serde_json::Value {
     json!({
@@ -171,6 +171,102 @@ fn disk_check_reports_missing_mounts_and_invalid_configuration() {
         &invalid,
         CheckState::Down,
         Some("disk configuration is invalid"),
+        None,
+    );
+}
+
+fn container(name: &str, state: &str, health: &str) -> ContainerSnapshot {
+    ContainerSnapshot {
+        id: format!("id-{name}"),
+        name: name.to_owned(),
+        image: "example:latest".to_owned(),
+        state: state.to_owned(),
+        health: health.to_owned(),
+        restart_count: 0,
+        cpu_percent: 10.0,
+        memory_used_bytes: 20,
+        memory_limit_bytes: 100,
+        network_received_bytes: 1,
+        network_transmitted_bytes: 2,
+        block_read_bytes: 3,
+        block_written_bytes: 4,
+        compose_project: Some("monitoring".to_owned()),
+        compose_service: Some(name.to_owned()),
+        ports: vec!["8080:80/tcp".to_owned()],
+        started_at: Some("2026-08-23T10:00:00Z".to_owned()),
+    }
+}
+
+#[test]
+fn docker_check_filters_containers_and_reports_health_and_resource_states() {
+    let mut value = snapshot();
+    value.container_runtime = Some(ContainerRuntimeSnapshot {
+        engine_version: "27.5".to_owned(),
+        containers: vec![
+            container("api", "running", "healthy"),
+            container("worker", "running", "healthy"),
+        ],
+    });
+    let config = json!({
+        "containerNamePattern": "api*",
+        "requireHealthy": true,
+        "requireRunning": true,
+        "maximumRestarts": 3,
+        "cpuWarningPercent": 90,
+        "memoryWarningPercent": 90
+    });
+    let up = super::execute(&task(CheckType::Docker, config.clone()), &value);
+    assert_result(&up, CheckState::Up, None, None);
+    assert_eq!(up.metrics["containerCount"], 1);
+
+    value.container_runtime.as_mut().unwrap().containers[0].health = "unhealthy".to_owned();
+    let down = super::execute(&task(CheckType::Docker, config.clone()), &value);
+    assert_result(
+        &down,
+        CheckState::Down,
+        Some("A container is not healthy"),
+        None,
+    );
+
+    value.container_runtime.as_mut().unwrap().containers[0].health = "healthy".to_owned();
+    value.container_runtime.as_mut().unwrap().containers[0].cpu_percent = 95.0;
+    let degraded = super::execute(&task(CheckType::Docker, config), &value);
+    assert_result(
+        &degraded,
+        CheckState::Degraded,
+        Some("A container resource warning threshold was reached"),
+        None,
+    );
+}
+
+#[test]
+fn docker_check_reports_unavailable_and_unmatched_runtimes() {
+    let config = json!({
+        "containerNamePattern": "missing*",
+        "requireHealthy": true,
+        "requireRunning": true,
+        "maximumRestarts": 3,
+        "cpuWarningPercent": 90,
+        "memoryWarningPercent": 90
+    });
+    let unavailable = super::execute(&task(CheckType::Docker, config.clone()), &snapshot());
+    assert_result(
+        &unavailable,
+        CheckState::Down,
+        Some("Connection failed"),
+        None,
+    );
+
+    let mut value = snapshot();
+    value.container_runtime = Some(ContainerRuntimeSnapshot {
+        engine_version: "27.5".to_owned(),
+        containers: vec![container("api", "running", "healthy")],
+    });
+    let unmatched = super::execute(&task(CheckType::Docker, config), &value);
+    assert_result(
+        &unmatched,
+        CheckState::Down,
+        Some("Connection failed"),
         None,
     );
 }

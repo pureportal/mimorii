@@ -5,7 +5,8 @@ import type { Request } from "express";
 export interface AuthenticatedAgent {
   id: string;
   teamId: string;
-  name: string;
+  resourceId: string;
+  resourceName: string;
   kind: AgentKind;
   capabilities: AgentCapability[];
   collectionIntervalSeconds: number;

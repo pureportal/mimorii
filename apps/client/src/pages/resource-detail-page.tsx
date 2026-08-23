@@ -1,16 +1,24 @@
 import type {
   AgentSummary,
+  AgentKind,
   CheckResult,
   CheckSummary,
   HeartbeatMonitorSummary,
   HostSnapshot,
+  ResourceAlertMetric,
+  ResourceAlertOperator,
+  ResourceAlertRuleSummary,
+  ResourceMetricSeries,
   ResourceSummary,
   TechnologyObservation,
 } from "@mimorii/contracts";
+import { resourceAlertOperators } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   ArrowLeft,
+  Battery,
+  Bell,
   Cpu,
   Database,
   Gauge,
@@ -20,6 +28,7 @@ import {
   Pencil,
   Radio,
   Trash2,
+  Container,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -66,6 +75,8 @@ export function ResourceDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedCheckId, setSelectedCheckId] = useState<string | null>(null);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<ResourceAlertRuleSummary | null>(null);
   const resource = useQuery({
     queryKey: ["resource", teamId, id],
     queryFn: () => api<ResourceSummary>(`/teams/${teamId}/resources/${id}`),
@@ -93,10 +104,28 @@ export function ResourceDetailPage() {
     refetchInterval: 30_000,
   });
   const snapshots = useQuery({
-    queryKey: ["snapshots", teamId, resource.data?.agentId],
+    queryKey: ["snapshots", teamId, resource.data?.agent?.id],
     queryFn: () =>
-      api<HostSnapshot[]>(`/teams/${teamId}/agents/${resource.data!.agentId}/snapshots?limit=200`),
-    enabled: Boolean(resource.data?.agentId),
+      api<HostSnapshot[]>(
+        `/teams/${teamId}/agents/${resource.data!.agent!.id}/snapshots?limit=200`
+      ),
+    enabled: resource.data?.agent?.kind === "desktop",
+    refetchInterval: 30_000,
+  });
+  const metrics = useQuery({
+    queryKey: ["resource-metrics", teamId, id],
+    queryFn: () => {
+      const from = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      return api<ResourceMetricSeries[]>(
+        `/teams/${teamId}/resources/${id}/metrics?from=${encodeURIComponent(from)}`
+      );
+    },
+    refetchInterval: 30_000,
+  });
+  const alerts = useQuery({
+    queryKey: ["resource-alerts", teamId, id],
+    queryFn: () => api<ResourceAlertRuleSummary[]>(`/teams/${teamId}/resources/${id}/alerts`),
+    enabled: Boolean(resource.data?.agent),
     refetchInterval: 30_000,
   });
   const technologies = useQuery({
@@ -112,6 +141,7 @@ export function ResourceDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["checks", teamId] }),
       queryClient.invalidateQueries({ queryKey: ["heartbeats", teamId] }),
       queryClient.invalidateQueries({ queryKey: ["overview", teamId] }),
+      queryClient.invalidateQueries({ queryKey: ["resource-alerts", teamId, id] }),
     ]);
   };
 
@@ -127,7 +157,10 @@ export function ResourceDetailPage() {
       />
     );
   const currentSnapshot = snapshots.data?.[0];
+  const currentAgent = agents.data?.find((agent) => agent.id === resource.data.agent?.id);
+  const deviceStatus = currentAgent?.deviceStatus;
   const chartData = (history.data ?? []).toReversed();
+  const checkMetricSeries = createCheckMetricSeries(chartData);
 
   async function removeResource() {
     setDeleting(true);
@@ -170,7 +203,9 @@ export function ResourceDetailPage() {
                 <StatusBadge status={resource.data.status} />
                 {resource.data.inMaintenance ? <StatusBadge status="maintenance" /> : null}
               </div>
-              <p className="mt-2 break-all text-sm text-muted">{resource.data.target}</p>
+              <p className="mt-2 text-sm capitalize text-muted">
+                {resource.data.agent?.platform ?? resource.data.kind}
+              </p>
               {resource.data.description ? (
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
                   {resource.data.description}
@@ -238,6 +273,45 @@ export function ResourceDetailPage() {
             )}
             detail={formatCount(currentSnapshot.processCount, "process", "processes")}
           />
+        </section>
+      ) : null}
+
+      {deviceStatus ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <HostMetric
+            icon={Battery}
+            label="Battery"
+            value={
+              deviceStatus.battery.percent == null
+                ? "—"
+                : `${deviceStatus.battery.percent.toFixed(0)}%`
+            }
+          />
+          <HostMetric
+            icon={MemoryStick}
+            label="Memory"
+            value={`${percentage(deviceStatus.memory.totalBytes - deviceStatus.memory.availableBytes, deviceStatus.memory.totalBytes)}%`}
+          />
+          <HostMetric
+            icon={Database}
+            label="Storage"
+            value={`${percentage(deviceStatus.storage.totalBytes - deviceStatus.storage.availableBytes, deviceStatus.storage.totalBytes)}%`}
+          />
+          <HostMetric
+            icon={Network}
+            label="Internet"
+            value={deviceStatus.connectivity.internetValidated ? "Available" : "Unavailable"}
+          />
+        </section>
+      ) : null}
+
+      {metrics.data?.some((series) => series.points.length) ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {metrics.data
+            .filter((series) => series.points.length)
+            .map((series) => (
+              <MetricHistory key={series.metric} series={series} />
+            ))}
         </section>
       ) : null}
 
@@ -339,6 +413,7 @@ export function ResourceDetailPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{check.name}</p>
                       <p className="text-xs text-muted">
+                        {checkExecutionLabel(check.execution, agents.data ?? [])} ·{" "}
                         {formatPercent(check.uptime24h)} · {formatLatency(check.lastLatencyMs)}
                       </p>
                     </div>
@@ -386,8 +461,83 @@ export function ResourceDetailPage() {
               ) : null}
             </CardContent>
           </Card>
+          {resource.data.agent ? (
+            <Card>
+              <CardHeader>
+                <h3 className="font-display font-bold">Alerts</h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedAlert(null);
+                    setAlertOpen(true);
+                  }}
+                >
+                  <Bell /> Add alert
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {alerts.data?.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-center gap-3 rounded-xl border border-line p-3"
+                  >
+                    <StatusBadge status={alert.active ? "down" : alert.enabled ? "up" : "paused"} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{alert.name}</p>
+                      <p className="text-xs text-muted">
+                        {metricLabel(alert.metric)} {alertOperatorSymbol(alert.operator)}{" "}
+                        {String(alert.threshold)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Edit ${alert.name}`}
+                      onClick={() => {
+                        setSelectedAlert(alert);
+                        setAlertOpen(true);
+                      }}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Delete ${alert.name}`}
+                      onClick={async () => {
+                        try {
+                          await api(`/teams/${teamId}/resources/${id}/alerts/${alert.id}`, {
+                            method: "DELETE",
+                          });
+                          await alerts.refetch();
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error ? error.message : "Alert could not be deleted"
+                          );
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+                {!alerts.data?.length ? (
+                  <div className="grid h-24 place-items-center text-sm text-muted">No alerts</div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </section>
+
+      {checkMetricSeries.length ? (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {checkMetricSeries.map((series) => (
+            <CheckMetricHistory key={series.metric} series={series} />
+          ))}
+        </section>
+      ) : null}
 
       {currentSnapshot?.disks.length ? (
         <Card>
@@ -420,6 +570,77 @@ export function ResourceDetailPage() {
         </Card>
       ) : null}
 
+      {currentSnapshot?.containerRuntime?.containers.length ? (
+        <Card>
+          <CardHeader>
+            <h3 className="font-display font-bold">Containers</h3>
+            <span className="text-xs text-muted">
+              Docker {currentSnapshot.containerRuntime.engineVersion}
+            </span>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {currentSnapshot.containerRuntime.containers.map((container) => (
+              <div key={container.id} className="rounded-xl border border-line p-4">
+                <div className="flex items-center gap-3">
+                  <Container className="size-4 text-violet-strong" />
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">{container.name}</p>
+                  <StatusBadge
+                    status={
+                      container.state === "running" && container.health !== "unhealthy"
+                        ? "up"
+                        : "down"
+                    }
+                  />
+                </div>
+                <p className="mt-2 truncate text-xs text-muted">{container.image}</p>
+                {container.composeProject || container.composeService ? (
+                  <p className="mt-1 truncate text-xs text-muted">
+                    {[container.composeProject, container.composeService]
+                      .filter(Boolean)
+                      .join(" / ")}
+                  </p>
+                ) : null}
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <ContainerMetric label="CPU" value={container.cpuPercent.toFixed(1) + "%"} />
+                  <ContainerMetric
+                    label="Memory"
+                    value={
+                      container.memoryLimitBytes
+                        ? percentage(container.memoryUsedBytes, container.memoryLimitBytes) + "%"
+                        : formatBytes(container.memoryUsedBytes)
+                    }
+                  />
+                  <ContainerMetric
+                    label="Network"
+                    value={[
+                      formatBytes(container.networkReceivedBytes),
+                      formatBytes(container.networkTransmittedBytes),
+                    ].join(" / ")}
+                  />
+                  <ContainerMetric
+                    label="Disk I/O"
+                    value={[
+                      formatBytes(container.blockReadBytes),
+                      formatBytes(container.blockWrittenBytes),
+                    ].join(" / ")}
+                  />
+                  <ContainerMetric
+                    label="Restarts"
+                    value={container.restartCount.toLocaleString()}
+                  />
+                  <ContainerMetric label="Health" value={container.health} />
+                </dl>
+                {container.ports.length ? (
+                  <p className="mt-3 break-words font-mono text-[11px] text-muted">
+                    {container.ports.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {technologies.data?.length ? (
         <Card>
           <CardHeader>
@@ -448,8 +669,18 @@ export function ResourceDetailPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
         resource={resource.data}
-        agents={(agents.data ?? []).filter((agent) => agent.kind === "desktop")}
         onSaved={refresh}
+      />
+      <AlertRuleDialog
+        open={alertOpen}
+        onOpenChange={setAlertOpen}
+        teamId={teamId}
+        resourceId={id}
+        rule={selectedAlert}
+        metrics={availableAlertMetrics(resource.data.agent?.kind)}
+        onSaved={async () => {
+          await alerts.refetch();
+        }}
       />
       <ResourceImageDialog
         open={imageOpen}
@@ -472,6 +703,11 @@ export function ResourceDetailPage() {
 
 function percentage(used: number, total: number): string {
   return (total ? (used / total) * 100 : 0).toFixed(1);
+}
+
+function checkExecutionLabel(execution: CheckSummary["execution"], agents: AgentSummary[]): string {
+  if (execution.kind === "direct") return "Direct";
+  return agents.find((agent) => agent.id === execution.agentId)?.resourceName ?? "Agent";
 }
 
 function HostMetric({
@@ -499,34 +735,437 @@ function HostMetric({
   );
 }
 
+function MetricHistory({ series }: { series: ResourceMetricSeries }) {
+  return (
+    <Card className="h-64 p-5">
+      <h3 className="font-display font-bold">{metricLabel(series.metric)}</h3>
+      <ResponsiveContainer width="100%" height="85%">
+        <LineChart data={series.points} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
+          <XAxis
+            dataKey="observedAt"
+            tickFormatter={(value) => new Date(value).toLocaleDateString()}
+            tick={{ fill: chartColors.muted, fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            minTickGap={35}
+          />
+          <YAxis
+            tick={{ fill: chartColors.muted, fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            labelFormatter={(value) =>
+              typeof value === "string" || typeof value === "number"
+                ? new Date(value).toLocaleString()
+                : ""
+            }
+            contentStyle={chartTooltipStyle}
+          />
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={chartColors.lavender}
+            strokeWidth={2.5}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </Card>
+  );
+}
+
+interface CheckMetricSeries {
+  metric: string;
+  points: Array<{
+    observedAt: string;
+    value: number | string | boolean | null;
+  }>;
+}
+
+export function createCheckMetricSeries(results: CheckResult[]): CheckMetricSeries[] {
+  const metrics = [...new Set(results.flatMap((result) => Object.keys(result.metrics)))].toSorted();
+  return metrics.map((metric) => ({
+    metric,
+    points: results.flatMap((result) =>
+      Object.hasOwn(result.metrics, metric)
+        ? [{ observedAt: result.checkedAt, value: result.metrics[metric] ?? null }]
+        : []
+    ),
+  }));
+}
+
+function CheckMetricHistory({ series }: { series: CheckMetricSeries }) {
+  const numericPoints = series.points.filter(
+    (point): point is { observedAt: string; value: number } => typeof point.value === "number"
+  );
+  const latest = series.points.at(-1)?.value ?? null;
+  return (
+    <Card className="min-h-36 p-5">
+      <h3 className="text-sm font-semibold text-muted">{checkMetricLabel(series.metric)}</h3>
+      <p className="mt-3 font-display text-2xl font-black">
+        {formatCheckMetric(series.metric, latest)}
+      </p>
+      {numericPoints.length > 1 ? (
+        <div className="mt-3 h-14">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={numericPoints}>
+              <Tooltip
+                labelFormatter={(value) =>
+                  typeof value === "string" || typeof value === "number"
+                    ? new Date(value).toLocaleString()
+                    : ""
+                }
+                formatter={(value) => [
+                  typeof value === "number"
+                    ? formatCheckMetric(series.metric, value)
+                    : String(value),
+                  checkMetricLabel(series.metric),
+                ]}
+                contentStyle={chartTooltipStyle}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={chartColors.lavender}
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function checkMetricLabel(metric: string): string {
+  const label = metric
+    .replace(/[._]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\bms\b/gi, "ms")
+    .replace(/\bio\b/gi, "I/O");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatCheckMetric(metric: string, value: number | string | boolean | null): string {
+  if (value === null) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value;
+  const normalized = metric.toLowerCase();
+  if (normalized.includes("bytes")) return formatBytes(value);
+  if (normalized.includes("percent")) return value.toFixed(1) + "%";
+  if (normalized.endsWith("ms")) return value.toLocaleString() + " ms";
+  if (normalized.includes("seconds")) return value.toLocaleString() + " s";
+  return value.toLocaleString();
+}
+
+function ContainerMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-muted">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium capitalize" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function AlertRuleDialog({
+  open,
+  onOpenChange,
+  teamId,
+  resourceId,
+  rule,
+  metrics,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  teamId: string;
+  resourceId: string;
+  rule: ResourceAlertRuleSummary | null;
+  metrics: ResourceAlertMetric[];
+  onSaved: () => Promise<void>;
+}) {
+  const [name, setName] = useState("Resource threshold");
+  const [metric, setMetric] = useState<ResourceAlertMetric>("cpuPercent");
+  const [operator, setOperator] = useState<ResourceAlertOperator>("greaterThanOrEqual");
+  const [threshold, setThreshold] = useState("90");
+  const [recoveryThreshold, setRecoveryThreshold] = useState("80");
+  const [requiredSamples, setRequiredSamples] = useState("2");
+  const [enabled, setEnabled] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const booleanMetric = isBooleanAlertMetric(metric);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(rule?.name ?? "Resource threshold");
+    setMetric(rule?.metric ?? metrics[0] ?? "cpuPercent");
+    setOperator(rule?.operator ?? "greaterThanOrEqual");
+    setThreshold(String(rule?.threshold ?? 90));
+    setRecoveryThreshold(
+      rule?.recoveryThreshold === null || rule?.recoveryThreshold === undefined
+        ? ""
+        : String(rule.recoveryThreshold)
+    );
+    setRequiredSamples(String(rule?.requiredSamples ?? 2));
+    setEnabled(rule?.enabled ?? true);
+    setError("");
+  }, [open, rule, metrics]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/teams/${teamId}/resources/${resourceId}/alerts${rule ? `/${rule.id}` : ""}`, {
+        method: rule ? "PATCH" : "POST",
+        ...jsonBody({
+          name,
+          metric,
+          operator: booleanMetric ? "equals" : operator,
+          threshold: booleanMetric ? threshold === "true" : Number(threshold),
+          recoveryThreshold: booleanMetric
+            ? threshold !== "true"
+            : recoveryThreshold
+              ? Number(recoveryThreshold)
+              : null,
+          requiredSamples: Number(requiredSamples),
+          enabled,
+        }),
+      });
+      await onSaved();
+      onOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Alert could not be saved");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader title={rule ? "Edit alert" : "Add alert"} />
+        <form className="grid gap-4" onSubmit={submit}>
+          <Field>
+            <FieldLabel htmlFor="alert-name">Name</FieldLabel>
+            <Input
+              id="alert-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={100}
+              required
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="alert-metric">Metric</FieldLabel>
+              <Select
+                id="alert-metric"
+                value={metric}
+                onChange={(event) => {
+                  const value = metrics.find((item) => item === event.target.value);
+                  if (value) {
+                    setMetric(value);
+                    setThreshold(isBooleanAlertMetric(value) ? "true" : "90");
+                    setRecoveryThreshold(isBooleanAlertMetric(value) ? "" : "80");
+                  }
+                }}
+              >
+                {metrics.map((value) => (
+                  <option key={value} value={value}>
+                    {metricLabel(value)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {!booleanMetric ? (
+              <Field>
+                <FieldLabel htmlFor="alert-operator">Operator</FieldLabel>
+                <Select
+                  id="alert-operator"
+                  value={operator}
+                  onChange={(event) => {
+                    const value = resourceAlertOperators.find(
+                      (item) => item === event.target.value
+                    );
+                    if (value) {
+                      setOperator(value);
+                      const trigger = Number(threshold);
+                      if (Number.isFinite(trigger)) {
+                        setRecoveryThreshold(
+                          String(
+                            value === "lessThan" || value === "lessThanOrEqual"
+                              ? trigger + 10
+                              : trigger - 10
+                          )
+                        );
+                      }
+                    }
+                  }}
+                >
+                  {resourceAlertOperators
+                    .filter((value) => value !== "equals")
+                    .map((value) => (
+                      <option key={value} value={value}>
+                        {alertOperatorSymbol(value)}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            ) : null}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field>
+              <FieldLabel htmlFor="alert-threshold">Threshold</FieldLabel>
+              {booleanMetric ? (
+                <Select
+                  id="alert-threshold"
+                  value={threshold}
+                  onChange={(event) => setThreshold(event.target.value)}
+                >
+                  <option value="true">True</option>
+                  <option value="false">False</option>
+                </Select>
+              ) : (
+                <Input
+                  id="alert-threshold"
+                  type="number"
+                  step="any"
+                  value={threshold}
+                  onChange={(event) => setThreshold(event.target.value)}
+                  required
+                />
+              )}
+            </Field>
+            {!booleanMetric ? (
+              <Field>
+                <FieldLabel htmlFor="alert-recovery">Recovery</FieldLabel>
+                <Input
+                  id="alert-recovery"
+                  type="number"
+                  step="any"
+                  value={recoveryThreshold}
+                  onChange={(event) => setRecoveryThreshold(event.target.value)}
+                />
+              </Field>
+            ) : null}
+            <Field>
+              <FieldLabel htmlFor="alert-samples">Samples</FieldLabel>
+              <Input
+                id="alert-samples"
+                type="number"
+                min={1}
+                max={10}
+                value={requiredSamples}
+                onChange={(event) => setRequiredSamples(event.target.value)}
+                required
+              />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+              className="size-4 accent-[var(--color-lavender)]"
+            />
+            Enabled
+          </label>
+          <FieldError>{error}</FieldError>
+          <Button type="submit" variant="coral" disabled={busy}>
+            {busy ? "Saving…" : rule ? "Save" : "Save alert"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function metricLabel(metric: ResourceAlertMetric): string {
+  const labels: Record<ResourceAlertMetric, string> = {
+    cpuPercent: "CPU",
+    memoryPercent: "Memory",
+    storagePercent: "Storage",
+    loadAverage: "Load average",
+    batteryPercent: "Battery",
+    batteryTemperatureCelsius: "Battery temperature",
+    containerCount: "Containers",
+    unhealthyContainerCount: "Unhealthy containers",
+    internetAvailable: "Internet available",
+    lowMemory: "Low memory",
+    backgroundRestricted: "Background restricted",
+  };
+  return labels[metric];
+}
+
+function alertOperatorSymbol(operator: ResourceAlertOperator): string {
+  return (
+    {
+      greaterThan: ">",
+      greaterThanOrEqual: "≥",
+      lessThan: "<",
+      lessThanOrEqual: "≤",
+      equals: "=",
+    } as const
+  )[operator];
+}
+
+function isBooleanAlertMetric(metric: ResourceAlertMetric): boolean {
+  return (
+    metric === "internetAvailable" || metric === "lowMemory" || metric === "backgroundRestricted"
+  );
+}
+
+function availableAlertMetrics(kind: AgentKind | undefined): ResourceAlertMetric[] {
+  return kind === "mobile"
+    ? [
+        "batteryPercent",
+        "batteryTemperatureCelsius",
+        "memoryPercent",
+        "storagePercent",
+        "internetAvailable",
+        "lowMemory",
+        "backgroundRestricted",
+      ]
+    : kind === "desktop"
+      ? [
+          "cpuPercent",
+          "memoryPercent",
+          "storagePercent",
+          "loadAverage",
+          "containerCount",
+          "unhealthyContainerCount",
+        ]
+      : [];
+}
+
 function EditResourceDialog({
   open,
   onOpenChange,
   resource,
-  agents,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   resource: ResourceSummary;
-  agents: AgentSummary[];
   onSaved: () => Promise<void>;
 }) {
   const { activeTeam } = useAuth();
   const [name, setName] = useState(resource.name);
-  const [target, setTarget] = useState(resource.target);
   const [description, setDescription] = useState(resource.description ?? "");
   const [tags, setTags] = useState(resource.tags.join(", "));
-  const [agentId, setAgentId] = useState(resource.agentId ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setName(resource.name);
-      setTarget(resource.target);
       setDescription(resource.description ?? "");
       setTags(resource.tags.join(", "));
-      setAgentId(resource.agentId ?? "");
       setError("");
     }
   }, [open, resource]);
@@ -539,13 +1178,11 @@ function EditResourceDialog({
         method: "PATCH",
         ...jsonBody({
           name,
-          target,
           description,
           tags: tags
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean),
-          agentId: agentId || null,
         }),
       });
       await onSaved();
@@ -572,15 +1209,6 @@ function EditResourceDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="edit-target">Target</FieldLabel>
-            <Input
-              id="edit-target"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              required
-            />
-          </Field>
-          <Field>
             <FieldLabel htmlFor="edit-description">Description</FieldLabel>
             <Textarea
               id="edit-description"
@@ -592,21 +1220,6 @@ function EditResourceDialog({
           <Field>
             <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
             <Input id="edit-tags" value={tags} onChange={(event) => setTags(event.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="edit-agent">Agent</FieldLabel>
-            <Select
-              id="edit-agent"
-              value={agentId}
-              onChange={(event) => setAgentId(event.target.value)}
-            >
-              <option value="">Direct</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </Select>
           </Field>
           <FieldError>{error}</FieldError>
           <div className="flex justify-end gap-2">

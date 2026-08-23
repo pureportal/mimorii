@@ -20,7 +20,8 @@ export interface CheckRow {
   next_check_at: string | null;
   created_at: string;
   updated_at: string;
-  agent_id?: string | null;
+  agent_id: string | null;
+  encrypted_secret: string | null;
 }
 
 export interface ExecutedCheckResult {
@@ -36,5 +37,6 @@ export interface RunnableCheck {
   id: string;
   type: CheckType;
   config: CheckConfig;
+  secret: string | null;
   timeoutMs: number;
 }

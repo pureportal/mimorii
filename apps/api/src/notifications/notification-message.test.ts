@@ -20,6 +20,12 @@ describe("notificationMessage navigation", () => {
     );
   });
 
+  it("links resource alerts to the monitored resource in the Client", () => {
+    expect(notificationMessage("resource.alert.triggered", { resourceId: "device-1" }).path).toBe(
+      appRoutes.resource("device-1")
+    );
+  });
+
   it("keeps an explicit safe application path", () => {
     expect(notificationMessage("incident.opened", { path: appRoutes.alertHistory }).path).toBe(
       appRoutes.alertHistory

@@ -21,6 +21,7 @@ import { NotificationsModule } from "./notifications/notifications.module.js";
 import { ObjectivesModule } from "./objectives/objectives.module.js";
 import { PlatformSettingsModule } from "./platform-settings/platform-settings.module.js";
 import { ResourcesModule } from "./resources/resources.module.js";
+import { ResourceAlertsModule } from "./resource-alerts/resource-alerts.module.js";
 import { RetentionModule } from "./retention/retention.module.js";
 import { SponsorsModule } from "./sponsors/sponsors.module.js";
 import { StatusPagesModule } from "./status-pages/status-pages.module.js";
@@ -48,6 +49,7 @@ import { TeamsModule } from "./teams/teams.module.js";
     TeamsModule,
     DashboardsModule,
     ResourcesModule,
+    ResourceAlertsModule,
     RetentionModule,
     ChecksModule,
     HeartbeatsModule,

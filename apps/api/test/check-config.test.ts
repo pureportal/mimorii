@@ -7,9 +7,8 @@ describe("check configuration", () => {
   const service = new CheckConfigService();
 
   it("normalizes safe HTTP defaults", () => {
-    expect(service.validate("http", { url: "https://example.com/status" })).toEqual({
-      url: "https://example.com/status",
-      method: "GET",
+    expect(service.validate("http", { target: { url: "https://example.com/status" } })).toEqual({
+      target: { url: "https://example.com/status", method: "GET" },
       expectedStatuses: [200],
       followRedirects: false,
       validateTls: true,
@@ -18,8 +17,10 @@ describe("check configuration", () => {
 
   it("accepts supported HTTP methods", () => {
     for (const method of httpMethods) {
-      expect(service.validate("http", { url: "https://example.com/", method })).toMatchObject({
-        method,
+      expect(
+        service.validate("http", { target: { url: "https://example.com/", method } })
+      ).toMatchObject({
+        target: { method },
       });
     }
   });
@@ -27,8 +28,7 @@ describe("check configuration", () => {
   it("rejects unsupported HTTP methods", () => {
     expect(() =>
       service.validate("http", {
-        url: "https://example.com/",
-        method: "TRACE",
+        target: { url: "https://example.com/", method: "TRACE" },
       })
     ).toThrow(BadRequestException);
   });
@@ -36,9 +36,22 @@ describe("check configuration", () => {
   it("rejects embedded HTTP credentials", () => {
     expect(() =>
       service.validate("http", {
-        url: "https://user:secret@example.com/",
+        target: { url: "https://user:secret@example.com/" },
       })
     ).toThrow(BadRequestException);
+    expect(() =>
+      service.validate("http", {
+        target: {
+          url: "https://example.com/",
+          headers: { authorization: "Bearer plaintext" },
+        },
+      })
+    ).toThrow(BadRequestException);
+    expect(
+      service.validate("http", {
+        target: { url: "https://example.com/", secretHeaderName: "Authorization" },
+      })
+    ).toMatchObject({ target: { secretHeaderName: "authorization" } });
   });
 
   it("validates resource thresholds", () => {
@@ -50,17 +63,35 @@ describe("check configuration", () => {
   it("normalizes full HTTP assertions", () => {
     expect(
       service.validate("http", {
-        url: "https://example.com/health",
+        target: { url: "https://example.com/health" },
         expectedHeaders: { "Content-Type": "application/json" },
-        jsonPointer: "/status",
-        expectedJsonValue: "ok",
+        jsonAssertions: {
+          kind: "group",
+          operator: "and",
+          conditions: [
+            {
+              kind: "assertion",
+              name: "Status",
+              pointer: "/status",
+              operator: "equals",
+              expectedValue: "ok",
+            },
+            {
+              kind: "group",
+              operator: "or",
+              conditions: [
+                { kind: "assertion", name: "Primary", pointer: "/primary", operator: "exists" },
+                { kind: "assertion", name: "Replica", pointer: "/replica", operator: "exists" },
+              ],
+            },
+          ],
+        },
         latencyWarningMs: 750,
         certificateWarningDays: 21,
       })
     ).toMatchObject({
       expectedHeaders: { "content-type": "application/json" },
-      jsonPointer: "/status",
-      expectedJsonValue: "ok",
+      jsonAssertions: { operator: "and" },
       latencyWarningMs: 750,
       certificateWarningDays: 21,
     });
@@ -77,5 +108,74 @@ describe("check configuration", () => {
       warningPercent: 90,
       criticalPercent: 95,
     });
+  });
+
+  it("normalizes ICMP, WAN, Docker, and database configurations", () => {
+    expect(
+      service.validate("icmp", { target: { host: "Example.COM" }, packetCount: 4 })
+    ).toMatchObject({
+      target: { host: "example.com" },
+      packetCount: 4,
+      minimumSuccessPercent: 100,
+    });
+    expect(
+      service.validate("wan", {
+        targets: [
+          { name: "Primary", host: "1.1.1.1" },
+          { name: "Secondary", host: "8.8.8.8" },
+        ],
+        requiredSuccessfulTargets: 1,
+      })
+    ).toMatchObject({ requiredSuccessfulTargets: 1, packetCount: 2 });
+    expect(service.validate("docker", {})).toMatchObject({
+      requireHealthy: true,
+      requireRunning: true,
+      maximumRestarts: 3,
+    });
+    expect(
+      service.validate("database", {
+        target: {
+          engine: "postgresql",
+          host: "DB.EXAMPLE.COM",
+          database: "app",
+          username: "monitor",
+          tls: true,
+        },
+      })
+    ).toMatchObject({
+      target: { host: "db.example.com", port: 5432, tls: true },
+      connectionWarningPercent: 85,
+    });
+  });
+
+  it("rejects impossible WAN requirements and mutating database statements", () => {
+    expect(() =>
+      service.validate("wan", {
+        targets: [{ name: "Primary", host: "1.1.1.1" }],
+        requiredSuccessfulTargets: 2,
+      })
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.validate("database", {
+        target: {
+          engine: "postgresql",
+          host: "db.example.com",
+          database: "app",
+          username: "monitor",
+          tls: true,
+        },
+        query: { statement: "DELETE FROM users" },
+      })
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.validate("database", {
+        target: {
+          engine: "redis",
+          host: "cache.example.com",
+          database: "sessions",
+          tls: true,
+        },
+      })
+    ).toThrow(BadRequestException);
   });
 });

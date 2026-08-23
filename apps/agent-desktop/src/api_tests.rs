@@ -21,6 +21,7 @@ fn config(server_url: String) -> AgentConfig {
 
 fn snapshot() -> HostSnapshot {
     HostSnapshot {
+        snapshot_id: "00000000-0000-4000-8000-000000000001".to_owned(),
         hostname: "relay-01".to_owned(),
         platform: "test platform".to_owned(),
         version: "0.1.0".to_owned(),
@@ -44,6 +45,7 @@ fn snapshot() -> HostSnapshot {
             category: "database".to_owned(),
             version: Some("16".to_owned()),
         }],
+        container_runtime: None,
         observed_at: "2026-08-12T20:00:00Z".to_owned(),
     }
 }
@@ -59,7 +61,8 @@ fn poll_authenticates_clamps_the_limit_and_deserializes_configuration_and_tasks(
                 "checkId": "check-1",
                 "type": "tcp",
                 "timeoutMs": 2500,
-                "config": { "host": "database.internal", "port": 5432 },
+                "config": { "target": { "host": "database.internal", "port": 5432 } },
+                "secret": null,
                 "issuedAt": "2026-08-12T20:00:00Z"
             }]
         })

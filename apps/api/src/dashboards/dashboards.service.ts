@@ -9,6 +9,7 @@ import {
   dashboardIncidentLimits,
   dashboardMetrics,
   dashboardWindowDays,
+  resourceMetricNames,
   type DashboardAccessMode,
   type DashboardConfiguration,
   type DashboardIncidentLimit,
@@ -329,6 +330,7 @@ export class DashboardsService {
         !input.metric ||
         !input.windowDays ||
         input.limit !== undefined ||
+        (resourceMetricNames.some((metric) => metric === input.metric) && !input.resourceId) ||
         ((input.metric === "monitorCount" || input.metric === "openIncidents") &&
           input.windowDays !== 1)
       ) {

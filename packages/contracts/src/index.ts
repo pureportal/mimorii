@@ -36,10 +36,20 @@ export const appRoutes = {
   platformAudit: "/app/platform/audit-log",
 } as const;
 
-export const resourceKinds = ["server", "service", "endpoint"] as const;
+export const resourceKinds = ["host", "device", "service"] as const;
 export type ResourceKind = (typeof resourceKinds)[number];
 
-export const checkTypes = ["http", "tcp", "dns", "host", "disk"] as const;
+export const checkTypes = [
+  "http",
+  "tcp",
+  "dns",
+  "icmp",
+  "wan",
+  "host",
+  "disk",
+  "docker",
+  "database",
+] as const;
 export type CheckType = (typeof checkTypes)[number];
 
 export const httpMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
@@ -59,6 +69,13 @@ export const dashboardMetrics = [
   "averageLatency",
   "monitorCount",
   "openIncidents",
+  "cpuPercent",
+  "memoryPercent",
+  "storagePercent",
+  "loadAverage",
+  "batteryPercent",
+  "containerCount",
+  "unhealthyContainerCount",
 ] as const;
 export type DashboardMetric = (typeof dashboardMetrics)[number];
 
@@ -118,6 +135,8 @@ export const notificationEvents = [
   "maintenance.started",
   "maintenance.completed",
   "slo.breached",
+  "resource.alert.triggered",
+  "resource.alert.recovered",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 
@@ -297,10 +316,9 @@ export interface ResourceSummary {
   teamId: string;
   name: string;
   kind: ResourceKind;
-  target: string;
   description: string | null;
   tags: string[];
-  agentId: string | null;
+  agent: ResourceAgentSummary | null;
   status: CheckStatus;
   checksUp: number;
   checksTotal: number;
@@ -310,14 +328,57 @@ export interface ResourceSummary {
   createdAt: string;
 }
 
-export interface HttpCheckConfig {
+export interface ResourceAgentSummary {
+  id: string;
+  kind: AgentKind;
+  status: AgentStatus;
+  platform: string | null;
+  version: string | null;
+  lastSeenAt: string | null;
+}
+
+export interface HttpCheckTarget {
   url: string;
   method: HttpMethod;
+  headers?: Record<string, string>;
+  secretHeaderName?: string;
+  body?: string;
+}
+
+export const httpJsonAssertionOperators = [
+  "equals",
+  "notEquals",
+  "contains",
+  "exists",
+  "greaterThan",
+  "greaterThanOrEqual",
+  "lessThan",
+  "lessThanOrEqual",
+] as const;
+export type HttpJsonAssertionOperator = (typeof httpJsonAssertionOperators)[number];
+
+export interface HttpJsonAssertion {
+  kind: "assertion";
+  name: string;
+  pointer: string;
+  operator: HttpJsonAssertionOperator;
+  expectedValue?: string | number | boolean | null;
+}
+
+export interface HttpJsonAssertionGroup {
+  kind: "group";
+  operator: "and" | "or";
+  conditions: HttpJsonAssertionNode[];
+}
+
+export type HttpJsonAssertionNode = HttpJsonAssertion | HttpJsonAssertionGroup;
+
+export interface HttpCheckConfig {
+  target: HttpCheckTarget;
   expectedStatuses: number[];
   responseContains?: string;
   expectedHeaders?: Record<string, string>;
-  jsonPointer?: string;
-  expectedJsonValue?: string | number | boolean | null;
+  jsonAssertions?: HttpJsonAssertionGroup;
   latencyWarningMs?: number;
   certificateWarningDays?: number;
   followRedirects: boolean;
@@ -325,14 +386,37 @@ export interface HttpCheckConfig {
 }
 
 export interface TcpCheckConfig {
-  host: string;
-  port: number;
+  target: {
+    host: string;
+    port: number;
+  };
 }
 
 export interface DnsCheckConfig {
-  hostname: string;
+  target: {
+    hostname: string;
+  };
   recordType: "A" | "AAAA" | "CNAME" | "MX" | "NS" | "SRV" | "TXT";
   expectedValue?: string;
+}
+
+export interface IcmpCheckConfig {
+  target: {
+    host: string;
+  };
+  packetCount: number;
+  minimumSuccessPercent: number;
+  latencyWarningMs?: number;
+}
+
+export interface WanCheckConfig {
+  targets: Array<{
+    name: string;
+    host: string;
+  }>;
+  requiredSuccessfulTargets: number;
+  packetCount: number;
+  latencyWarningMs?: number;
 }
 
 export interface HostCheckConfig {
@@ -352,12 +436,48 @@ export interface DiskCheckConfig {
   criticalPercent: number;
 }
 
+export interface DockerCheckConfig {
+  containerNamePattern?: string;
+  requireHealthy: boolean;
+  requireRunning: boolean;
+  maximumRestarts: number;
+  cpuWarningPercent: number;
+  memoryWarningPercent: number;
+}
+
+export const databaseEngines = ["postgresql", "mysql", "redis"] as const;
+export type DatabaseEngine = (typeof databaseEngines)[number];
+
+export interface DatabaseCheckConfig {
+  target: {
+    engine: DatabaseEngine;
+    host: string;
+    port: number;
+    database?: string;
+    username?: string;
+    tls: boolean;
+  };
+  connectionWarningPercent: number;
+  replicationLagWarningSeconds?: number;
+  slowQueryWarningCount?: number;
+  query?: {
+    statement: string;
+    expectedValue?: string | number | boolean | null;
+  };
+}
+
 export type CheckConfig =
   | HttpCheckConfig
   | TcpCheckConfig
   | DnsCheckConfig
+  | IcmpCheckConfig
+  | WanCheckConfig
   | HostCheckConfig
-  | DiskCheckConfig;
+  | DiskCheckConfig
+  | DockerCheckConfig
+  | DatabaseCheckConfig;
+
+export type CheckExecution = { kind: "direct" } | { kind: "agent"; agentId: string };
 
 export interface CheckSummary {
   id: string;
@@ -372,6 +492,8 @@ export interface CheckSummary {
   failureThreshold: number;
   recoveryThreshold: number;
   config: CheckConfig;
+  execution: CheckExecution;
+  secretConfigured: boolean;
   consecutiveFailures: number;
   lastCheckedAt: string | null;
   nextCheckAt: string | null;
@@ -633,7 +755,8 @@ export interface DashboardMetricViewItem extends DashboardViewItemBase {
   windowDays: DashboardWindowDays;
   resourceName: string | null;
   value: number | null;
-  format: "percent" | "milliseconds" | "count";
+  format: "percent" | "milliseconds" | "count" | "number";
+  series: Array<{ observedAt: string; value: number }>;
 }
 
 export interface DashboardUptimeViewItem extends DashboardViewItemBase {
@@ -742,8 +865,9 @@ export interface AuditEventSummary {
 
 export interface AgentSummary {
   id: string;
+  resourceId: string;
+  resourceName: string;
   teamId: string;
-  name: string;
   kind: AgentKind;
   collectionIntervalSeconds: number;
   status: AgentStatus;
@@ -757,7 +881,8 @@ export interface AgentSummary {
 
 export interface AgentEnrollment {
   agentId: string;
-  name: string;
+  resourceId: string;
+  resourceName: string;
   kind: AgentKind;
   collectionIntervalSeconds: number;
 }
@@ -858,6 +983,7 @@ export interface MobileDeviceStatusResponse {
 }
 
 export interface HostSnapshot {
+  snapshotId: string;
   hostname: string;
   platform: string;
   version: string;
@@ -881,7 +1007,88 @@ export interface HostSnapshot {
     category: TechnologyObservation["category"];
     version: string | null;
   }>;
+  containerRuntime: ContainerRuntimeSnapshot | null;
   observedAt: string;
+}
+
+export interface ContainerRuntimeSnapshot {
+  engineVersion: string;
+  containers: ContainerSnapshot[];
+}
+
+export interface ContainerSnapshot {
+  id: string;
+  name: string;
+  image: string;
+  state: "created" | "running" | "paused" | "restarting" | "exited" | "dead" | "unknown";
+  health: "healthy" | "unhealthy" | "starting" | "none";
+  restartCount: number;
+  cpuPercent: number;
+  memoryUsedBytes: number;
+  memoryLimitBytes: number;
+  networkReceivedBytes: number;
+  networkTransmittedBytes: number;
+  blockReadBytes: number;
+  blockWrittenBytes: number;
+  composeProject: string | null;
+  composeService: string | null;
+  ports: string[];
+  startedAt: string | null;
+}
+
+export const resourceMetricNames = [
+  "cpuPercent",
+  "memoryPercent",
+  "storagePercent",
+  "loadAverage",
+  "batteryPercent",
+  "batteryTemperatureCelsius",
+  "containerCount",
+  "unhealthyContainerCount",
+] as const;
+export type ResourceMetricName = (typeof resourceMetricNames)[number];
+
+export interface ResourceMetricPoint {
+  observedAt: string;
+  value: number;
+}
+
+export interface ResourceMetricSeries {
+  metric: ResourceMetricName;
+  points: ResourceMetricPoint[];
+}
+
+export const resourceAlertMetrics = [
+  ...resourceMetricNames,
+  "internetAvailable",
+  "lowMemory",
+  "backgroundRestricted",
+] as const;
+export type ResourceAlertMetric = (typeof resourceAlertMetrics)[number];
+
+export const resourceAlertOperators = [
+  "greaterThan",
+  "greaterThanOrEqual",
+  "lessThan",
+  "lessThanOrEqual",
+  "equals",
+] as const;
+export type ResourceAlertOperator = (typeof resourceAlertOperators)[number];
+
+export interface ResourceAlertRuleSummary {
+  id: string;
+  resourceId: string;
+  name: string;
+  metric: ResourceAlertMetric;
+  operator: ResourceAlertOperator;
+  threshold: number | boolean;
+  recoveryThreshold: number | boolean | null;
+  requiredSamples: number;
+  enabled: boolean;
+  active: boolean;
+  lastEvaluatedAt: string | null;
+  triggeredAt: string | null;
+  createdAt: string;
 }
 
 export interface AgentTask {
@@ -890,6 +1097,7 @@ export interface AgentTask {
   type: CheckType;
   timeoutMs: number;
   config: CheckConfig;
+  secret: string | null;
   issuedAt: string;
 }
 

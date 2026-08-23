@@ -1,6 +1,6 @@
 import type { AgentSummary, CheckType, ResourceSummary } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Globe2, Plus, Search, Waypoints } from "lucide-react";
+import { Boxes, Globe2, Plus, Search, Waypoints } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -35,7 +35,7 @@ export function ResourcesPage() {
   const filtered = useMemo(
     () =>
       resources.data?.filter((resource) =>
-        `${resource.name} ${resource.target} ${resource.tags.join(" ")}`
+        `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`
           .toLowerCase()
           .includes(search.toLowerCase())
       ) ?? [],
@@ -121,7 +121,9 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
                 <StatusBadge status={resource.status} />
               </div>
             </div>
-            <p className="mt-1 truncate text-sm text-muted">{resource.target}</p>
+            <p className="mt-1 truncate text-sm text-muted">
+              {resource.agent?.platform ?? resource.kind}
+            </p>
           </div>
         </div>
         <div className="mt-7 grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
@@ -153,7 +155,7 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
   );
 }
 
-type SetupMode = "website" | "port" | "agent";
+type SetupMode = "website" | "port" | "service";
 
 function QuickResourceDialog({
   open,
@@ -197,26 +199,29 @@ function QuickResourceDialog({
         method: "POST",
         ...jsonBody({
           name,
-          kind: mode === "website" ? "endpoint" : "server",
-          target,
+          kind: "service",
           tags: [],
-          ...(agentId ? { agentId } : {}),
         }),
       });
       resourceId = resource.id;
       const check = defaultCheck(mode, target, port, statusCode, content);
-      await api(`/teams/${teamId}/checks`, {
-        method: "POST",
-        ...jsonBody({
-          resourceId,
-          name: check.name,
-          type: check.type,
-          config: check.config,
-          intervalSeconds: Number(interval),
-          timeoutMs: Number(timeout),
-          enabled: true,
-        }),
-      });
+      if (check) {
+        await api(`/teams/${teamId}/checks`, {
+          method: "POST",
+          ...jsonBody({
+            resourceId,
+            name: check.name,
+            type: check.type,
+            config: check.config,
+            execution: agentId ? { kind: "agent", agentId } : { kind: "direct" },
+            intervalSeconds: Number(interval),
+            timeoutMs: Number(timeout),
+            failureThreshold: 2,
+            recoveryThreshold: 1,
+            enabled: true,
+          }),
+        });
+      }
       await onCreated();
       onOpenChange(false);
       setName("");
@@ -256,13 +261,13 @@ function QuickResourceDialog({
               }}
             />
             <ModeButton
-              active={mode === "agent"}
-              icon={Bot}
-              label="Server"
+              active={mode === "service"}
+              icon={Boxes}
+              label="Service"
               onClick={() => {
-                setMode("agent");
-                setTarget("Local server");
-                setAgentId(agents[0]?.id ?? "");
+                setMode("service");
+                setTarget("");
+                setAgentId("");
               }}
             />
           </div>
@@ -272,39 +277,41 @@ function QuickResourceDialog({
               id="resource-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder={mode === "website" ? "Main website" : "Production server"}
+              placeholder={mode === "website" ? "Main website" : "Production service"}
               maxLength={100}
               required
             />
           </Field>
-          <div className={mode === "port" ? "grid gap-4 sm:grid-cols-[1fr_120px]" : "grid gap-4"}>
-            <Field>
-              <FieldLabel htmlFor="resource-target">
-                {mode === "website" ? "URL" : mode === "port" ? "Host" : "Hostname"}
-              </FieldLabel>
-              <Input
-                id="resource-target"
-                type={mode === "website" ? "url" : "text"}
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-                required
-              />
-            </Field>
-            {mode === "port" ? (
+          {mode !== "service" ? (
+            <div className={mode === "port" ? "grid gap-4 sm:grid-cols-[1fr_120px]" : "grid gap-4"}>
               <Field>
-                <FieldLabel htmlFor="resource-port">Port</FieldLabel>
+                <FieldLabel htmlFor="resource-target">
+                  {mode === "website" ? "URL" : mode === "port" ? "Host" : "Hostname"}
+                </FieldLabel>
                 <Input
-                  id="resource-port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={port}
-                  onChange={(event) => setPort(event.target.value)}
+                  id="resource-target"
+                  type={mode === "website" ? "url" : "text"}
+                  value={target}
+                  onChange={(event) => setTarget(event.target.value)}
                   required
                 />
               </Field>
-            ) : null}
-          </div>
+              {mode === "port" ? (
+                <Field>
+                  <FieldLabel htmlFor="resource-port">Port</FieldLabel>
+                  <Input
+                    id="resource-port"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={port}
+                    onChange={(event) => setPort(event.target.value)}
+                    required
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
           {mode === "website" || mode === "port" ? (
             <Field>
               <FieldLabel htmlFor="resource-agent">Agent</FieldLabel>
@@ -316,34 +323,12 @@ function QuickResourceDialog({
                 <option value="">Direct</option>
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.name}
+                    {agent.resourceName}
                   </option>
                 ))}
               </Select>
             </Field>
-          ) : (
-            <Field>
-              <FieldLabel htmlFor="resource-agent-required">Agent</FieldLabel>
-              <Select
-                id="resource-agent-required"
-                value={agentId}
-                onChange={(event) => setAgentId(event.target.value)}
-                required
-              >
-                <option value="" disabled>
-                  Select agent
-                </option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </Select>
-              {agents.length === 0 ? (
-                <FieldError>Add an agent before adding a server health check</FieldError>
-              ) : null}
-            </Field>
-          )}
+          ) : null}
 
           <details className="rounded-2xl border border-line px-4 py-3">
             <summary className="text-sm font-semibold">Advanced</summary>
@@ -372,7 +357,7 @@ function QuickResourceDialog({
                   </Field>
                 </>
               ) : null}
-              {mode !== "agent" ? (
+              {mode !== "service" ? (
                 <>
                   <Field>
                     <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
@@ -405,7 +390,7 @@ function QuickResourceDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="coral" disabled={busy || (mode === "agent" && !agentId)}>
+            <Button type="submit" variant="coral" disabled={busy}>
               {busy ? "Adding…" : "Add resource"}
             </Button>
           </div>
@@ -444,14 +429,13 @@ function defaultCheck(
   port: string,
   status: string,
   content: string
-): { name: string; type: CheckType; config: Record<string, unknown> } {
+): { name: string; type: CheckType; config: Record<string, unknown> } | null {
   if (mode === "website")
     return {
       name: "HTTP availability",
       type: "http",
       config: {
-        url: target,
-        method: "GET",
+        target: { url: target, method: "GET" },
         expectedStatuses: [Number(status)],
         ...(content ? { responseContains: content } : {}),
         followRedirects: true,
@@ -459,10 +443,10 @@ function defaultCheck(
       },
     };
   if (mode === "port")
-    return { name: `TCP ${port}`, type: "tcp", config: { host: target, port: Number(port) } };
-  return {
-    name: "Server health",
-    type: "host",
-    config: { cpuWarningPercent: 90, memoryWarningPercent: 90, loadWarning: 4 },
-  };
+    return {
+      name: `TCP ${port}`,
+      type: "tcp",
+      config: { target: { host: target, port: Number(port) } },
+    };
+  return null;
 }

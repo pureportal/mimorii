@@ -21,7 +21,37 @@ pub struct TechnologySnapshot {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ContainerSnapshot {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub state: String,
+    pub health: String,
+    pub restart_count: u64,
+    pub cpu_percent: f64,
+    pub memory_used_bytes: u64,
+    pub memory_limit_bytes: u64,
+    pub network_received_bytes: u64,
+    pub network_transmitted_bytes: u64,
+    pub block_read_bytes: u64,
+    pub block_written_bytes: u64,
+    pub compose_project: Option<String>,
+    pub compose_service: Option<String>,
+    pub ports: Vec<String>,
+    pub started_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerRuntimeSnapshot {
+    pub engine_version: String,
+    pub containers: Vec<ContainerSnapshot>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HostSnapshot {
+    pub snapshot_id: String,
     pub hostname: String,
     pub platform: String,
     pub version: String,
@@ -37,6 +67,7 @@ pub struct HostSnapshot {
     pub network_transmitted_bytes: u64,
     pub disks: Vec<DiskSnapshot>,
     pub technologies: Vec<TechnologySnapshot>,
+    pub container_runtime: Option<ContainerRuntimeSnapshot>,
     pub observed_at: String,
 }
 
@@ -50,6 +81,7 @@ pub struct AgentTask {
     pub check_type: CheckType,
     pub timeout_ms: u64,
     pub config: Value,
+    pub secret: Option<String>,
     #[serde(rename = "issuedAt")]
     pub _issued_at: String,
 }
@@ -67,8 +99,12 @@ pub enum CheckType {
     Http,
     Tcp,
     Dns,
+    Icmp,
+    Wan,
     Host,
     Disk,
+    Docker,
+    Database,
 }
 
 #[derive(Clone, Debug, Serialize)]

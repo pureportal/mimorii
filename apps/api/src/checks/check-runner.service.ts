@@ -1,5 +1,13 @@
 import { Injectable } from "@nestjs/common";
-import type { DnsCheckConfig, HttpCheckConfig, TcpCheckConfig } from "@mimorii/contracts";
+import type {
+  DatabaseCheckConfig,
+  DnsCheckConfig,
+  HttpCheckConfig,
+  HttpJsonAssertionNode,
+  IcmpCheckConfig,
+  TcpCheckConfig,
+  WanCheckConfig,
+} from "@mimorii/contracts";
 import { Resolver } from "node:dns/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -7,25 +15,48 @@ import { connect } from "node:net";
 import { TLSSocket } from "node:tls";
 import type { ExecutedCheckResult, RunnableCheck } from "./checks.types.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
+import { DatabaseCheckService } from "./database-check.service.js";
+import { IcmpService, type IcmpProbeResult } from "./icmp.service.js";
 
 const MAX_HTTP_BODY_BYTES = 512 * 1024;
 
 @Injectable()
 export class CheckRunnerService {
-  constructor(private readonly targets: TargetSafetyService) {}
+  constructor(
+    private readonly targets: TargetSafetyService,
+    private readonly icmpChecks: IcmpService,
+    private readonly databaseChecks: DatabaseCheckService
+  ) {}
 
   async run(check: RunnableCheck): Promise<ExecutedCheckResult> {
     const checkedAt = new Date().toISOString();
     try {
       switch (check.type) {
         case "http":
-          return await this.http(check.config as HttpCheckConfig, check.timeoutMs, checkedAt);
+          return await this.http(
+            check.config as HttpCheckConfig,
+            check.secret,
+            check.timeoutMs,
+            checkedAt
+          );
         case "tcp":
           return await this.tcp(check.config as TcpCheckConfig, check.timeoutMs, checkedAt);
         case "dns":
           return await this.dns(check.config as DnsCheckConfig, check.timeoutMs, checkedAt);
+        case "icmp":
+          return await this.icmp(check.config as IcmpCheckConfig, check.timeoutMs, checkedAt);
+        case "wan":
+          return await this.wan(check.config as WanCheckConfig, check.timeoutMs, checkedAt);
+        case "database":
+          return await this.database(
+            check.config as DatabaseCheckConfig,
+            check.secret,
+            check.timeoutMs,
+            checkedAt
+          );
         case "host":
         case "disk":
+        case "docker":
           return this.down("Check requires an agent", checkedAt);
       }
     } catch (error) {
@@ -35,14 +66,15 @@ export class CheckRunnerService {
 
   private async http(
     config: HttpCheckConfig,
+    secret: string | null,
     timeoutMs: number,
     checkedAt: string,
     redirects = 0
   ): Promise<ExecutedCheckResult> {
-    const url = this.targets.validateHttpUrl(config.url);
+    const url = this.targets.validateHttpUrl(config.target.url);
     const addresses = await this.targets.resolvePublicHost(url.hostname);
     const started = performance.now();
-    const response = await this.requestHttp(url, addresses[0]!, config, timeoutMs);
+    const response = await this.requestHttp(url, addresses[0]!, config, secret, timeoutMs);
     const latencyMs = Math.round((performance.now() - started) * 10) / 10;
 
     if (
@@ -54,7 +86,14 @@ export class CheckRunnerService {
       if (redirects >= 3)
         return this.down("Too many redirects", checkedAt, latencyMs, response.statusCode);
       const nextUrl = new URL(response.location, url);
-      return this.http({ ...config, url: nextUrl.toString() }, timeoutMs, checkedAt, redirects + 1);
+      const redirectedSecret = nextUrl.origin === url.origin ? secret : null;
+      return this.http(
+        { ...config, target: { ...config.target, url: nextUrl.toString() } },
+        redirectedSecret,
+        timeoutMs,
+        checkedAt,
+        redirects + 1
+      );
     }
 
     if (!config.expectedStatuses.includes(response.statusCode)) {
@@ -86,7 +125,7 @@ export class CheckRunnerService {
         );
       }
     }
-    if (config.jsonPointer) {
+    if (config.jsonAssertions) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(response.body) as unknown;
@@ -96,21 +135,10 @@ export class CheckRunnerService {
           ...response.metrics,
         });
       }
-      const assertion = this.jsonPointer(parsed, config.jsonPointer);
-      if (!assertion.found) {
-        return this.down(
-          "Expected JSON value was not found",
-          checkedAt,
-          latencyMs,
-          response.statusCode,
-          { responseBytes: response.bytes, ...response.metrics }
-        );
-      }
-      if (
-        Object.hasOwn(config, "expectedJsonValue") &&
-        assertion.value !== config.expectedJsonValue
-      ) {
-        return this.down("JSON value did not match", checkedAt, latencyMs, response.statusCode, {
+      const assertion = this.evaluateJsonAssertions(parsed, config.jsonAssertions);
+      Object.assign(response.metrics, assertion.metrics);
+      if (!assertion.matches) {
+        return this.down(assertion.message, checkedAt, latencyMs, response.statusCode, {
           responseBytes: response.bytes,
           ...response.metrics,
         });
@@ -151,6 +179,7 @@ export class CheckRunnerService {
     url: URL,
     address: string,
     config: HttpCheckConfig,
+    secret: string | null,
     timeoutMs: number
   ): Promise<{
     statusCode: number;
@@ -167,11 +196,15 @@ export class CheckRunnerService {
           hostname: address,
           port: url.port || (url.protocol === "https:" ? 443 : 80),
           path: `${url.pathname}${url.search}`,
-          method: config.method,
+          method: config.target.method,
           headers: {
             host: url.host,
             accept: "*/*",
             "user-agent": "Mimorii/0.1 uptime-check",
+            ...config.target.headers,
+            ...(config.target.secretHeaderName && secret
+              ? { [config.target.secretHeaderName]: secret }
+              : {}),
           },
           ...(url.protocol === "https:"
             ? { servername: url.hostname, rejectUnauthorized: config.validateTls }
@@ -234,7 +267,7 @@ export class CheckRunnerService {
       );
       request.setTimeout(timeoutMs, () => request.destroy(new Error("timeout")));
       request.on("error", reject);
-      request.end();
+      request.end(config.target.body);
     });
   }
 
@@ -243,10 +276,10 @@ export class CheckRunnerService {
     timeoutMs: number,
     checkedAt: string
   ): Promise<ExecutedCheckResult> {
-    const addresses = await this.targets.resolvePublicHost(config.host);
+    const addresses = await this.targets.resolvePublicHost(config.target.host);
     const started = performance.now();
     await new Promise<void>((resolve, reject) => {
-      const socket = connect({ host: addresses[0]!, port: config.port });
+      const socket = connect({ host: addresses[0]!, port: config.target.port });
       socket.setTimeout(timeoutMs);
       socket.once("connect", () => {
         socket.destroy();
@@ -261,7 +294,7 @@ export class CheckRunnerService {
       latencyMs,
       statusCode: null,
       message: latencyMs >= timeoutMs * 0.75 ? "Connection is near the timeout" : null,
-      metrics: { port: config.port },
+      metrics: { port: config.target.port },
       checkedAt,
     };
   }
@@ -271,7 +304,7 @@ export class CheckRunnerService {
     timeoutMs: number,
     checkedAt: string
   ): Promise<ExecutedCheckResult> {
-    this.targets.normalizeHost(config.hostname);
+    this.targets.normalizeHost(config.target.hostname);
     const resolver = new Resolver({ timeout: timeoutMs, tries: 1 });
     const started = performance.now();
     const records = await this.resolveRecords(resolver, config);
@@ -291,26 +324,153 @@ export class CheckRunnerService {
     };
   }
 
+  private async icmp(
+    config: IcmpCheckConfig,
+    timeoutMs: number,
+    checkedAt: string
+  ): Promise<ExecutedCheckResult> {
+    const addresses = await this.targets.resolvePublicHost(config.target.host);
+    const probe = await this.icmpChecks.probe(addresses[0]!, config.packetCount, timeoutMs);
+    return this.icmpResult(probe, config.minimumSuccessPercent, config.latencyWarningMs, checkedAt);
+  }
+
+  private async wan(
+    config: WanCheckConfig,
+    timeoutMs: number,
+    checkedAt: string
+  ): Promise<ExecutedCheckResult> {
+    const probes = await Promise.all(
+      config.targets.map(async (target) => {
+        const addresses = await this.targets.resolvePublicHost(target.host);
+        const probe = await this.icmpChecks.probe(addresses[0]!, config.packetCount, timeoutMs);
+        return { target, probe };
+      })
+    );
+    const successful = probes.filter(({ probe }) => probe.received > 0).length;
+    const latencies = probes.flatMap(({ probe }) =>
+      probe.averageLatencyMs === null ? [] : [probe.averageLatencyMs]
+    );
+    const averageLatencyMs = latencies.length
+      ? Math.round((latencies.reduce((sum, latency) => sum + latency, 0) / latencies.length) * 10) /
+        10
+      : null;
+    const metrics: Record<string, number | string | boolean | null> = {
+      targetCount: probes.length,
+      reachableTargets: successful,
+      averageLatencyMs,
+    };
+    for (const { target, probe } of probes) {
+      const key = target.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ".")
+        .replace(/^\.|\.$/g, "");
+      metrics[`target.${key}.reachable`] = probe.received > 0;
+      metrics[`target.${key}.latencyMs`] = probe.averageLatencyMs;
+      metrics[`target.${key}.lossPercent`] = probe.lossPercent;
+    }
+    if (successful < config.requiredSuccessfulTargets) {
+      return this.down(
+        "WAN availability requirement was not met",
+        checkedAt,
+        averageLatencyMs,
+        null,
+        metrics
+      );
+    }
+    const latencyWarning =
+      config.latencyWarningMs !== undefined &&
+      averageLatencyMs !== null &&
+      averageLatencyMs >= config.latencyWarningMs;
+    const partial = successful < probes.length;
+    return {
+      status: latencyWarning || partial ? "degraded" : "up",
+      latencyMs: averageLatencyMs,
+      statusCode: null,
+      message: partial
+        ? "Some WAN targets are unreachable"
+        : latencyWarning
+          ? "WAN latency exceeded the warning threshold"
+          : null,
+      metrics,
+      checkedAt,
+    };
+  }
+
+  private async database(
+    config: DatabaseCheckConfig,
+    secret: string | null,
+    timeoutMs: number,
+    checkedAt: string
+  ): Promise<ExecutedCheckResult> {
+    const addresses = await this.targets.resolvePublicHost(config.target.host);
+    const result = await this.databaseChecks.probe(config, secret, addresses[0]!, timeoutMs);
+    return {
+      status: result.degraded ? "degraded" : "up",
+      latencyMs: result.latencyMs,
+      statusCode: null,
+      message: result.message,
+      metrics: result.metrics,
+      checkedAt,
+    };
+  }
+
+  private icmpResult(
+    probe: IcmpProbeResult,
+    minimumSuccessPercent: number,
+    latencyWarningMs: number | undefined,
+    checkedAt: string
+  ): ExecutedCheckResult {
+    const successPercent = probe.sent ? (probe.received / probe.sent) * 100 : 0;
+    const metrics = {
+      packetsSent: probe.sent,
+      packetsReceived: probe.received,
+      packetLossPercent: probe.lossPercent,
+      minimumLatencyMs: probe.minimumLatencyMs,
+      maximumLatencyMs: probe.maximumLatencyMs,
+    };
+    if (successPercent < minimumSuccessPercent) {
+      return this.down(
+        "ICMP response requirement was not met",
+        checkedAt,
+        probe.averageLatencyMs,
+        null,
+        metrics
+      );
+    }
+    const degraded =
+      latencyWarningMs !== undefined &&
+      probe.averageLatencyMs !== null &&
+      probe.averageLatencyMs >= latencyWarningMs;
+    return {
+      status: degraded ? "degraded" : "up",
+      latencyMs: probe.averageLatencyMs,
+      statusCode: null,
+      message: degraded ? "ICMP latency exceeded the warning threshold" : null,
+      metrics,
+      checkedAt,
+    };
+  }
+
   private async resolveRecords(resolver: Resolver, config: DnsCheckConfig): Promise<string[]> {
     switch (config.recordType) {
       case "A":
-        return resolver.resolve4(config.hostname);
+        return resolver.resolve4(config.target.hostname);
       case "AAAA":
-        return resolver.resolve6(config.hostname);
+        return resolver.resolve6(config.target.hostname);
       case "CNAME":
-        return resolver.resolveCname(config.hostname);
+        return resolver.resolveCname(config.target.hostname);
       case "MX":
-        return (await resolver.resolveMx(config.hostname)).map(
+        return (await resolver.resolveMx(config.target.hostname)).map(
           (record) => `${record.priority} ${record.exchange}`
         );
       case "NS":
-        return resolver.resolveNs(config.hostname);
+        return resolver.resolveNs(config.target.hostname);
       case "SRV":
-        return (await resolver.resolveSrv(config.hostname)).map(
+        return (await resolver.resolveSrv(config.target.hostname)).map(
           (record) => `${record.priority} ${record.weight} ${record.port} ${record.name}`
         );
       case "TXT":
-        return (await resolver.resolveTxt(config.hostname)).map((record) => record.join(""));
+        return (await resolver.resolveTxt(config.target.hostname)).map((record) => record.join(""));
     }
   }
 
@@ -333,6 +493,81 @@ export class CheckRunnerService {
     return { found: true, value: current };
   }
 
+  private evaluateJsonAssertions(
+    root: unknown,
+    node: HttpJsonAssertionNode
+  ): {
+    matches: boolean;
+    message: string;
+    metrics: Record<string, boolean>;
+  } {
+    if (node.kind === "group") {
+      const results = node.conditions.map((condition) =>
+        this.evaluateJsonAssertions(root, condition)
+      );
+      const matches =
+        node.operator === "and"
+          ? results.every((result) => result.matches)
+          : results.some((result) => result.matches);
+      return {
+        matches,
+        message: matches
+          ? ""
+          : results
+              .filter((result) => !result.matches)
+              .map((result) => result.message)
+              .join("; ") || "JSON assertion group did not match",
+        metrics: Object.assign({}, ...results.map((result) => result.metrics)),
+      };
+    }
+    const actual = this.jsonPointer(root, node.pointer);
+    const matches = this.jsonComparison(
+      actual.found,
+      actual.value,
+      node.operator,
+      node.expectedValue
+    );
+    const key = node.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/^\.|\.$/g, "");
+    return {
+      matches,
+      message: `${node.name} did not match`,
+      metrics: { [`assertion.${key}.matched`]: matches },
+    };
+  }
+
+  private jsonComparison(
+    found: boolean,
+    actual: unknown,
+    operator: Exclude<HttpJsonAssertionNode, { kind: "group" }>["operator"],
+    expected: unknown
+  ): boolean {
+    if (operator === "exists") return found;
+    if (!found) return false;
+    switch (operator) {
+      case "equals":
+        return actual === expected;
+      case "notEquals":
+        return actual !== expected;
+      case "contains":
+        return typeof actual === "string"
+          ? actual.includes(String(expected))
+          : Array.isArray(actual)
+            ? actual.some((value) => value === expected)
+            : false;
+      case "greaterThan":
+        return typeof actual === "number" && typeof expected === "number" && actual > expected;
+      case "greaterThanOrEqual":
+        return typeof actual === "number" && typeof expected === "number" && actual >= expected;
+      case "lessThan":
+        return typeof actual === "number" && typeof expected === "number" && actual < expected;
+      case "lessThanOrEqual":
+        return typeof actual === "number" && typeof expected === "number" && actual <= expected;
+    }
+  }
+
   private down(
     message: string,
     checkedAt: string,
@@ -345,6 +580,16 @@ export class CheckRunnerService {
 
   private safeError(error: unknown): string {
     if (error instanceof Error && error.message === "timeout") return "Check timed out";
+    if (
+      error instanceof Error &&
+      new Set([
+        "ICMP executor is unavailable",
+        "Database query value did not match",
+        "Database statistics are unavailable",
+      ]).has(error.message)
+    ) {
+      return error.message;
+    }
     if (error instanceof Error && "code" in error) {
       const code = String((error as Error & { code?: string }).code ?? "");
       if (code === "ENOTFOUND" || code === "ENODATA") return "Target could not be resolved";

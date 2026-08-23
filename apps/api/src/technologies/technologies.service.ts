@@ -80,7 +80,7 @@ export class TechnologiesService {
     observedAt: string
   ): Promise<void> {
     const resources = await this.database.all<ResourceContext>(
-      "SELECT team_id, id AS resource_id FROM resources WHERE agent_id = ? AND kind = 'server'",
+      "SELECT team_id, resource_id FROM agents WHERE id = ?",
       agentId
     );
     for (const resource of resources) {

@@ -1,6 +1,6 @@
 import { hashSecret } from "../../common/crypto.js";
 import { applicationVersion } from "../../version.js";
-import { termsVersion } from "@mimorii/contracts";
+import { checkTypes, termsVersion } from "@mimorii/contracts";
 import { at, days, hours, minutes, seedId, seedSecret, type SeedContext } from "./context.js";
 
 export interface SeedIdentityIds {
@@ -120,7 +120,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
      revoked_at = NULL, updated_at = ? WHERE id = ? AND team_id = ?`,
     "Local development",
     applicationVersion,
-    JSON.stringify(["http", "tcp", "dns", "host", "disk"]),
+    JSON.stringify(checkTypes),
     context.now.toISOString(),
     context.now.toISOString(),
     context.agentId,
@@ -170,22 +170,34 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
   ];
   for (const agent of agents) {
     await context.database.run(
+      `INSERT INTO resources
+       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+       VALUES (?, ?, ?, 'host', NULL, '[]', ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind,
+       updated_at = excluded.updated_at`,
+      agent.id,
+      context.teamId,
+      agent.name,
+      at(context, -days(60)),
+      context.now.toISOString()
+    );
+    await context.database.run(
       `INSERT INTO agents
-       (id, team_id, name, key_hash, kind, platform, version, capabilities_json, last_seen_at,
+       (id, team_id, resource_id, key_hash, kind, platform, version, capabilities_json, last_seen_at,
         revoked_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET name = excluded.name, key_hash = excluded.key_hash,
+       ON CONFLICT(id) DO UPDATE SET resource_id = excluded.resource_id, key_hash = excluded.key_hash,
        kind = excluded.kind, platform = excluded.platform, version = excluded.version,
        capabilities_json = excluded.capabilities_json, last_seen_at = excluded.last_seen_at,
        revoked_at = excluded.revoked_at, updated_at = excluded.updated_at`,
       agent.id,
       context.teamId,
-      agent.name,
+      agent.id,
       hashSecret(seedSecret(context, "mim_agent", agent.key)),
       "desktop",
       agent.platform,
       agent.version,
-      JSON.stringify(agent.capabilities),
+      JSON.stringify(agent.revokedAt ? agent.capabilities : checkTypes),
       agent.lastSeenAt,
       agent.revokedAt,
       at(context, -days(60)),

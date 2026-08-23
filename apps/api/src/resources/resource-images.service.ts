@@ -1,9 +1,7 @@
-import type { ResourceKind } from "@mimorii/contracts";
 import {
   BadGatewayException,
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service.js";
@@ -14,8 +12,7 @@ import { FaviconFetcherService } from "./favicon-fetcher.service.js";
 
 interface ResourceIdentityRow {
   id: string;
-  kind: ResourceKind;
-  target: string;
+  website_url: string | null;
 }
 
 export interface ResourceImageRow {
@@ -25,8 +22,6 @@ export interface ResourceImageRow {
 
 @Injectable()
 export class ResourceImagesService {
-  private readonly logger = new Logger(ResourceImagesService.name);
-
   constructor(
     private readonly database: DatabaseService,
     private readonly access: TeamAccessService,
@@ -72,12 +67,11 @@ export class ResourceImagesService {
   async refreshFavicon(userId: string, teamId: string, resourceId: string): Promise<string> {
     await this.access.require(userId, teamId, "member");
     const resource = await this.requireResource(teamId, resourceId);
-    const websiteUrl = websiteTarget(resource.kind, resource.target);
-    if (!websiteUrl) throw new BadRequestException("Resource is not a website");
+    if (!resource.website_url) throw new BadRequestException("Resource has no HTTP target");
 
     let image: Buffer;
     try {
-      image = await this.favicons.retrieve(websiteUrl);
+      image = await this.favicons.retrieve(resource.website_url);
     } catch {
       throw new BadGatewayException("Favicon could not be retrieved");
     }
@@ -95,39 +89,14 @@ export class ResourceImagesService {
     });
   }
 
-  async tryAssignFavicon(
-    userId: string,
-    teamId: string,
-    resourceId: string,
-    kind: ResourceKind,
-    target: string
-  ): Promise<boolean> {
-    const websiteUrl = websiteTarget(kind, target);
-    if (!websiteUrl) return false;
-    try {
-      const image = await this.favicons.retrieve(websiteUrl);
-      await this.database.transaction(async () => {
-        await this.store(resourceId, image);
-        await this.audit.record({
-          teamId,
-          userId,
-          action: "resource.favicon_updated",
-          subjectType: "resource",
-          subjectId: resourceId,
-          metadata: { automatic: true },
-        });
-      });
-      return true;
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : "Unknown error";
-      this.logger.warn(`Could not assign favicon to resource ${resourceId}: ${reason}`);
-      return false;
-    }
-  }
-
   private async requireResource(teamId: string, resourceId: string): Promise<ResourceIdentityRow> {
     const resource = await this.database.get<ResourceIdentityRow>(
-      "SELECT id, kind, target FROM resources WHERE id = ? AND team_id = ?",
+      `SELECT r.id,
+        (SELECT c.config_json::jsonb #>> '{target,url}'
+         FROM checks c
+         WHERE c.resource_id = r.id AND c.type = 'http'
+         ORDER BY c.created_at LIMIT 1) AS website_url
+       FROM resources r WHERE r.id = ? AND r.team_id = ?`,
       resourceId,
       teamId
     );
@@ -150,18 +119,5 @@ export class ResourceImagesService {
     );
     if (!stored) throw new Error("Resource image could not be stored");
     return stored.updated_at;
-  }
-}
-
-function websiteTarget(kind: ResourceKind, target: string): string | null {
-  if (kind !== "endpoint") return null;
-  try {
-    const url = new URL(target);
-    if (!new Set(["http:", "https:"]).has(url.protocol) || url.username || url.password) {
-      return null;
-    }
-    return url.toString();
-  } catch {
-    return null;
   }
 }

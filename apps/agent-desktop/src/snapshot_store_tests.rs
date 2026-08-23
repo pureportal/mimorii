@@ -6,6 +6,7 @@ use crate::test_support::temporary_path;
 
 fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
     HostSnapshot {
+        snapshot_id: format!("snapshot-{observed_at}"),
         hostname: "relay-01".to_owned(),
         platform: "test".to_owned(),
         version: "0.1.0".to_owned(),
@@ -29,6 +30,7 @@ fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
             category: "database".to_owned(),
             version: Some("16".to_owned()),
         }],
+        container_runtime: None,
         observed_at: observed_at.to_owned(),
     }
 }

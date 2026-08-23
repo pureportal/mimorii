@@ -27,6 +27,13 @@ const metricLabels: Record<DashboardMetric, string> = {
   averageLatency: "Average latency",
   monitorCount: "Monitor count",
   openIncidents: "Open incidents",
+  cpuPercent: "CPU",
+  memoryPercent: "Memory",
+  storagePercent: "Storage",
+  loadAverage: "Load average",
+  batteryPercent: "Battery",
+  containerCount: "Containers",
+  unhealthyContainerCount: "Unhealthy containers",
 };
 
 export function DashboardItemDialog({
@@ -73,7 +80,7 @@ export function DashboardItemDialog({
         type,
         metric,
         resourceId: resourceId || null,
-        windowDays: metric === "uptime" || metric === "averageLatency" ? windowDays : 1,
+        windowDays: metric === "monitorCount" || metric === "openIncidents" ? 1 : windowDays,
       });
     } else if (type === "uptime") {
       onSave({
@@ -163,10 +170,17 @@ export function DashboardItemDialog({
               <Select
                 id="dashboard-item-resource"
                 value={resourceId}
-                required={type === "uptime" || type === "status"}
+                required={
+                  type === "uptime" ||
+                  type === "status" ||
+                  (type === "metric" &&
+                    !["uptime", "averageLatency", "monitorCount", "openIncidents"].includes(metric))
+                }
                 onChange={(event) => setResourceId(event.target.value)}
               >
-                {type === "metric" || type === "incidents" ? (
+                {(type === "metric" &&
+                  ["uptime", "averageLatency", "monitorCount", "openIncidents"].includes(metric)) ||
+                type === "incidents" ? (
                   <option value="">All resources</option>
                 ) : (
                   <option value="" disabled>
@@ -183,7 +197,7 @@ export function DashboardItemDialog({
           ) : null}
 
           {type === "uptime" ||
-          (type === "metric" && (metric === "uptime" || metric === "averageLatency")) ? (
+          (type === "metric" && metric !== "monitorCount" && metric !== "openIncidents") ? (
             <Field>
               <FieldLabel htmlFor="dashboard-item-window">Window</FieldLabel>
               <Select
@@ -244,7 +258,14 @@ function parseMetric(value: string): DashboardMetric {
     value === "uptime" ||
     value === "averageLatency" ||
     value === "monitorCount" ||
-    value === "openIncidents"
+    value === "openIncidents" ||
+    value === "cpuPercent" ||
+    value === "memoryPercent" ||
+    value === "storagePercent" ||
+    value === "loadAverage" ||
+    value === "batteryPercent" ||
+    value === "containerCount" ||
+    value === "unhealthyContainerCount"
   ) {
     return value;
   }

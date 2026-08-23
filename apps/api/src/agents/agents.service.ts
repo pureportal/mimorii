@@ -19,8 +19,9 @@ import {
   type MobileDeviceStatus,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { AuditService } from "../common/audit.service.js";
-import { createSecret, hashSecret } from "../common/crypto.js";
+import { createSecret, decryptConfiguration, hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import type { AuthenticatedAgent } from "./agent-auth.js";
@@ -34,11 +35,14 @@ import type {
 import { ResultsService } from "../checks/results.service.js";
 import { TechnologiesService } from "../technologies/technologies.service.js";
 import { MobileDeviceStatusService } from "./mobile-device-status.service.js";
+import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
+import { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 
 interface AgentRow {
   id: string;
   team_id: string;
-  name: string;
+  resource_id: string;
+  resource_name: string;
   kind: AgentKind;
   collection_interval_seconds: number;
   platform: string | null;
@@ -55,6 +59,7 @@ interface TaskRow {
   payload_json: string;
   status: string;
   issued_at: string;
+  encrypted_secret: string | null;
 }
 
 @Injectable()
@@ -65,13 +70,17 @@ export class AgentsService {
     private readonly audit: AuditService,
     private readonly results: ResultsService,
     private readonly technologies: TechnologiesService,
-    private readonly mobileDeviceStatuses: MobileDeviceStatusService
+    private readonly mobileDeviceStatuses: MobileDeviceStatusService,
+    private readonly telemetry: ResourceTelemetryService,
+    private readonly alerts: ResourceAlertsService
   ) {}
 
   async list(userId: string, teamId: string): Promise<AgentSummary[]> {
     await this.access.require(userId, teamId, "viewer");
     const rows = await this.database.all<AgentRow>(
-      "SELECT * FROM agents WHERE team_id = ? AND revoked_at IS NULL ORDER BY name",
+      `SELECT a.*, r.name AS resource_name FROM agents a
+       JOIN resources r ON r.id = a.resource_id
+       WHERE a.team_id = ? AND a.revoked_at IS NULL ORDER BY LOWER(r.name)`,
       teamId
     );
     const mobileStatuses = await this.mobileDeviceStatuses.latestByAgentIds(
@@ -90,21 +99,34 @@ export class AgentsService {
       input.collectionIntervalSeconds
     );
     const capabilities = [...agentCapabilitiesByKind[input.kind]];
-    await this.database.run(
-      `INSERT INTO agents
-       (id, team_id, name, key_hash, kind, capabilities_json, collection_interval_seconds,
-        created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      teamId,
-      input.name.trim(),
-      hashSecret(enrollmentKey),
-      input.kind,
-      JSON.stringify(capabilities),
-      collectionIntervalSeconds,
-      now,
-      now
-    );
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `INSERT INTO resources
+         (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, '[]', ?, ?)`,
+        id,
+        teamId,
+        input.name.trim(),
+        input.kind === "mobile" ? "device" : "host",
+        now,
+        now
+      );
+      await this.database.run(
+        `INSERT INTO agents
+         (id, team_id, resource_id, key_hash, kind, capabilities_json,
+          collection_interval_seconds, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        teamId,
+        id,
+        hashSecret(enrollmentKey),
+        input.kind,
+        JSON.stringify(capabilities),
+        collectionIntervalSeconds,
+        now,
+        now
+      );
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -119,20 +141,29 @@ export class AgentsService {
   async update(userId: string, teamId: string, id: string, input: UpdateAgentDto) {
     await this.access.require(userId, teamId, "admin");
     const agent = await this.requireRow(teamId, id);
-    const name = typeof input.name === "string" ? input.name.trim() : agent.name;
+    const name = typeof input.name === "string" ? input.name.trim() : agent.resource_name;
     const collectionIntervalSeconds =
       typeof input.collectionIntervalSeconds === "number"
         ? this.collectionInterval(agent.kind, input.collectionIntervalSeconds)
         : agent.collection_interval_seconds;
-    await this.database.run(
-      `UPDATE agents SET name = ?, collection_interval_seconds = ?, updated_at = ?
-       WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
-      name,
-      collectionIntervalSeconds,
-      new Date().toISOString(),
-      id,
-      teamId
-    );
+    const updatedAt = new Date().toISOString();
+    await this.database.transaction(async () => {
+      await this.database.run(
+        "UPDATE resources SET name = ?, updated_at = ? WHERE id = ? AND team_id = ?",
+        name,
+        updatedAt,
+        agent.resource_id,
+        teamId
+      );
+      await this.database.run(
+        `UPDATE agents SET collection_interval_seconds = ?, updated_at = ?
+         WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
+        collectionIntervalSeconds,
+        updatedAt,
+        id,
+        teamId
+      );
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -219,12 +250,20 @@ export class AgentsService {
     }
     const now = new Date().toISOString();
     const rows = await this.database.all<TaskRow>(
-      `SELECT * FROM agent_tasks WHERE agent_id = ? AND status IN ('pending', 'claimed')
-       ORDER BY issued_at LIMIT ?`,
+      `SELECT at.*, c.encrypted_secret FROM agent_tasks at
+       JOIN checks c ON c.id = at.check_id
+       WHERE at.agent_id = ? AND at.status IN ('pending', 'claimed')
+       ORDER BY at.issued_at LIMIT ?`,
       agent.id,
       Math.min(Math.max(limit, 1), 100)
     );
-    const tasks = rows.map((row) => ({ row, task: JSON.parse(row.payload_json) as AgentTask }));
+    const tasks = rows.map((row) => {
+      const task = JSON.parse(row.payload_json) as AgentTask;
+      task.secret = row.encrypted_secret
+        ? decryptConfiguration<string>(row.encrypted_secret)
+        : null;
+      return { row, task };
+    });
     const supported = tasks.filter(({ task }) => agent.capabilities.includes(task.type));
     const unsupported = tasks.filter(({ task }) => !agent.capabilities.includes(task.type));
     if (unsupported.length > 0) {
@@ -270,7 +309,10 @@ export class AgentsService {
       throw new BadRequestException("Desktop agent capabilities are invalid");
     }
     const reportsHostTelemetry = input.snapshots.length > 0;
-    const supportsHostTelemetry = capabilities.includes("host") || capabilities.includes("disk");
+    const supportsHostTelemetry =
+      capabilities.includes("host") ||
+      capabilities.includes("disk") ||
+      capabilities.includes("docker");
     if (reportsHostTelemetry !== supportsHostTelemetry) {
       throw new BadRequestException("Agent telemetry does not match its capabilities");
     }
@@ -279,6 +321,7 @@ export class AgentsService {
       this.normalizeSnapshot(snapshot, receivedAt)
     );
     const latestSnapshot = snapshots.at(-1);
+    let latestInsertedSnapshot: HostSnapshot | undefined;
     let acceptedResults = 0;
 
     await this.database.transaction(async () => {
@@ -293,15 +336,30 @@ export class AgentsService {
         agent.id
       );
       for (const snapshot of snapshots) {
-        await this.database.run(
+        const inserted = await this.database.run(
           `INSERT INTO host_snapshots (id, agent_id, snapshot_json, observed_at, received_at)
-           VALUES (?, ?, ?, ?, ?)`,
-          randomUUID(),
+           VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+          snapshot.snapshotId,
           agent.id,
           JSON.stringify(snapshot),
           snapshot.observedAt,
           receivedAt
         );
+        if (inserted.changes === 0) {
+          const existing = await this.database.get<{ agent_id: string; snapshot_json: string }>(
+            "SELECT agent_id, snapshot_json FROM host_snapshots WHERE id = ?",
+            snapshot.snapshotId
+          );
+          if (
+            !existing ||
+            existing.agent_id !== agent.id ||
+            !isDeepStrictEqual(JSON.parse(existing.snapshot_json), snapshot)
+          ) {
+            throw new BadRequestException("Snapshot ID has already been used");
+          }
+          continue;
+        }
+        latestInsertedSnapshot = snapshot;
         await this.technologies.observeAgent(agent.id, snapshot.technologies, snapshot.observedAt);
       }
       for (const result of input.results) {
@@ -311,11 +369,21 @@ export class AgentsService {
       }
     });
 
+    if (latestInsertedSnapshot) {
+      await this.alerts.evaluate(
+        agent.teamId,
+        agent.resourceId,
+        this.telemetry.values(latestInsertedSnapshot),
+        latestInsertedSnapshot.observedAt
+      );
+    }
+
     return { acceptedAt: receivedAt, acceptedSnapshots: snapshots.length, acceptedResults };
   }
 
   private normalizeSnapshot(input: HostSnapshotDto, receivedAt: string): HostSnapshot {
     return {
+      snapshotId: input.snapshotId,
       hostname: input.hostname,
       platform: input.platform,
       version: input.version,
@@ -339,6 +407,30 @@ export class AgentsService {
         category: technology.category,
         version: technology.version ?? null,
       })),
+      containerRuntime: input.containerRuntime
+        ? {
+            engineVersion: input.containerRuntime.engineVersion,
+            containers: input.containerRuntime.containers.map((container) => ({
+              id: container.id,
+              name: container.name,
+              image: container.image,
+              state: container.state,
+              health: container.health,
+              restartCount: container.restartCount,
+              cpuPercent: container.cpuPercent,
+              memoryUsedBytes: container.memoryUsedBytes,
+              memoryLimitBytes: container.memoryLimitBytes,
+              networkReceivedBytes: container.networkReceivedBytes,
+              networkTransmittedBytes: container.networkTransmittedBytes,
+              blockReadBytes: container.blockReadBytes,
+              blockWrittenBytes: container.blockWrittenBytes,
+              composeProject: container.composeProject,
+              composeService: container.composeService,
+              ports: [...container.ports],
+              startedAt: container.startedAt,
+            })),
+          }
+        : null,
       observedAt: this.safeCollectedAt(input.observedAt, receivedAt),
     };
   }
@@ -400,7 +492,9 @@ export class AgentsService {
 
   private async requireRow(teamId: string, id: string): Promise<AgentRow> {
     const row = await this.database.get<AgentRow>(
-      "SELECT * FROM agents WHERE id = ? AND team_id = ? AND revoked_at IS NULL",
+      `SELECT a.*, r.name AS resource_name FROM agents a
+       JOIN resources r ON r.id = a.resource_id
+       WHERE a.id = ? AND a.team_id = ? AND a.revoked_at IS NULL`,
       id,
       teamId
     );
@@ -425,8 +519,9 @@ export class AgentsService {
           : "offline";
     return {
       id: row.id,
+      resourceId: row.resource_id,
+      resourceName: row.resource_name,
       teamId: row.team_id,
-      name: row.name,
       kind: row.kind,
       collectionIntervalSeconds: row.collection_interval_seconds,
       status,

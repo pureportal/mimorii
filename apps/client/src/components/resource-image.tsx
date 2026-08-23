@@ -1,6 +1,6 @@
 import type { ResourceKind, ResourceSummary } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Globe2, Network, Server } from "lucide-react";
+import { Network, Server, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiBlob } from "../lib/api";
 import { cn } from "../lib/cn";
@@ -54,5 +54,5 @@ export function ResourceImage({
 }
 
 function resourceKindIcon(kind: ResourceKind) {
-  return kind === "server" ? Server : kind === "service" ? Network : Globe2;
+  return kind === "host" ? Server : kind === "device" ? Smartphone : Network;
 }

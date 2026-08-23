@@ -13,6 +13,7 @@ use serde_json::json;
 
 use super::{assert_result, snapshot, task};
 use crate::models::{CheckState, CheckType};
+use crate::target_policy::TargetPolicy;
 use crate::test_support::tcp_listener;
 
 static DNS_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -22,7 +23,10 @@ fn tcp_check_connects_and_records_the_port() {
     let (listener, port) = tcp_listener();
     let handle = thread::spawn(move || listener.accept().unwrap());
     let result = super::execute(
-        &task(CheckType::Tcp, json!({ "host": "127.0.0.1", "port": port })),
+        &task(
+            CheckType::Tcp,
+            json!({ "target": { "host": "127.0.0.1", "port": port } }),
+        ),
         &snapshot(),
     );
 
@@ -37,7 +41,10 @@ fn tcp_check_reports_connection_and_configuration_failures() {
     let (listener, port) = tcp_listener();
     drop(listener);
     let connection = super::execute(
-        &task(CheckType::Tcp, json!({ "host": "127.0.0.1", "port": port })),
+        &task(
+            CheckType::Tcp,
+            json!({ "target": { "host": "127.0.0.1", "port": port } }),
+        ),
         &snapshot(),
     );
     assert_result(
@@ -88,7 +95,7 @@ fn dns_check_supports_every_configured_record_type() {
             &task(
                 CheckType::Dns,
                 json!({
-                    "hostname": "relay.test.",
+                    "target": { "hostname": "relay.test." },
                     "recordType": record_type.to_string(),
                     "expectedValue": expected
                 }),
@@ -110,7 +117,7 @@ fn dns_check_reports_expected_value_mismatches() {
         &task(
             CheckType::Dns,
             json!({
-                "hostname": "relay.test.",
+                "target": { "hostname": "relay.test." },
                 "recordType": "A",
                 "expectedValue": "198.51.100.5"
             }),
@@ -142,7 +149,7 @@ fn dns_check_rejects_invalid_configuration_and_record_types() {
     let invalid_type = super::execute(
         &task(
             CheckType::Dns,
-            json!({ "hostname": "relay.test", "recordType": "INVALID" }),
+            json!({ "target": { "hostname": "relay.test" }, "recordType": "INVALID" }),
         ),
         &snapshot(),
     );
@@ -169,9 +176,9 @@ fn dns_timeout_errors_are_reported() {
     });
     let mut value = task(
         CheckType::Dns,
-        json!({ "hostname": "relay.test.", "recordType": "A" }),
+        json!({ "target": { "hostname": "relay.test." }, "recordType": "A" }),
     );
-    value.timeout_ms = 25;
+    value.timeout_ms = 100;
     let resolver = ResolverConfig::from_parts(
         None,
         Vec::new(),
@@ -217,6 +224,55 @@ fn result_helpers_preserve_fields_and_measure_elapsed_time() {
 
     let elapsed = super::super::elapsed_ms(Instant::now()).unwrap();
     assert!(elapsed >= 0.0);
+}
+
+#[test]
+fn icmp_wan_and_database_checks_enforce_the_agent_target_policy() {
+    let policy = TargetPolicy {
+        allowed_protocols: Vec::new(),
+        ..TargetPolicy::default()
+    };
+    let definitions = [
+        (
+            CheckType::Icmp,
+            json!({
+                "target": { "host": "example.com" },
+                "packetCount": 2,
+                "minimumSuccessPercent": 100
+            }),
+        ),
+        (
+            CheckType::Wan,
+            json!({
+                "targets": [{ "name": "Primary", "host": "example.com" }],
+                "requiredSuccessfulTargets": 1,
+                "packetCount": 2
+            }),
+        ),
+        (
+            CheckType::Database,
+            json!({
+                "target": {
+                    "engine": "postgresql",
+                    "host": "database.example.com",
+                    "port": 5432,
+                    "database": "app",
+                    "username": "monitor",
+                    "tls": true
+                },
+                "connectionWarningPercent": 85
+            }),
+        ),
+    ];
+    for (check_type, config) in definitions {
+        let result = super::super::execute(&task(check_type, config), &snapshot(), &policy);
+        assert_result(
+            &result,
+            CheckState::Down,
+            Some("Target is not allowed by agent policy"),
+            None,
+        );
+    }
 }
 
 fn dns_fixture(record_type: RecordType) -> (ResolverConfig, thread::JoinHandle<()>) {

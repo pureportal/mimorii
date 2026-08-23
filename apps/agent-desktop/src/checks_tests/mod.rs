@@ -30,12 +30,14 @@ fn task(check_type: CheckType, config: Value) -> AgentTask {
         check_type,
         timeout_ms: 2_000,
         config,
+        secret: None,
         _issued_at: "2026-08-12T20:00:00Z".to_owned(),
     }
 }
 
 fn snapshot() -> HostSnapshot {
     HostSnapshot {
+        snapshot_id: "00000000-0000-4000-8000-000000000002".to_owned(),
         hostname: "relay-01".to_owned(),
         platform: "test".to_owned(),
         version: "0.1.0".to_owned(),
@@ -55,6 +57,7 @@ fn snapshot() -> HostSnapshot {
             total_bytes: 100,
         }],
         technologies: Vec::new(),
+        container_runtime: None,
         observed_at: "2026-08-12T20:00:00Z".to_owned(),
     }
 }

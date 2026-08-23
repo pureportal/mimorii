@@ -1,4 +1,4 @@
-import { imageAssetMaxBytes } from "@mimorii/contracts";
+import { imageAssetMaxBytes, resourceMetricNames } from "@mimorii/contracts";
 import {
   BadRequestException,
   Body,
@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   UploadedFile,
@@ -30,6 +31,7 @@ import type { Request, Response } from "express";
 import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
+import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
 import { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
 import { ResourcesService } from "./resources.service.js";
 import { ResourceImagesService } from "./resource-images.service.js";
@@ -49,7 +51,8 @@ const ResourceImageUploadInterceptor = FileInterceptor("image", {
 export class ResourcesController {
   constructor(
     private readonly resources: ResourcesService,
-    private readonly images: ResourceImagesService
+    private readonly images: ResourceImagesService,
+    private readonly telemetry: ResourceTelemetryService
   ) {}
 
   @Get()
@@ -64,6 +67,30 @@ export class ResourcesController {
     @Param("id") id: string
   ) {
     return this.resources.get(user.id, teamId, id);
+  }
+
+  @Get(":id/metrics")
+  async metrics(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Param("id") id: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string
+  ) {
+    await this.resources.get(user.id, teamId, id);
+    const end = to ? new Date(to) : new Date();
+    const start = from ? new Date(from) : new Date(end.getTime() - 24 * 60 * 60 * 1_000);
+    if (
+      !Number.isFinite(start.getTime()) ||
+      !Number.isFinite(end.getTime()) ||
+      start >= end ||
+      end.getTime() - start.getTime() > 90 * 24 * 60 * 60 * 1_000
+    ) {
+      throw new BadRequestException("Choose a valid range of up to 90 days");
+    }
+    return this.telemetry.series(id, start.toISOString(), end.toISOString(), [
+      ...resourceMetricNames,
+    ]);
   }
 
   @Get(":id/image")

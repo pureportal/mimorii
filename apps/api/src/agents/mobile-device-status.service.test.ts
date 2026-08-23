@@ -4,11 +4,14 @@ import type { DatabaseService } from "../database/database.service.js";
 import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { MobileDeviceStatusDto } from "./mobile-device-status.dto.js";
 import { MobileDeviceStatusService } from "./mobile-device-status.service.js";
+import type { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
+import type { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 
 const mobileAgent: AuthenticatedAgent = {
   id: "mobile-1",
   teamId: "team-1",
-  name: "Phone",
+  resourceId: "mobile-1",
+  resourceName: "Phone",
   kind: "mobile",
   capabilities: ["device-status"],
   collectionIntervalSeconds: 900,
@@ -60,7 +63,18 @@ function createService() {
     run,
     transaction: async <T>(action: () => Promise<T>) => action(),
   } as unknown as DatabaseService;
-  return { get, run, service: new MobileDeviceStatusService(database) };
+  const telemetry = { values: vi.fn(() => ({ batteryPercent: 75 })) };
+  const alerts = { evaluate: vi.fn(async () => undefined) };
+  return {
+    get,
+    run,
+    alerts,
+    service: new MobileDeviceStatusService(
+      database,
+      telemetry as unknown as ResourceTelemetryService,
+      alerts as unknown as ResourceAlertsService
+    ),
+  };
 }
 
 describe("MobileDeviceStatusService", () => {

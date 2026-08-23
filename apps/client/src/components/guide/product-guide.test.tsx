@@ -173,14 +173,13 @@ describe("ProductGuide automatic tours", () => {
         target: navigation,
         title: "Resources",
         content:
-          "Resources are the websites, services, ports, and servers you monitor. Open one to review its checks, current health, and history.",
+          "Resources are the hosts, devices, and services you monitor. Open one to review its checks, current health, and history.",
         placement: "right",
       }),
       expect.objectContaining({
         target: toolbar,
         title: "Search or start monitoring",
-        content:
-          "Search by name, address, or tag, or add a website, port, or server with its first check.",
+        content: "Search by name or tag, or add a website or service with its first check.",
       }),
       expect.objectContaining({
         target: list,

@@ -36,6 +36,13 @@ const metricLabels: Record<DashboardMetric, string> = {
   averageLatency: "Average latency",
   monitorCount: "Monitor count",
   openIncidents: "Open incidents",
+  cpuPercent: "CPU",
+  memoryPercent: "Memory",
+  storagePercent: "Storage",
+  loadAverage: "Load average",
+  batteryPercent: "Battery",
+  containerCount: "Containers",
+  unhealthyContainerCount: "Unhealthy containers",
 };
 
 export function DashboardEditorPage() {

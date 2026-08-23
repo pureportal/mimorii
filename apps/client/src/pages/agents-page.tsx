@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Copy, KeyRound, Pencil, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { MobileDeviceStatusSummary } from "../components/mobile-device-status-summary";
@@ -20,6 +21,7 @@ import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { api, getServerUrl, jsonBody } from "../lib/api";
 import { createAgentEnrollmentCode } from "../lib/agent-enrollment";
+import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatRelative } from "../lib/format";
 
@@ -125,7 +127,7 @@ export function AgentsPage() {
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-display font-bold">{agent.name}</p>
+                    <p className="truncate font-display font-bold">{agent.resourceName}</p>
                     <p className="mt-1 truncate text-xs text-muted">
                       {agentPlatform(agent)} · {formatRelative(agent.lastSeenAt)}
                     </p>
@@ -136,6 +138,9 @@ export function AgentsPage() {
                   <MobileDeviceStatusSummary status={agent.deviceStatus} />
                 ) : null}
                 <div className="mt-5 flex flex-wrap justify-end gap-1 border-t border-line pt-4">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={appRoutes.resource(agent.resourceId)}>View resource</Link>
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => setEditingAgent(agent)}>
                     <Pencil /> Edit
                   </Button>
@@ -195,8 +200,8 @@ export function AgentsPage() {
         }}
         title={
           confirmation?.action === "rotate"
-            ? `Rotate ${confirmation.agent.name}'s key?`
-            : `Revoke ${confirmation?.agent.name ?? "agent"}?`
+            ? `Rotate ${confirmation.agent.resourceName}'s key?`
+            : `Revoke ${confirmation?.agent.resourceName ?? "agent"}?`
         }
         description={
           confirmation?.action === "rotate"
@@ -226,7 +231,7 @@ function EditAgentDialog({
   onOpenChange: (open: boolean) => void;
   onSaved: () => Promise<unknown>;
 }) {
-  const [name, setName] = useState(agent.name);
+  const [name, setName] = useState(agent.resourceName);
   const [interval, setInterval] = useState(String(agent.collectionIntervalSeconds));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

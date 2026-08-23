@@ -8,6 +8,23 @@ use crate::models::CheckState;
 use crate::test_support::{MockResponse, http_server};
 
 #[test]
+fn http_check_sends_an_encrypted_secret_header() {
+    let server = http_server(vec![MockResponse::new(200, "healthy")]);
+    let mut task = super::http_task(&server.url, json!({ "secretHeaderName": "authorization" }));
+    task.secret = Some("Bearer encrypted-value".to_owned());
+
+    let result = super::super::http(&task).unwrap();
+    let request = server.requests.recv().unwrap();
+
+    assert_eq!(result.status, CheckState::Up);
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer encrypted-value")
+    );
+}
+
+#[test]
 fn http_check_exercises_assertions_and_collects_response_metrics() {
     let server = http_server(vec![
         MockResponse::new(200, r#"{"service":{"state":"ready"}}"#)
@@ -25,8 +42,39 @@ fn http_check_exercises_assertions_and_collects_response_metrics() {
                     "content-type": "application/json",
                     "x-fixture-state": "ready"
                 },
-                "jsonPointer": "/service/state",
-                "expectedJsonValue": "ready"
+                "jsonAssertions": {
+                    "kind": "group",
+                    "operator": "and",
+                    "conditions": [
+                        {
+                            "kind": "assertion",
+                            "name": "Service state",
+                            "pointer": "/service/state",
+                            "operator": "equals",
+                            "expectedValue": "ready"
+                        },
+                        {
+                            "kind": "group",
+                            "operator": "or",
+                            "conditions": [
+                                {
+                                    "kind": "assertion",
+                                    "name": "Ready state",
+                                    "pointer": "/service/state",
+                                    "operator": "contains",
+                                    "expectedValue": "read"
+                                },
+                                {
+                                    "kind": "assertion",
+                                    "name": "Standby state",
+                                    "pointer": "/service/state",
+                                    "operator": "equals",
+                                    "expectedValue": "standby"
+                                }
+                            ]
+                        }
+                    ]
+                }
             }),
         ),
         &snapshot(),
@@ -138,7 +186,10 @@ fn http_check_reports_unexpected_status_content_and_headers() {
 fn http_json_assertions_report_each_failure_path() {
     let invalid_server = http_server(vec![MockResponse::new(200, "not-json")]);
     let invalid = crate::checks::tests::execute(
-        &http_task(&invalid_server.url, json!({ "jsonPointer": "/state" })),
+        &http_task(
+            &invalid_server.url,
+            json!({ "jsonAssertions": assertion("State", "/state", "exists", serde_json::Value::Null) }),
+        ),
         &snapshot(),
     );
     assert_result(
@@ -152,14 +203,14 @@ fn http_json_assertions_report_each_failure_path() {
     let missing = crate::checks::tests::execute(
         &http_task(
             &missing_server.url,
-            json!({ "jsonPointer": "/service/state" }),
+            json!({ "jsonAssertions": assertion("Service state", "/service/state", "exists", serde_json::Value::Null) }),
         ),
         &snapshot(),
     );
     assert_result(
         &missing,
         CheckState::Down,
-        Some("Expected JSON value was not found"),
+        Some("JSON assertion failed: Service state"),
         Some(200),
     );
 
@@ -167,14 +218,14 @@ fn http_json_assertions_report_each_failure_path() {
     let mismatch = crate::checks::tests::execute(
         &http_task(
             &mismatch_server.url,
-            json!({ "jsonPointer": "/state", "expectedJsonValue": "down" }),
+            json!({ "jsonAssertions": assertion("State is down", "/state", "equals", "down") }),
         ),
         &snapshot(),
     );
     assert_result(
         &mismatch,
         CheckState::Down,
-        Some("JSON value did not match"),
+        Some("JSON assertion failed: State is down"),
         Some(200),
     );
 }
@@ -183,10 +234,32 @@ fn http_json_assertions_report_each_failure_path() {
 fn http_json_pointer_without_an_expected_value_only_checks_presence() {
     let server = http_server(vec![MockResponse::new(200, r#"{"state":{"value":1}}"#)]);
     let result = crate::checks::tests::execute(
-        &http_task(&server.url, json!({ "jsonPointer": "/state" })),
+        &http_task(
+            &server.url,
+            json!({ "jsonAssertions": assertion("State", "/state", "exists", serde_json::Value::Null) }),
+        ),
         &snapshot(),
     );
     assert_result(&result, CheckState::Up, None, Some(200));
+}
+
+fn assertion(
+    name: &str,
+    pointer: &str,
+    operator: &str,
+    expected_value: impl serde::Serialize,
+) -> serde_json::Value {
+    json!({
+        "kind": "group",
+        "operator": "and",
+        "conditions": [{
+            "kind": "assertion",
+            "name": name,
+            "pointer": pointer,
+            "operator": operator,
+            "expectedValue": expected_value
+        }]
+    })
 }
 
 #[test]

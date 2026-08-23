@@ -11,11 +11,10 @@ const website: ResourceSummary = {
   id: "resource-1",
   teamId: "team-1",
   name: "Website",
-  kind: "endpoint",
-  target: "https://example.com/",
+  kind: "service",
   description: null,
   tags: [],
-  agentId: null,
+  agent: null,
   status: "up",
   checksUp: 1,
   checksTotal: 1,
@@ -89,7 +88,7 @@ describe("resource image dialog", () => {
   });
 
   it("does not show favicon retrieval for non-website resources", () => {
-    renderDialog({ ...website, kind: "server", target: "server.internal" });
+    renderDialog({ ...website, kind: "host" });
 
     expect(screen.queryByRole("button", { name: "Update favicon" })).not.toBeInTheDocument();
   });

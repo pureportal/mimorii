@@ -40,7 +40,7 @@ describe("resource images", () => {
   it("normalizes and stores a manually selected image", async () => {
     const { access, audit, database, images } = setup();
     database.get
-      .mockResolvedValueOnce({ id: "resource-1", kind: "server", target: "server.local" })
+      .mockResolvedValueOnce({ id: "resource-1", website_url: null })
       .mockResolvedValueOnce({ updated_at: "2026-08-21T12:00:00.000Z" });
 
     const updatedAt = await images.replace(
@@ -79,8 +79,7 @@ describe("resource images", () => {
     database.get
       .mockResolvedValueOnce({
         id: "resource-1",
-        kind: "endpoint",
-        target: "https://example.com/status",
+        website_url: "https://example.com/status",
       })
       .mockResolvedValueOnce({ updated_at: "2026-08-21T12:01:00.000Z" });
 
@@ -96,10 +95,10 @@ describe("resource images", () => {
 
   it("does not offer favicon updates for non-website resources", async () => {
     const { database, images } = setup();
-    database.get.mockResolvedValueOnce({ id: "resource-1", kind: "server", target: "host" });
+    database.get.mockResolvedValueOnce({ id: "resource-1", website_url: null });
 
     await expect(images.refreshFavicon("user-1", "team-1", "resource-1")).rejects.toEqual(
-      new BadRequestException("Resource is not a website")
+      new BadRequestException("Resource has no HTTP target")
     );
   });
 
@@ -107,49 +106,12 @@ describe("resource images", () => {
     const { database, images } = setup({ faviconError: new Error("network failed") });
     database.get.mockResolvedValueOnce({
       id: "resource-1",
-      kind: "endpoint",
-      target: "https://example.com/",
+      website_url: "https://example.com/",
     });
 
     await expect(images.refreshFavicon("user-1", "team-1", "resource-1")).rejects.toEqual(
       new BadGatewayException("Favicon could not be retrieved")
     );
     expect(database.get).toHaveBeenCalledOnce();
-  });
-
-  it("keeps website creation successful when automatic favicon retrieval fails", async () => {
-    const { audit, database, images } = setup({ faviconError: new Error("network failed") });
-
-    await expect(
-      images.tryAssignFavicon("user-1", "team-1", "resource-1", "endpoint", "https://example.com/")
-    ).resolves.toBe(false);
-    expect(database.get).not.toHaveBeenCalled();
-    expect(audit.record).not.toHaveBeenCalled();
-  });
-
-  it("stores a successfully retrieved favicon during website creation", async () => {
-    const favicon = await sharp({
-      create: {
-        width: 128,
-        height: 128,
-        channels: 4,
-        background: { r: 70, g: 150, b: 120, alpha: 1 },
-      },
-    })
-      .png()
-      .toBuffer();
-    const { audit, database, images } = setup({ favicon });
-    database.get.mockResolvedValueOnce({ updated_at: "2026-08-21T12:00:00.000Z" });
-
-    await expect(
-      images.tryAssignFavicon("user-1", "team-1", "resource-1", "endpoint", "https://example.com/")
-    ).resolves.toBe(true);
-    expect(database.get.mock.calls[0]?.[2]).toEqual(favicon);
-    expect(audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "resource.favicon_updated",
-        metadata: { automatic: true },
-      })
-    );
   });
 });

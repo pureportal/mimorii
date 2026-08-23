@@ -17,6 +17,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -102,7 +103,115 @@ export class TechnologySnapshotDto {
   version?: string | null;
 }
 
+export class ContainerSnapshotDto {
+  @ApiProperty()
+  @IsString()
+  @Length(12, 128)
+  id!: string;
+
+  @ApiProperty()
+  @IsString()
+  @Length(1, 255)
+  name!: string;
+
+  @ApiProperty()
+  @IsString()
+  @Length(1, 500)
+  image!: string;
+
+  @ApiProperty({
+    enum: ["created", "running", "paused", "restarting", "exited", "dead", "unknown"],
+  })
+  @IsIn(["created", "running", "paused", "restarting", "exited", "dead", "unknown"])
+  state!: "created" | "running" | "paused" | "restarting" | "exited" | "dead" | "unknown";
+
+  @ApiProperty({ enum: ["healthy", "unhealthy", "starting", "none"] })
+  @IsIn(["healthy", "unhealthy", "starting", "none"])
+  health!: "healthy" | "unhealthy" | "starting" | "none";
+
+  @ApiProperty()
+  @IsInt()
+  @Min(0)
+  restartCount!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  cpuPercent!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  memoryUsedBytes!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  memoryLimitBytes!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  networkReceivedBytes!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  networkTransmittedBytes!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  blockReadBytes!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  blockWrittenBytes!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(1, 255)
+  composeProject!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(1, 255)
+  composeService!: string | null;
+
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMaxSize(128)
+  @IsString({ each: true })
+  ports!: string[];
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsISO8601()
+  startedAt!: string | null;
+}
+
+export class ContainerRuntimeSnapshotDto {
+  @ApiProperty()
+  @IsString()
+  @Length(1, 100)
+  engineVersion!: string;
+
+  @ApiProperty({ type: [ContainerSnapshotDto] })
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ContainerSnapshotDto)
+  containers!: ContainerSnapshotDto[];
+}
+
 export class HostSnapshotDto {
+  @ApiProperty({ format: "uuid" })
+  @IsUUID()
+  snapshotId!: string;
+
   @ApiProperty()
   @IsString()
   @Length(1, 255)
@@ -182,6 +291,12 @@ export class HostSnapshotDto {
   @ValidateNested({ each: true })
   @Type(() => TechnologySnapshotDto)
   technologies!: TechnologySnapshotDto[];
+
+  @ApiPropertyOptional({ type: ContainerRuntimeSnapshotDto, nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ContainerRuntimeSnapshotDto)
+  containerRuntime!: ContainerRuntimeSnapshotDto | null;
 
   @ApiProperty()
   @IsISO8601()

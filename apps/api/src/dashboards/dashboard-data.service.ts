@@ -13,8 +13,11 @@ import type {
   DashboardViewItem,
   IncidentImpact,
   IncidentStatus,
+  ResourceMetricName,
 } from "@mimorii/contracts";
+import { resourceMetricNames } from "@mimorii/contracts";
 import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
+import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
 import { DatabaseService } from "../database/database.service.js";
 
 interface IncidentRow {
@@ -28,7 +31,10 @@ interface IncidentRow {
 
 @Injectable()
 export class DashboardDataService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly telemetry: ResourceTelemetryService
+  ) {}
 
   async render(
     teamId: string,
@@ -97,6 +103,7 @@ export class DashboardDataService {
         resourceName,
         value: row?.value ?? 0,
         format: "count",
+        series: [],
       };
     }
 
@@ -120,10 +127,30 @@ export class DashboardDataService {
         resourceName,
         value: row?.value ?? 0,
         format: "count",
+        series: [],
+      };
+    }
+
+    if (resourceMetricNames.includes(item.metric as ResourceMetricName)) {
+      const from = new Date(Date.now() - item.windowDays * 86_400_000).toISOString();
+      const series = (
+        await this.telemetry.series(item.resourceId!, from, new Date().toISOString(), [
+          item.metric as ResourceMetricName,
+        ])
+      )[0]!.points;
+      return {
+        ...this.viewBase(item),
+        metric: item.metric,
+        windowDays: item.windowDays,
+        resourceName,
+        value: series.at(-1)?.value ?? null,
+        format: item.metric.endsWith("Percent") ? "percent" : "number",
+        series,
       };
     }
 
     const resourceScope = item.resourceId ? "AND o.resource_id = ?" : "";
+    const from = new Date(Date.now() - item.windowDays * 86_400_000).toISOString();
     const row = await this.database.get<{ value: number | null }>(
       `${MONITOR_OBSERVATIONS_CTE} SELECT AVG(${
         item.metric === "uptime"
@@ -132,7 +159,20 @@ export class DashboardDataService {
       }) AS value
        FROM observations o WHERE o.team_id = ? AND o.observed_at >= ? ${resourceScope}`,
       teamId,
-      new Date(Date.now() - item.windowDays * 86_400_000).toISOString(),
+      from,
+      ...(item.resourceId ? [item.resourceId] : [])
+    );
+    const series = await this.database.all<{ observedAt: string; value: number }>(
+      `${MONITOR_OBSERVATIONS_CTE} SELECT o.observed_at AS "observedAt", ${
+        item.metric === "uptime"
+          ? "CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END"
+          : "o.latency_ms"
+      } AS value
+       FROM observations o WHERE o.team_id = ? AND o.observed_at >= ? ${resourceScope}
+       AND ${item.metric === "uptime" ? "TRUE" : "o.latency_ms IS NOT NULL"}
+       ORDER BY o.observed_at`,
+      teamId,
+      from,
       ...(item.resourceId ? [item.resourceId] : [])
     );
     return {
@@ -142,6 +182,7 @@ export class DashboardDataService {
       resourceName,
       value: row?.value ?? null,
       format: item.metric === "uptime" ? "percent" : "milliseconds",
+      series,
     };
   }
 

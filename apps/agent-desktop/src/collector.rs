@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use sysinfo::{Disks, Networks, System};
 
+use crate::containers;
 use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
 use crate::time_now;
 
@@ -14,6 +15,7 @@ pub fn collect() -> HostSnapshot {
     let networks = Networks::new_with_refreshed_list();
     let technologies = collect_technologies(&system);
     HostSnapshot {
+        snapshot_id: uuid::Uuid::new_v4().to_string(),
         hostname: System::host_name().unwrap_or_else(|| "unknown".to_owned()),
         platform: format!(
             "{} {}",
@@ -48,6 +50,7 @@ pub fn collect() -> HostSnapshot {
             })
             .collect(),
         technologies,
+        container_runtime: containers::collect(),
         observed_at: time_now(),
     }
 }

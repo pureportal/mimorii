@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { resourceKinds, type ResourceKind } from "@mimorii/contracts";
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, IsUUID, Length } from "class-validator";
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Length } from "class-validator";
 
 export class CreateResourceDto {
   @ApiProperty({ minLength: 1, maxLength: 100 })
@@ -11,11 +11,6 @@ export class CreateResourceDto {
   @ApiProperty({ enum: resourceKinds })
   @IsIn(resourceKinds)
   kind!: ResourceKind;
-
-  @ApiProperty({ maxLength: 2048 })
-  @IsString()
-  @Length(1, 2048)
-  target!: string;
 
   @ApiPropertyOptional({ maxLength: 500 })
   @IsOptional()
@@ -29,11 +24,6 @@ export class CreateResourceDto {
   @ArrayMaxSize(12)
   @IsString({ each: true })
   tags?: string[];
-
-  @ApiPropertyOptional({ format: "uuid", nullable: true })
-  @IsOptional()
-  @IsUUID()
-  agentId?: string | null;
 }
 
 export class UpdateResourceDto extends PartialType(CreateResourceDto) {}

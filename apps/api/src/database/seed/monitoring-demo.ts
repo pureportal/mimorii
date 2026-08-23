@@ -1,11 +1,16 @@
 import type {
   CheckType,
+  DatabaseCheckConfig,
   DiskCheckConfig,
   DnsCheckConfig,
+  DockerCheckConfig,
   HostCheckConfig,
   HttpCheckConfig,
+  HttpJsonAssertionGroup,
+  IcmpCheckConfig,
   ResourceKind,
   TcpCheckConfig,
+  WanCheckConfig,
 } from "@mimorii/contracts";
 import { at, days, hours, minutes, seedId, type SeedContext } from "./context.js";
 import type { SeedIdentityIds } from "./identity.js";
@@ -16,7 +21,6 @@ interface DemoResourceSeed {
   key: string;
   name: string;
   kind: ResourceKind;
-  target: string;
   description: string;
   tags: string[];
   agentId: string | null;
@@ -41,7 +45,11 @@ type DemoCheckSeed =
   | (DemoCheckSeedBase & { type: "tcp"; config: TcpCheckConfig })
   | (DemoCheckSeedBase & { type: "dns"; config: DnsCheckConfig })
   | (DemoCheckSeedBase & { type: "host"; config: HostCheckConfig })
-  | (DemoCheckSeedBase & { type: "disk"; config: DiskCheckConfig });
+  | (DemoCheckSeedBase & { type: "disk"; config: DiskCheckConfig })
+  | (DemoCheckSeedBase & { type: "icmp"; config: IcmpCheckConfig })
+  | (DemoCheckSeedBase & { type: "wan"; config: WanCheckConfig })
+  | (DemoCheckSeedBase & { type: "docker"; config: DockerCheckConfig })
+  | (DemoCheckSeedBase & { type: "database"; config: DatabaseCheckConfig });
 
 const recoveredHistory = ["up", "up", "down", "down", "up", "up", "up", "up"] as const;
 const warningHistory = ["up", "up", "up", "degraded", "up", "up", "up", "degraded"] as const;
@@ -54,7 +62,7 @@ export async function seedMonitoringDemo(
   const resources = demoResources(context, identity);
   const checks = demoChecks();
   await seedResources(context, resources);
-  await seedChecks(context, checks);
+  await seedChecks(context, identity, resources, checks);
   await seedResults(context, checks);
 }
 
@@ -63,8 +71,7 @@ function demoResources(context: SeedContext, identity: SeedIdentityIds): DemoRes
     {
       key: "public-web",
       name: "Public website",
-      kind: "endpoint",
-      target: "https://example.com/",
+      kind: "service",
       description: "Customer-facing website and edge connectivity",
       tags: ["production", "public", "web"],
       agentId: null,
@@ -72,8 +79,7 @@ function demoResources(context: SeedContext, identity: SeedIdentityIds): DemoRes
     {
       key: "public-status",
       name: "Public service status",
-      kind: "endpoint",
-      target: "https://status.example.com/api/status",
+      kind: "service",
       description: "Public status API consumed by clients and integrations",
       tags: ["production", "public", "status"],
       agentId: null,
@@ -81,8 +87,7 @@ function demoResources(context: SeedContext, identity: SeedIdentityIds): DemoRes
     {
       key: "internal-api",
       name: "Internal application API",
-      kind: "endpoint",
-      target: "http://api.internal:8080",
+      kind: "service",
       description: "Private application API monitored from the local relay",
       tags: ["production", "private", "api"],
       agentId: context.agentId,
@@ -91,25 +96,14 @@ function demoResources(context: SeedContext, identity: SeedIdentityIds): DemoRes
       key: "cache",
       name: "Cache cluster",
       kind: "service",
-      target: "redis.internal:6379",
       description: "Redis cache and its metrics exporter",
       tags: ["production", "private", "cache"],
-      agentId: context.agentId,
-    },
-    {
-      key: "worker",
-      name: "Background worker",
-      kind: "server",
-      target: "worker-01.internal",
-      description: "Worker host processing queues and scheduled jobs",
-      tags: ["production", "private", "worker"],
       agentId: context.agentId,
     },
     {
       key: "edge-gateway",
       name: "Branch gateway",
       kind: "service",
-      target: "gateway.branch.internal",
       description: "Branch network gateway observed through its relay",
       tags: ["branch", "private", "network"],
       agentId: identity.staleAgentId,
@@ -125,8 +119,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Website availability",
       type: "http",
       config: {
-        url: "https://example.com/",
-        method: "GET",
+        target: { url: "https://example.com/", method: "GET" },
         expectedStatuses: [200],
         followRedirects: true,
         validateTls: true,
@@ -138,8 +131,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Website headers and TLS",
       type: "http",
       config: {
-        url: "https://example.com/",
-        method: "HEAD",
+        target: { url: "https://example.com/", method: "HEAD" },
         expectedStatuses: [200, 301, 302],
         expectedHeaders: { "content-type": "text/html" },
         certificateWarningDays: 21,
@@ -155,7 +147,7 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "public-web",
       name: "Public HTTPS port",
       type: "tcp",
-      config: { host: "example.com", port: 443 },
+      config: { target: { host: "example.com", port: 443 } },
       history: recoveredHistory,
       downMessage: "Connection failed",
     },
@@ -165,9 +157,21 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Website DNS mapping",
       type: "dns",
       config: {
-        hostname: "example.com",
+        target: { hostname: "example.com" },
         recordType: "A",
         expectedValue: "93.184.216.34",
+      },
+    },
+    {
+      key: "website-icmp",
+      resourceKey: "public-web",
+      name: "Website network reachability",
+      type: "icmp",
+      config: {
+        target: { host: "example.com" },
+        packetCount: 3,
+        minimumSuccessPercent: 67,
+        latencyWarningMs: 250,
       },
     },
     {
@@ -176,12 +180,10 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Customer API health",
       type: "http",
       config: {
-        url: "https://api.example.com/health",
-        method: "GET",
+        target: { url: "https://api.example.com/health", method: "GET" },
         expectedStatuses: [200],
         expectedHeaders: { "content-type": "application/json" },
-        jsonPointer: "/status",
-        expectedJsonValue: "healthy",
+        jsonAssertions: jsonEquals("Service status", "/status", "healthy"),
         latencyWarningMs: 750,
         certificateWarningDays: 30,
         followRedirects: false,
@@ -196,12 +198,10 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Public service status mapping",
       type: "http",
       config: {
-        url: "https://status.example.com/api/status",
-        method: "GET",
+        target: { url: "https://status.example.com/api/status", method: "GET" },
         expectedStatuses: [200],
         expectedHeaders: { "content-type": "application/json" },
-        jsonPointer: "/page/status",
-        expectedJsonValue: "operational",
+        jsonAssertions: jsonEquals("Page status", "/page/status", "operational"),
         latencyWarningMs: 1_000,
         certificateWarningDays: 14,
         followRedirects: true,
@@ -216,8 +216,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Status endpoint response",
       type: "http",
       config: {
-        url: "https://status.example.com/api/health",
-        method: "GET",
+        target: { url: "https://status.example.com/api/health", method: "GET" },
         expectedStatuses: [200, 204],
         responseContains: "ok",
         followRedirects: false,
@@ -232,7 +231,7 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "server",
       name: "Application SSH port",
       type: "tcp",
-      config: { host: "app-01.internal", port: 22 },
+      config: { target: { host: "app-01.internal", port: 22 } },
     },
     {
       key: "server-health",
@@ -240,12 +239,10 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Application process health",
       type: "http",
       config: {
-        url: "http://app-01.internal:8080/health",
-        method: "GET",
+        target: { url: "http://app-01.internal:8080/health", method: "GET" },
         expectedStatuses: [200],
         expectedHeaders: { "content-type": "application/json" },
-        jsonPointer: "/status",
-        expectedJsonValue: "ready",
+        jsonAssertions: jsonEquals("Process status", "/status", "ready"),
         latencyWarningMs: 500,
         followRedirects: false,
         validateTls: true,
@@ -264,11 +261,39 @@ function demoChecks(): DemoCheckSeed[] {
       intervalSeconds: 300,
     },
     {
+      key: "server-wan",
+      resourceKey: "server",
+      name: "WAN reachability",
+      type: "wan",
+      config: {
+        targets: [
+          { name: "Primary DNS", host: "1.1.1.1" },
+          { name: "Secondary DNS", host: "8.8.8.8" },
+        ],
+        requiredSuccessfulTargets: 1,
+        packetCount: 3,
+        latencyWarningMs: 150,
+      },
+    },
+    {
+      key: "server-docker",
+      resourceKey: "server",
+      name: "Docker containers",
+      type: "docker",
+      config: {
+        requireHealthy: true,
+        requireRunning: true,
+        maximumRestarts: 3,
+        cpuWarningPercent: 85,
+        memoryWarningPercent: 85,
+      },
+    },
+    {
       key: "database-replica-port",
       resourceKey: "service",
       name: "PostgreSQL replica port",
       type: "tcp",
-      config: { host: "postgres-replica.internal", port: 5432 },
+      config: { target: { host: "postgres-replica.internal", port: 5432 } },
       history: recoveredHistory,
       downMessage: "Connection failed",
       failureThreshold: 3,
@@ -279,7 +304,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Database service discovery",
       type: "dns",
       config: {
-        hostname: "_postgresql._tcp.database.internal",
+        target: { hostname: "_postgresql._tcp.database.internal" },
         recordType: "SRV",
         expectedValue: "postgres.internal",
       },
@@ -290,11 +315,9 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Pipeline health mapping",
       type: "http",
       config: {
-        url: "http://pipeline.internal:8080/health",
-        method: "GET",
+        target: { url: "http://pipeline.internal:8080/health", method: "GET" },
         expectedStatuses: [200],
-        jsonPointer: "/jobs/ready",
-        expectedJsonValue: true,
+        jsonAssertions: jsonEquals("Jobs ready", "/jobs/ready", true),
         latencyWarningMs: 1_500,
         followRedirects: false,
         validateTls: true,
@@ -307,7 +330,7 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "pipeline",
       name: "Pipeline worker port",
       type: "tcp",
-      config: { host: "pipeline.internal", port: 9090 },
+      config: { target: { host: "pipeline.internal", port: 9090 } },
       history: failingHistory,
       downMessage: "Connection failed",
       failureThreshold: 3,
@@ -318,8 +341,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Internal API availability",
       type: "http",
       config: {
-        url: "http://api.internal:8080/",
-        method: "GET",
+        target: { url: "http://api.internal:8080/", method: "GET" },
         expectedStatuses: [200, 204],
         followRedirects: true,
         validateTls: true,
@@ -331,12 +353,10 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Internal API health mapping",
       type: "http",
       config: {
-        url: "http://api.internal:8080/health",
-        method: "GET",
+        target: { url: "http://api.internal:8080/health", method: "GET" },
         expectedStatuses: [200],
         expectedHeaders: { "content-type": "application/json" },
-        jsonPointer: "/service/state",
-        expectedJsonValue: "healthy",
+        jsonAssertions: jsonEquals("Service state", "/service/state", "healthy"),
         latencyWarningMs: 400,
         followRedirects: false,
         validateTls: true,
@@ -350,11 +370,9 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Internal deployment status",
       type: "http",
       config: {
-        url: "http://api.internal:8080/status",
-        method: "GET",
+        target: { url: "http://api.internal:8080/status", method: "GET" },
         expectedStatuses: [200],
-        jsonPointer: "/deployment/phase",
-        expectedJsonValue: "ready",
+        jsonAssertions: jsonEquals("Deployment phase", "/deployment/phase", "ready"),
         followRedirects: false,
         validateTls: true,
       },
@@ -366,29 +384,48 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "internal-api",
       name: "Internal API port",
       type: "tcp",
-      config: { host: "api.internal", port: 8080 },
+      config: { target: { host: "api.internal", port: 8080 } },
     },
     {
       key: "internal-dns",
       resourceKey: "internal-api",
       name: "Internal API DNS",
       type: "dns",
-      config: { hostname: "api.internal", recordType: "A", expectedValue: "10.20.0.15" },
+      config: {
+        target: { hostname: "api.internal" },
+        recordType: "A",
+        expectedValue: "10.20.0.15",
+      },
     },
     {
       key: "cache-redis",
       resourceKey: "cache",
       name: "Redis port",
       type: "tcp",
-      config: { host: "redis.internal", port: 6379 },
+      config: { target: { host: "redis.internal", port: 6379 } },
       timeoutMs: 1_500,
+    },
+    {
+      key: "cache-database",
+      resourceKey: "cache",
+      name: "Redis health",
+      type: "database",
+      config: {
+        target: {
+          engine: "redis",
+          host: "redis.internal",
+          port: 6379,
+          tls: true,
+        },
+        connectionWarningPercent: 80,
+      },
     },
     {
       key: "cache-metrics",
       resourceKey: "cache",
       name: "Redis metrics port",
       type: "tcp",
-      config: { host: "redis.internal", port: 9121 },
+      config: { target: { host: "redis.internal", port: 9121 } },
       history: warningHistory,
       degradedMessage: "Connection is near the timeout",
     },
@@ -397,7 +434,11 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "cache",
       name: "Cache DNS mapping",
       type: "dns",
-      config: { hostname: "redis.internal", recordType: "A", expectedValue: "10.20.0.20" },
+      config: {
+        target: { hostname: "redis.internal" },
+        recordType: "A",
+        expectedValue: "10.20.0.20",
+      },
     },
     {
       key: "worker-host",
@@ -433,14 +474,14 @@ function demoChecks(): DemoCheckSeed[] {
       resourceKey: "worker",
       name: "Worker queue port",
       type: "tcp",
-      config: { host: "queue.internal", port: 5672 },
+      config: { target: { host: "queue.internal", port: 5672 } },
     },
     {
       key: "edge-https-port",
       resourceKey: "edge-gateway",
       name: "Branch HTTPS port",
       type: "tcp",
-      config: { host: "gateway.branch.internal", port: 443 },
+      config: { target: { host: "gateway.branch.internal", port: 443 } },
       history: recoveredHistory,
       downMessage: "Connection failed",
     },
@@ -450,7 +491,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Branch gateway DNS",
       type: "dns",
       config: {
-        hostname: "gateway.branch.internal",
+        target: { hostname: "gateway.branch.internal" },
         recordType: "AAAA",
         expectedValue: "fd00:20::1",
       },
@@ -461,8 +502,7 @@ function demoChecks(): DemoCheckSeed[] {
       name: "Branch gateway health",
       type: "http",
       config: {
-        url: "https://gateway.branch.internal/health",
-        method: "GET",
+        target: { url: "https://gateway.branch.internal/health", method: "GET" },
         expectedStatuses: [200],
         responseContains: "healthy",
         certificateWarningDays: 30,
@@ -479,37 +519,41 @@ async function seedResources(context: SeedContext, resources: DemoResourceSeed[]
   for (const [index, resource] of resources.entries()) {
     await context.database.run(
       `INSERT INTO resources
-       (id, team_id, name, kind, target, description, tags_json, agent_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind,
-       target = excluded.target, description = excluded.description, tags_json = excluded.tags_json,
-       agent_id = excluded.agent_id, updated_at = excluded.updated_at`,
+       description = excluded.description, tags_json = excluded.tags_json,
+       updated_at = excluded.updated_at`,
       resourceId(context, resource.key),
       context.teamId,
       resource.name,
       resource.kind,
-      resource.target,
       resource.description,
       JSON.stringify(resource.tags),
-      resource.agentId,
       at(context, -days(70 - index * 4)),
       context.now.toISOString()
     );
   }
 }
 
-async function seedChecks(context: SeedContext, checks: DemoCheckSeed[]): Promise<void> {
+async function seedChecks(
+  context: SeedContext,
+  identity: SeedIdentityIds,
+  resources: DemoResourceSeed[],
+  checks: DemoCheckSeed[]
+): Promise<void> {
   for (const [index, check] of checks.entries()) {
     const history = check.history ?? Array<ResultStatus>(8).fill("up");
     const status = history.at(-1)!;
     const lastLatencyMs = resultLatency(check.type, status, history.length - 1);
     await context.database.run(
       `INSERT INTO checks
-       (id, team_id, resource_id, name, type, config_json, interval_seconds, timeout_ms,
+       (id, team_id, resource_id, agent_id, name, type, config_json, interval_seconds, timeout_ms,
         failure_threshold, recovery_threshold, enabled, current_status, consecutive_failures,
         consecutive_successes, last_latency_ms, last_checked_at, next_check_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET resource_id = excluded.resource_id, name = excluded.name,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET resource_id = excluded.resource_id,
+       agent_id = excluded.agent_id, name = excluded.name,
        type = excluded.type, config_json = excluded.config_json,
        interval_seconds = excluded.interval_seconds, timeout_ms = excluded.timeout_ms,
        failure_threshold = excluded.failure_threshold, recovery_threshold = excluded.recovery_threshold,
@@ -521,6 +565,7 @@ async function seedChecks(context: SeedContext, checks: DemoCheckSeed[]): Promis
       checkId(context, check.key),
       context.teamId,
       resourceId(context, check.resourceKey),
+      checkAgentId(context, identity, resources, check.resourceKey),
       check.name,
       check.type,
       JSON.stringify(check.config),
@@ -567,7 +612,13 @@ async function seedResults(context: SeedContext, checks: DemoCheckSeed[]): Promi
 }
 
 function resultLatency(type: CheckType, status: ResultStatus, index: number): number | null {
-  if (type === "host" || type === "disk" || (status === "down" && type !== "http")) return null;
+  if (
+    type === "host" ||
+    type === "disk" ||
+    type === "docker" ||
+    (status === "down" && type !== "http")
+  )
+    return null;
   if (status === "degraded") return 1_100 + index * 9;
   return 24 + index * 7;
 }
@@ -600,7 +651,7 @@ function resultMetrics(
         certificateDaysRemaining: 74,
       };
     case "tcp":
-      return { port: check.config.port };
+      return { port: check.config.target.port };
     case "dns":
       return {
         recordCount: status === "down" ? 0 : 2,
@@ -621,12 +672,46 @@ function resultMetrics(
         usedBytes: 620_000_000_000,
         totalBytes: 1_000_000_000_000,
       };
+    case "icmp":
+      return { packetsSent: 3, packetsReceived: status === "down" ? 0 : 3, packetLossPercent: 0 };
+    case "wan":
+      return { targetsUp: status === "down" ? 0 : 2, targetsTotal: 2 };
+    case "docker":
+      return { containerCount: 5, unhealthyContainerCount: status === "down" ? 1 : 0 };
+    case "database":
+      return { connectionPercent: 38, connectedClients: 12, maximumClients: 100 };
   }
   throw new Error("Unsupported check type");
 }
 
 function resourceId(context: SeedContext, key: string): string {
+  if (key === "server" || key === "worker") return context.agentId;
   return seedId(context, `resource:${key}`);
+}
+
+function checkAgentId(
+  context: SeedContext,
+  identity: SeedIdentityIds,
+  resources: DemoResourceSeed[],
+  resourceKey: string
+): string | null {
+  if (resourceKey === "server" || resourceKey === "worker") return context.agentId;
+  if (resourceKey === "service") return identity.staleAgentId;
+  if (resourceKey === "pipeline") return identity.offlineAgentId;
+  if (resourceKey === "endpoint") return null;
+  return resources.find((resource) => resource.key === resourceKey)?.agentId ?? null;
+}
+
+function jsonEquals(
+  name: string,
+  pointer: string,
+  expectedValue: string | number | boolean | null
+): HttpJsonAssertionGroup {
+  return {
+    kind: "group",
+    operator: "and",
+    conditions: [{ kind: "assertion", name, pointer, operator: "equals", expectedValue }],
+  };
 }
 
 function checkId(context: SeedContext, key: string): string {

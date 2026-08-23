@@ -9,14 +9,9 @@ describe("HTTP check fields", () => {
   it("offers all supported request methods", () => {
     render(<HttpCheckFields fields={checkFields(undefined)} update={vi.fn()} />);
 
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "GET",
-      "HEAD",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ]);
+    const method = screen.getByLabelText("Method");
+    expect(
+      Array.from((method as HTMLSelectElement).options).map((option) => option.textContent)
+    ).toEqual(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
   });
 });

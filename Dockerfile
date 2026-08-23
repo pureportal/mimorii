@@ -41,6 +41,10 @@ RUN pnpm --filter @mimorii/contracts build \
 
 FROM node:24-bookworm-slim AS runtime
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV MIMORII_API_PORT=4310
 ENV MIMORII_CLIENT_DIST=/app/client

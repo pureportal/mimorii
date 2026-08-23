@@ -138,7 +138,7 @@ export function ResourceImageDialog({
           </Field>
           <FieldError>{error}</FieldError>
           <div className="flex flex-wrap justify-between gap-2">
-            {isWebsite(resource) ? (
+            {resource.kind === "service" ? (
               <Button
                 type="button"
                 variant="outline"
@@ -168,14 +168,4 @@ export function ResourceImageDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function isWebsite(resource: Pick<ResourceSummary, "kind" | "target">): boolean {
-  if (resource.kind !== "endpoint") return false;
-  try {
-    const url = new URL(resource.target);
-    return new Set(["http:", "https:"]).has(url.protocol) && !url.username && !url.password;
-  } catch {
-    return false;
-  }
 }

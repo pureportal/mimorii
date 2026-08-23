@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   CheckConfig,
+  CheckExecution,
   CheckSummary,
   CheckType,
   AgentCapability,
@@ -8,6 +9,7 @@ import type {
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
+import { encryptConfiguration } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckConfigService } from "./check-config.service.js";
@@ -21,10 +23,11 @@ interface CheckSummaryRow extends CheckRow {
   uptime_30d: number | null;
 }
 
-interface ResourceExecutionRow {
+interface ResourceRow {
   id: string;
-  agent_id: string | null;
 }
+
+const secretCheckTypes = new Set<CheckType>(["http", "database"]);
 
 @Injectable()
 export class ChecksService {
@@ -63,24 +66,34 @@ export class ChecksService {
       teamId
     ))!.count;
     if (count >= 2_000) throw new BadRequestException("Check limit reached");
-    const resource = await this.requireResource(teamId, input.resourceId);
+    await this.requireResource(teamId, input.resourceId);
     const config = this.configs.validate(input.type, input.config);
-    await this.validateExecution(input.type, config, resource.agent_id);
+    const execution = this.execution(input.execution);
+    await this.validateExecution(input.resourceId, input.type, config, execution, teamId);
+    if (!secretCheckTypes.has(input.type) && input.secret !== undefined && input.secret !== null) {
+      throw new BadRequestException("Secrets are not available for this check type");
+    }
+    const encryptedSecret =
+      secretCheckTypes.has(input.type) && input.secret ? encryptConfiguration(input.secret) : null;
+    this.validateSecret(input.type, config, encryptedSecret);
 
     const id = randomUUID();
     const now = new Date().toISOString();
     const enabled = input.enabled !== false;
     await this.database.run(
       `INSERT INTO checks
-       (id, team_id, resource_id, name, type, config_json, interval_seconds, timeout_ms,
+       (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
+        interval_seconds, timeout_ms,
         failure_threshold, recovery_threshold, enabled, current_status, next_check_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.resourceId,
       input.name.trim(),
       input.type,
       JSON.stringify(config),
+      execution.kind === "agent" ? execution.agentId : null,
+      encryptedSecret,
       input.intervalSeconds ?? 60,
       input.timeoutMs ?? 5_000,
       input.failureThreshold ?? 2,
@@ -97,7 +110,7 @@ export class ChecksService {
       action: "check.created",
       subjectType: "check",
       subjectId: id,
-      metadata: { type: input.type, routedThroughAgent: Boolean(resource.agent_id) },
+      metadata: { type: input.type, execution: execution.kind },
     });
     return this.get(userId, teamId, id);
   }
@@ -116,24 +129,43 @@ export class ChecksService {
     );
     if (!current) throw new NotFoundException("Check not found");
     const resourceId = input.resourceId ?? current.resource_id;
-    const resource = await this.requireResource(teamId, resourceId);
+    await this.requireResource(teamId, resourceId);
     const type = input.type ?? current.type;
     const config = this.configs.validate(
       type,
       input.config ?? (JSON.parse(current.config_json) as Record<string, unknown>)
     );
-    await this.validateExecution(type, config, resource.agent_id);
+    const execution = input.execution
+      ? this.execution(input.execution)
+      : current.agent_id
+        ? ({ kind: "agent", agentId: current.agent_id } as const)
+        : ({ kind: "direct" } as const);
+    await this.validateExecution(resourceId, type, config, execution, teamId);
+    if (!secretCheckTypes.has(type) && input.secret !== undefined && input.secret !== null) {
+      throw new BadRequestException("Secrets are not available for this check type");
+    }
+    const encryptedSecret = !secretCheckTypes.has(type)
+      ? null
+      : input.secret === undefined
+        ? current.encrypted_secret
+        : input.secret
+          ? encryptConfiguration(input.secret)
+          : null;
+    this.validateSecret(type, config, encryptedSecret);
     const enabled = input.enabled ?? Boolean(current.enabled);
     const now = new Date().toISOString();
 
     await this.database.run(
-      `UPDATE checks SET resource_id = ?, name = ?, type = ?, config_json = ?, interval_seconds = ?,
+      `UPDATE checks SET resource_id = ?, name = ?, type = ?, config_json = ?, agent_id = ?,
+       encrypted_secret = ?, interval_seconds = ?,
        timeout_ms = ?, failure_threshold = ?, recovery_threshold = ?, enabled = ?, current_status = ?,
        next_check_at = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
       resourceId,
       input.name?.trim() ?? current.name,
       type,
       JSON.stringify(config),
+      execution.kind === "agent" ? execution.agentId : null,
+      encryptedSecret,
       input.intervalSeconds ?? current.interval_seconds,
       input.timeoutMs ?? current.timeout_ms,
       input.failureThreshold ?? current.failure_threshold,
@@ -218,6 +250,8 @@ export class ChecksService {
       failureThreshold: row.failure_threshold,
       recoveryThreshold: row.recovery_threshold,
       config: JSON.parse(row.config_json) as CheckConfig,
+      execution: row.agent_id ? { kind: "agent", agentId: row.agent_id } : { kind: "direct" },
+      secretConfigured: Boolean(row.encrypted_secret),
       consecutiveFailures: row.consecutive_failures,
       lastCheckedAt: row.last_checked_at,
       nextCheckAt: row.next_check_at,
@@ -228,9 +262,9 @@ export class ChecksService {
     };
   }
 
-  private async requireResource(teamId: string, resourceId: string): Promise<ResourceExecutionRow> {
-    const resource = await this.database.get<ResourceExecutionRow>(
-      "SELECT id, agent_id FROM resources WHERE id = ? AND team_id = ?",
+  private async requireResource(teamId: string, resourceId: string): Promise<ResourceRow> {
+    const resource = await this.database.get<ResourceRow>(
+      "SELECT id FROM resources WHERE id = ? AND team_id = ?",
       resourceId,
       teamId
     );
@@ -238,31 +272,87 @@ export class ChecksService {
     return resource;
   }
 
-  private async validateExecution(type: CheckType, config: CheckConfig, agentId: string | null) {
-    if (agentId) {
+  private async validateExecution(
+    resourceId: string,
+    type: CheckType,
+    config: CheckConfig,
+    execution: CheckExecution,
+    teamId: string
+  ) {
+    if (execution.kind === "agent") {
       const agent = await this.database.get<{
         kind: AgentKind;
         capabilities_json: string;
-      }>("SELECT kind, capabilities_json FROM agents WHERE id = ? AND revoked_at IS NULL", agentId);
+        resource_id: string;
+      }>(
+        `SELECT kind, capabilities_json, resource_id FROM agents
+         WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
+        execution.agentId,
+        teamId
+      );
       const capabilities = agent ? (JSON.parse(agent.capabilities_json) as AgentCapability[]) : [];
       if (agent?.kind !== "desktop" || !capabilities.includes(type)) {
         throw new BadRequestException(`Assigned agent does not support ${type} checks`);
       }
+      if (["host", "disk", "docker"].includes(type) && agent.resource_id !== resourceId) {
+        throw new BadRequestException(`${type} checks must belong to the agent resource`);
+      }
       return;
     }
-    if (type === "host" || type === "disk") {
-      if (!agentId) throw new BadRequestException("Host and disk checks require an agent");
-      return;
+    if (type === "host" || type === "disk" || type === "docker") {
+      throw new BadRequestException(`${type} checks require their resource agent`);
     }
     if (type === "http") {
-      const url = this.targets.validateHttpUrl((config as { url: string }).url);
+      const url = this.targets.validateHttpUrl((config as { target: { url: string } }).target.url);
       await this.targets.resolvePublicHost(url.hostname);
       return;
     }
     if (type === "tcp") {
-      await this.targets.resolvePublicHost((config as { host: string }).host);
+      await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
       return;
     }
-    this.targets.normalizeHost((config as { hostname: string }).hostname);
+    if (type === "dns") {
+      this.targets.normalizeHost((config as { target: { hostname: string } }).target.hostname);
+      return;
+    }
+    if (type === "icmp") {
+      await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
+      return;
+    }
+    if (type === "wan") {
+      await Promise.all(
+        (config as { targets: Array<{ host: string }> }).targets.map((target) =>
+          this.targets.resolvePublicHost(target.host)
+        )
+      );
+      return;
+    }
+    if (type === "database") {
+      await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
+    }
+  }
+
+  private execution(value: { kind: "direct" | "agent"; agentId?: string }): CheckExecution {
+    if (value.kind === "direct") {
+      if (value.agentId) throw new BadRequestException("Direct execution cannot specify an agent");
+      return { kind: "direct" };
+    }
+    if (!value.agentId) throw new BadRequestException("Agent execution requires an agent");
+    return { kind: "agent", agentId: value.agentId };
+  }
+
+  private validateSecret(
+    type: CheckType,
+    config: CheckConfig,
+    encryptedSecret: string | null
+  ): void {
+    if (type !== "http") return;
+    const secretHeaderName = (config as { target: { secretHeaderName?: string } }).target
+      .secretHeaderName;
+    if (Boolean(secretHeaderName) !== Boolean(encryptedSecret)) {
+      throw new BadRequestException(
+        "HTTP secret header name and value must be configured together"
+      );
+    }
   }
 }

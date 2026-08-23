@@ -1,9 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
-  CheckStatus,
-  CheckType,
-  AgentCapability,
   AgentKind,
+  AgentStatus,
+  CheckStatus,
   ResourceKind,
   ResourceSummary,
 } from "@mimorii/contracts";
@@ -13,17 +12,20 @@ import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
-import { ResourceImagesService } from "./resource-images.service.js";
 
 interface ResourceRow {
   id: string;
   team_id: string;
   name: string;
   kind: ResourceKind;
-  target: string;
   description: string | null;
   tags_json: string;
   agent_id: string | null;
+  agent_kind: AgentKind | null;
+  agent_platform: string | null;
+  agent_version: string | null;
+  agent_last_seen_at: string | null;
+  agent_collection_interval_seconds: number | null;
   status: CheckStatus;
   checks_up: number;
   checks_total: number;
@@ -38,8 +40,7 @@ export class ResourcesService {
     private readonly database: DatabaseService,
     private readonly access: TeamAccessService,
     private readonly maintenance: MaintenanceService,
-    private readonly audit: AuditService,
-    private readonly images: ResourceImagesService
+    private readonly audit: AuditService
   ) {}
 
   async list(userId: string, teamId: string): Promise<ResourceSummary[]> {
@@ -64,29 +65,24 @@ export class ResourcesService {
 
   async create(userId: string, teamId: string, input: CreateResourceDto): Promise<ResourceSummary> {
     await this.access.require(userId, teamId, "member");
-    if (input.agentId) await this.access.require(userId, teamId, "admin");
     const count = (await this.database.get<{ count: number }>(
       "SELECT COUNT(*) AS count FROM resources WHERE team_id = ?",
       teamId
     ))!.count;
     if (count >= 1_000) throw new BadRequestException("Resource limit reached");
-    await this.requireAgent(teamId, input.agentId);
-
     const id = randomUUID();
     const now = new Date().toISOString();
     const tags = this.tags(input.tags);
     await this.database.run(
       `INSERT INTO resources
-       (id, team_id, name, kind, target, description, tags_json, agent_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.name.trim(),
       input.kind,
-      input.target.trim(),
       input.description?.trim() || null,
       JSON.stringify(tags),
-      input.agentId ?? null,
       now,
       now
     );
@@ -97,7 +93,6 @@ export class ResourcesService {
       subjectType: "resource",
       subjectId: id,
     });
-    await this.images.tryAssignFavicon(userId, teamId, id, input.kind, input.target.trim());
     return this.get(userId, teamId, id);
   }
 
@@ -111,26 +106,18 @@ export class ResourcesService {
     const current = await this.database.get<{
       name: string;
       kind: ResourceKind;
-      target: string;
       description: string | null;
       tags_json: string;
-      agent_id: string | null;
     }>("SELECT * FROM resources WHERE team_id = ? AND id = ?", teamId, id);
     if (!current) throw new NotFoundException("Resource not found");
-    if (input.agentId !== undefined && input.agentId !== current.agent_id) {
-      await this.access.require(userId, teamId, "admin");
-    }
-    await this.requireAgent(teamId, input.agentId, id);
 
     await this.database.run(
-      `UPDATE resources SET name = ?, kind = ?, target = ?, description = ?, tags_json = ?,
-       agent_id = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
+      `UPDATE resources SET name = ?, kind = ?, description = ?, tags_json = ?,
+       updated_at = ? WHERE id = ? AND team_id = ?`,
       input.name?.trim() ?? current.name,
       input.kind ?? current.kind,
-      input.target?.trim() ?? current.target,
       input.description === undefined ? current.description : input.description.trim() || null,
       input.tags === undefined ? current.tags_json : JSON.stringify(this.tags(input.tags)),
-      input.agentId === undefined ? current.agent_id : input.agentId,
       new Date().toISOString(),
       id,
       teamId
@@ -147,6 +134,21 @@ export class ResourcesService {
 
   async remove(userId: string, teamId: string, id: string): Promise<void> {
     await this.access.require(userId, teamId, "member");
+    const agent = await this.database.get<{ id: string }>(
+      "SELECT id FROM agents WHERE resource_id = ?",
+      id
+    );
+    if (agent) {
+      await this.access.require(userId, teamId, "admin");
+      const assigned = await this.database.get<{ count: number }>(
+        "SELECT COUNT(*)::int AS count FROM checks WHERE agent_id = ? AND resource_id != ?",
+        agent.id,
+        id
+      );
+      if (assigned?.count) {
+        throw new BadRequestException("Reassign checks that use this agent before deleting it");
+      }
+    }
     const result = await this.database.run(
       "DELETE FROM resources WHERE id = ? AND team_id = ?",
       id,
@@ -165,6 +167,12 @@ export class ResourcesService {
   private selectSql(where: string): string {
     return `
       SELECT r.*,
+        a.id AS agent_id,
+        a.kind AS agent_kind,
+        a.platform AS agent_platform,
+        a.version AS agent_version,
+        a.last_seen_at AS agent_last_seen_at,
+        a.collection_interval_seconds AS agent_collection_interval_seconds,
         CASE
           WHEN COUNT(c.id) = 0 AND NOT EXISTS (
             SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id
@@ -189,9 +197,11 @@ export class ResourcesService {
         COUNT(c.id) AS checks_total,
         MAX(c.last_checked_at) AS last_checked_at,
         (SELECT ri.updated_at FROM resource_images ri WHERE ri.resource_id = r.id) AS image_updated_at
-      FROM resources r LEFT JOIN checks c ON c.resource_id = r.id
+      FROM resources r
+      LEFT JOIN agents a ON a.resource_id = r.id AND a.revoked_at IS NULL
+      LEFT JOIN checks c ON c.resource_id = r.id
       ${where}
-      GROUP BY r.id
+      GROUP BY r.id, a.id
       ORDER BY LOWER(r.name)`;
   }
 
@@ -201,11 +211,19 @@ export class ResourcesService {
       teamId: row.team_id,
       name: row.name,
       kind: row.kind,
-      target: row.target,
       description: row.description,
       tags: JSON.parse(row.tags_json) as string[],
-      agentId: row.agent_id,
-      status: row.status,
+      agent: row.agent_id
+        ? {
+            id: row.agent_id,
+            kind: row.agent_kind!,
+            status: this.agentStatus(row),
+            platform: row.agent_platform,
+            version: row.agent_version,
+            lastSeenAt: row.agent_last_seen_at,
+          }
+        : null,
+      status: this.resourceStatus(row),
       checksUp: row.checks_up,
       checksTotal: row.checks_total,
       lastCheckedAt: row.last_checked_at,
@@ -221,35 +239,20 @@ export class ResourcesService {
     );
   }
 
-  private async requireAgent(
-    teamId: string,
-    agentId: string | null | undefined,
-    resourceId?: string
-  ): Promise<void> {
-    if (!agentId) return;
-    const agent = await this.database.get<{
-      kind: AgentKind;
-      capabilities_json: string;
-    }>(
-      `SELECT kind, capabilities_json FROM agents
-       WHERE id = ? AND team_id = ? AND revoked_at IS NULL`,
-      agentId,
-      teamId
-    );
-    if (!agent) throw new BadRequestException("Agent is unavailable");
-    if (agent.kind !== "desktop") {
-      throw new BadRequestException("Mobile agents cannot be assigned to resources");
-    }
-    if (!resourceId) return;
-    const capabilities = JSON.parse(agent.capabilities_json) as AgentCapability[];
-    const checks = await this.database.all<{ type: CheckType }>(
-      "SELECT type FROM checks WHERE resource_id = ? AND team_id = ?",
-      resourceId,
-      teamId
-    );
-    const unsupported = checks.find((check) => !capabilities.includes(check.type));
-    if (unsupported) {
-      throw new BadRequestException(`Agent does not support ${unsupported.type} checks`);
-    }
+  private resourceStatus(row: ResourceRow): CheckStatus {
+    if (!row.agent_id) return row.status;
+    const agentStatus = this.agentStatus(row);
+    if (agentStatus === "offline") return "down";
+    if (agentStatus === "stale" && row.status !== "down") return "degraded";
+    return row.status;
+  }
+
+  private agentStatus(row: ResourceRow): AgentStatus {
+    if (!row.agent_last_seen_at) return "never";
+    const interval = (row.agent_collection_interval_seconds ?? 30) * 1_000;
+    const age = Date.now() - new Date(row.agent_last_seen_at).getTime();
+    const online = row.agent_kind === "mobile" ? Math.max(30 * 60_000, interval * 2) : 90_000;
+    const stale = row.agent_kind === "mobile" ? Math.max(2 * 60 * 60_000, interval * 4) : 300_000;
+    return age <= online ? "online" : age <= stale ? "stale" : "offline";
   }
 }

@@ -8,11 +8,14 @@ import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { AgentHeartbeatDto, HostSnapshotDto } from "./agents.dto.js";
 import { AgentsService } from "./agents.service.js";
 import type { MobileDeviceStatusService } from "./mobile-device-status.service.js";
+import type { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
+import type { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 
 const agent: AuthenticatedAgent = {
   id: "agent-1",
   teamId: "team-1",
-  name: "Relay",
+  resourceId: "agent-1",
+  resourceName: "Relay",
   kind: "desktop",
   capabilities: ["http", "tcp", "dns", "host", "disk"],
   collectionIntervalSeconds: 45,
@@ -23,8 +26,17 @@ const mobileDeviceStatuses = {
   latest: vi.fn(async () => null),
 } as unknown as MobileDeviceStatusService;
 
+const telemetry = {
+  values: vi.fn(() => ({})),
+} as unknown as ResourceTelemetryService;
+
+const alerts = {
+  evaluate: vi.fn(async () => undefined),
+} as unknown as ResourceAlertsService;
+
 function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
   return {
+    snapshotId: "00000000-0000-4000-8000-000000000001",
     hostname: "relay-01",
     platform: "linux",
     version: "0.1.0",
@@ -40,6 +52,7 @@ function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
     networkTransmittedBytes: 5_000,
     disks: [{ mount: "/", usedBytes: 20_000, totalBytes: 100_000 }],
     technologies: [{ name: "postgres", category: "database", version: "16" }],
+    containerRuntime: null,
     observedAt,
   };
 }
@@ -49,7 +62,8 @@ describe("AgentsService", () => {
     const currentAgent = {
       id: "agent-1",
       team_id: "team-1",
-      name: "Relay",
+      resource_id: "agent-1",
+      resource_name: "Relay",
       kind: "desktop",
       collection_interval_seconds: 45,
       platform: "linux",
@@ -62,17 +76,23 @@ describe("AgentsService", () => {
     const get = vi
       .fn()
       .mockResolvedValueOnce(currentAgent)
-      .mockResolvedValueOnce({ ...currentAgent, name: "Production relay" });
+      .mockResolvedValueOnce({ ...currentAgent, resource_name: "Production relay" });
     const run = vi.fn(async () => ({ changes: 1 }));
     const requireAccess = vi.fn(async () => ({}));
     const record = vi.fn(async () => undefined);
     const service = new AgentsService(
-      { get, run } as unknown as DatabaseService,
+      {
+        get,
+        run,
+        transaction: async <T>(action: () => Promise<T>) => action(),
+      } as unknown as DatabaseService,
       { require: requireAccess } as unknown as TeamAccessService,
       { record } as unknown as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     const response = await service.update("user-1", "team-1", "agent-1", {
@@ -80,10 +100,10 @@ describe("AgentsService", () => {
     });
 
     expect(requireAccess).toHaveBeenCalledWith("user-1", "team-1", "admin");
-    expect(run).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE agents SET name = ?"),
+    expect(run).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("UPDATE resources SET name = ?"),
       "Production relay",
-      45,
       expect.any(String),
       "agent-1",
       "team-1"
@@ -96,7 +116,7 @@ describe("AgentsService", () => {
       subjectId: "agent-1",
       metadata: { name: "Production relay", collectionIntervalSeconds: 45 },
     });
-    expect(response.name).toBe("Production relay");
+    expect(response.resourceName).toBe("Production relay");
     expect(response.collectionIntervalSeconds).toBe(45);
   });
 
@@ -107,7 +127,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     await expect(
@@ -122,7 +144,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     await expect(
@@ -164,7 +188,9 @@ describe("AgentsService", () => {
         {} as AuditService,
         {} as ResultsService,
         {} as TechnologiesService,
-        mobileDeviceStatuses
+        mobileDeviceStatuses,
+        telemetry,
+        alerts
       );
 
       const response = await service.list("user-1", "team-1");
@@ -199,7 +225,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     const response = await service.poll(agent);
@@ -227,7 +255,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       { observeAgent } as unknown as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
     const input: AgentHeartbeatDto = {
       agentVersion: "2.1.0",
@@ -267,7 +297,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       { observeAgent } as unknown as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     const response = await service.heartbeat(agent, {
@@ -302,7 +334,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     await expect(
@@ -346,7 +380,9 @@ describe("AgentsService", () => {
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
-      mobileDeviceStatuses
+      mobileDeviceStatuses,
+      telemetry,
+      alerts
     );
 
     await expect(service.snapshots("user-1", "team-1", "agent-1")).resolves.toEqual([]);

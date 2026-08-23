@@ -34,6 +34,7 @@ fn config(server_url: &str, key: String) -> AgentConfig {
 
 fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
     HostSnapshot {
+        snapshot_id: format!("snapshot-{observed_at}"),
         hostname: "relay-01".to_owned(),
         platform: "test platform".to_owned(),
         version: "0.1.0".to_owned(),
@@ -57,6 +58,7 @@ fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
             category: "database".to_owned(),
             version: Some("16".to_owned()),
         }],
+        container_runtime: None,
         observed_at: observed_at.to_owned(),
     }
 }
@@ -79,6 +81,7 @@ fn triggered_poll(interval_seconds: u64) -> String {
                 "swapWarningPercent": 80,
                 "swapCriticalPercent": 90
             },
+            "secret": null,
             "issuedAt": "2026-08-13T10:00:30Z"
         }]
     })
@@ -239,11 +242,14 @@ fn rejects_missing_arguments_and_local_interval_configuration() {
 }
 
 #[test]
-fn polling_without_a_trigger_keeps_every_snapshot_local() {
-    let server = http_server(vec![MockResponse::new(
-        200,
-        r#"{"collectionIntervalSeconds":45,"tasks":[]}"#,
-    )]);
+fn polling_without_a_task_transfers_collected_telemetry() {
+    let server = http_server(vec![
+        MockResponse::new(200, r#"{"collectionIntervalSeconds":45,"tasks":[]}"#),
+        MockResponse::new(
+            200,
+            r#"{"acceptedAt":"2026-08-13T10:00:31Z","acceptedSnapshots":2,"acceptedResults":0}"#,
+        ),
+    ]);
     let directory = temporary_path("collected");
     let store = SnapshotStore::new(directory.clone());
     store
@@ -261,14 +267,22 @@ fn polling_without_a_trigger_keeps_every_snapshot_local() {
     .unwrap();
 
     assert_eq!(configured_interval.get(), 45);
-    assert!(outcome.heartbeat.unwrap().is_none());
-    assert_eq!(store.load().unwrap().snapshots().len(), 2);
+    let response = outcome.heartbeat.unwrap().unwrap();
+    assert_eq!(response.accepted_snapshots, 2);
+    assert_eq!(response.accepted_results, 0);
+    assert!(store.load().unwrap().is_empty());
     let poll = server
         .requests
         .recv_timeout(Duration::from_secs(1))
         .unwrap();
     assert!(poll.starts_with("GET /api/agent/tasks?limit=100 HTTP/1.1"));
-    assert!(server.requests.try_recv().is_err());
+    let heartbeat = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    let payload: Value = serde_json::from_str(heartbeat.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(payload["snapshots"].as_array().unwrap().len(), 2);
+    assert_eq!(payload["results"], json!([]));
 
     fs::remove_dir_all(directory).unwrap();
 }
@@ -312,7 +326,9 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     assert_eq!(payload["results"][0]["taskId"], "task-1");
     assert_eq!(
         payload["capabilities"],
-        json!(["http", "tcp", "dns", "host", "disk"])
+        json!([
+            "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database"
+        ])
     );
 
     fs::remove_dir_all(directory).unwrap();
@@ -336,7 +352,8 @@ fn check_runner_registers_network_capabilities_and_never_sends_host_snapshots() 
                     "checkId": "check-1",
                     "type": "tcp",
                     "timeoutMs": 2_000,
-                    "config": { "host": "127.0.0.1", "port": port },
+                    "config": { "target": { "host": "127.0.0.1", "port": port } },
+                    "secret": null,
                     "issuedAt": "2026-08-13T10:00:30Z"
                 }]
             })
@@ -374,7 +391,7 @@ fn check_runner_registers_network_capabilities_and_never_sends_host_snapshots() 
     assert_eq!(registration_payload["snapshots"], json!([]));
     assert_eq!(
         registration_payload["capabilities"],
-        json!(["http", "tcp", "dns"])
+        json!(["http", "tcp", "dns", "icmp", "wan", "database"])
     );
     assert_eq!(
         registration_payload["agentVersion"],

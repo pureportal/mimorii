@@ -17,8 +17,10 @@ const MAXIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 3_600;
 const TRIGGER_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const CONFIGURATION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const NATIVE_CAPABILITIES: &[&str] = &["http", "tcp", "dns", "host", "disk"];
-const CHECK_RUNNER_CAPABILITIES: &[&str] = &["http", "tcp", "dns"];
+const NATIVE_CAPABILITIES: &[&str] = &[
+    "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database",
+];
+const CHECK_RUNNER_CAPABILITIES: &[&str] = &["http", "tcp", "dns", "icmp", "wan", "database"];
 
 pub(crate) trait RuntimeReporter: Send + Sync {
     fn info(&self, message: &str);
@@ -193,7 +195,7 @@ pub(crate) fn cycle(
     let poll = client.poll(100)?;
     validate_collection_interval(poll.collection_interval_seconds)?;
     configure_collection(poll.collection_interval_seconds)?;
-    if poll.tasks.is_empty() {
+    if poll.tasks.is_empty() && store.load()?.is_empty() {
         return Ok(CycleOutcome {
             heartbeat: Ok(None),
         });

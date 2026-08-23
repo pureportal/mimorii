@@ -12,8 +12,7 @@ fn http_task(url: &str, follow_redirects: bool) -> crate::models::AgentTask {
     task(
         CheckType::Http,
         json!({
-            "url": url,
-            "method": "GET",
+            "target": { "url": url, "method": "GET" },
             "expectedStatuses": [200],
             "followRedirects": follow_redirects,
             "validateTls": true
@@ -91,7 +90,7 @@ fn tcp_port_policy_is_checked_before_dns_resolution() {
     let error = super::super::tcp_with_resolver(
         &task(
             CheckType::Tcp,
-            json!({ "host": "database.example.com", "port": 5432 }),
+            json!({ "target": { "host": "database.example.com", "port": 5432 } }),
         ),
         &policy,
         |_, _| {

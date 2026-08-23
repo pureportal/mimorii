@@ -2,6 +2,7 @@ import type { AgentSummary } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { createAgentEnrollmentCode, parseAgentEnrollmentCode } from "../lib/agent-enrollment";
 import { AgentsPage } from "./agents-page";
 
@@ -21,8 +22,9 @@ vi.mock("../lib/auth", () => ({ useAuth: useAuthMock }));
 
 const warehouseRelay: AgentSummary = {
   id: "agent-1",
+  resourceId: "agent-1",
+  resourceName: "Warehouse relay",
   teamId: "team-1",
-  name: "Warehouse relay",
   kind: "desktop",
   collectionIntervalSeconds: 30,
   status: "online",
@@ -36,8 +38,9 @@ const warehouseRelay: AgentSummary = {
 
 const fieldPhone: AgentSummary = {
   id: "22222222-2222-4222-8222-222222222222",
+  resourceId: "22222222-2222-4222-8222-222222222222",
+  resourceName: "Field phone",
   teamId: "team-1",
-  name: "Field phone",
   kind: "mobile",
   collectionIntervalSeconds: 900,
   status: "offline",
@@ -145,7 +148,7 @@ describe("AgentsPage confirmations", () => {
       if (path === "/teams/team-1/agents/agent-1" && options?.method === "PATCH") {
         currentAgent = {
           ...warehouseRelay,
-          name: "Production relay",
+          resourceName: "Production relay",
           collectionIntervalSeconds: 45,
         };
         return Promise.resolve(currentAgent);
@@ -231,9 +234,11 @@ function renderPage() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AgentsPage />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <AgentsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 

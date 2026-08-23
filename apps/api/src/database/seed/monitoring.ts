@@ -34,6 +34,7 @@ interface CheckSeed {
   name: string;
   type: CheckType;
   config: CheckConfig;
+  agentId: string | null;
   intervalSeconds: number;
   timeoutMs: number;
   failureThreshold: number;
@@ -51,23 +52,23 @@ export async function seedMonitoring(
   context: SeedContext,
   identity: SeedIdentityIds
 ): Promise<SeedMonitoringIds> {
-  const ids = monitoringIds(context);
+  const ids = monitoringIds(context, identity);
   await seedResources(context, identity, ids);
-  await seedChecks(context, ids);
+  await seedChecks(context, identity, ids);
   await seedResults(context, ids);
   await seedMonitoringDemo(context, identity);
   await seedRelayTelemetry(context, identity, ids);
   return ids;
 }
 
-function monitoringIds(context: SeedContext): SeedMonitoringIds {
+function monitoringIds(context: SeedContext, identity: SeedIdentityIds): SeedMonitoringIds {
   return {
-    serverResourceId: seedId(context, "resource:server"),
+    serverResourceId: context.agentId,
     serviceResourceId: seedId(context, "resource:service"),
     endpointResourceId: seedId(context, "resource:endpoint"),
     pipelineResourceId: seedId(context, "resource:pipeline"),
     pendingResourceId: seedId(context, "resource:pending"),
-    pausedResourceId: seedId(context, "resource:paused"),
+    pausedResourceId: identity.newAgentId,
     httpCheckId: seedId(context, "check:http"),
     tcpCheckId: seedId(context, "check:tcp"),
     dnsCheckId: seedId(context, "check:dns"),
@@ -95,89 +96,77 @@ async function seedResources(
     id: string;
     name: string;
     kind: ResourceKind;
-    target: string;
     description: string;
     tags: string[];
-    agentId: string | null;
   }> = [
     {
       id: ids.serverResourceId,
       name: "Application server",
-      kind: "server",
-      target: "app-01.internal",
+      kind: "host",
       description: "Primary application host",
       tags: ["production", "core", "linux"],
-      agentId: context.agentId,
     },
     {
       id: ids.serviceResourceId,
       name: "Payments database",
       kind: "service",
-      target: "postgres.internal:5432",
       description: "PostgreSQL service used by payments",
       tags: ["production", "payments", "database"],
-      agentId: identity.staleAgentId,
     },
     {
       id: ids.endpointResourceId,
       name: "Customer API",
-      kind: "endpoint",
-      target: "https://example.com/",
+      kind: "service",
       description: "Public customer API health endpoint",
       tags: ["production", "public", "api"],
-      agentId: null,
     },
     {
       id: ids.pipelineResourceId,
       name: "Data pipeline",
       kind: "service",
-      target: "pipeline.internal",
       description: "Scheduled imports, exports, and backups",
       tags: ["production", "data", "jobs"],
-      agentId: identity.offlineAgentId,
     },
     {
       id: ids.pendingResourceId,
       name: "Preview API",
-      kind: "endpoint",
-      target: "https://preview.example.com/health",
+      kind: "service",
       description: "New endpoint awaiting its first observation",
       tags: ["staging", "api"],
-      agentId: null,
     },
     {
       id: ids.pausedResourceId,
       name: "Archive server",
-      kind: "server",
-      target: "archive.internal",
+      kind: "host",
       description: "Cold storage host with monitoring paused",
       tags: ["archive", "internal"],
-      agentId: identity.newAgentId,
     },
   ];
   for (const [index, resource] of resources.entries()) {
     await context.database.run(
       `INSERT INTO resources
-       (id, team_id, name, kind, target, description, tags_json, agent_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind,
-       target = excluded.target, description = excluded.description, tags_json = excluded.tags_json,
-       agent_id = excluded.agent_id, updated_at = excluded.updated_at`,
+       description = excluded.description, tags_json = excluded.tags_json,
+       updated_at = excluded.updated_at`,
       resource.id,
       context.teamId,
       resource.name,
       resource.kind,
-      resource.target,
       resource.description,
       JSON.stringify(resource.tags),
-      resource.agentId,
       at(context, -days(100 - index * 8)),
       context.now.toISOString()
     );
   }
 }
 
-async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise<void> {
+async function seedChecks(
+  context: SeedContext,
+  identity: SeedIdentityIds,
+  ids: SeedMonitoringIds
+): Promise<void> {
   const hostConfig = {
     cpuWarningPercent: 80,
     cpuCriticalPercent: 95,
@@ -194,9 +183,9 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.endpointResourceId,
       name: "API response",
       type: "http",
+      agentId: null,
       config: {
-        url: "https://example.com/",
-        method: "GET",
+        target: { url: "https://example.com/", method: "GET" },
         expectedStatuses: [200],
         responseContains: "Example Domain",
         expectedHeaders: { "content-type": "text/html" },
@@ -222,7 +211,8 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.serviceResourceId,
       name: "PostgreSQL port",
       type: "tcp",
-      config: { host: "postgres.internal", port: 5432 },
+      agentId: identity.staleAgentId,
+      config: { target: { host: "postgres.internal", port: 5432 } },
       intervalSeconds: 60,
       timeoutMs: 3_000,
       failureThreshold: 3,
@@ -240,7 +230,8 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.endpointResourceId,
       name: "Public DNS",
       type: "dns",
-      config: { hostname: "example.com", recordType: "A" },
+      agentId: null,
+      config: { target: { hostname: "example.com" }, recordType: "A" },
       intervalSeconds: 120,
       timeoutMs: 4_000,
       failureThreshold: 2,
@@ -258,6 +249,7 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.serverResourceId,
       name: "Host resources",
       type: "host",
+      agentId: context.agentId,
       config: hostConfig,
       intervalSeconds: 30,
       timeoutMs: 5_000,
@@ -276,6 +268,7 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.serverResourceId,
       name: "Root disk",
       type: "disk",
+      agentId: context.agentId,
       config: { mount: "/", warningPercent: 80, criticalPercent: 95 },
       intervalSeconds: 300,
       timeoutMs: 5_000,
@@ -294,14 +287,25 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.pendingResourceId,
       name: "Preview health",
       type: "http",
+      agentId: null,
       config: {
-        url: "https://preview.example.com/health",
-        method: "GET",
+        target: { url: "https://preview.example.com/health", method: "GET" },
         expectedStatuses: [200],
         responseContains: "ready",
         expectedHeaders: { "content-type": "application/json" },
-        jsonPointer: "/service/status",
-        expectedJsonValue: "ready",
+        jsonAssertions: {
+          kind: "group",
+          operator: "and",
+          conditions: [
+            {
+              kind: "assertion",
+              name: "Service status",
+              pointer: "/service/status",
+              operator: "equals",
+              expectedValue: "ready",
+            },
+          ],
+        },
         latencyWarningMs: 1_000,
         certificateWarningDays: 30,
         followRedirects: false,
@@ -324,6 +328,7 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       resourceId: ids.pausedResourceId,
       name: "Archive disk",
       type: "disk",
+      agentId: identity.newAgentId,
       config: { mount: "/archive", warningPercent: 85, criticalPercent: 95 },
       intervalSeconds: 600,
       timeoutMs: 5_000,
@@ -341,12 +346,12 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
   for (const [index, check] of checks.entries()) {
     await context.database.run(
       `INSERT INTO checks
-       (id, team_id, resource_id, name, type, config_json, interval_seconds, timeout_ms,
+       (id, team_id, resource_id, agent_id, name, type, config_json, interval_seconds, timeout_ms,
         failure_threshold, recovery_threshold, enabled, current_status, consecutive_failures,
         consecutive_successes, last_latency_ms, last_checked_at, next_check_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET resource_id = excluded.resource_id, name = excluded.name,
-       type = excluded.type, config_json = excluded.config_json,
+       agent_id = excluded.agent_id, type = excluded.type, config_json = excluded.config_json,
        interval_seconds = excluded.interval_seconds, timeout_ms = excluded.timeout_ms,
        failure_threshold = excluded.failure_threshold, recovery_threshold = excluded.recovery_threshold,
        enabled = excluded.enabled, current_status = excluded.current_status,
@@ -357,6 +362,7 @@ async function seedChecks(context: SeedContext, ids: SeedMonitoringIds): Promise
       check.id,
       context.teamId,
       check.resourceId,
+      check.agentId,
       check.name,
       check.type,
       JSON.stringify(check.config),

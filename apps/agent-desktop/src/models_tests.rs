@@ -9,6 +9,7 @@ use super::{
 
 fn snapshot() -> HostSnapshot {
     HostSnapshot {
+        snapshot_id: "00000000-0000-4000-8000-000000000003".to_owned(),
         hostname: "relay".to_owned(),
         platform: "linux".to_owned(),
         version: "0.1.0".to_owned(),
@@ -32,6 +33,7 @@ fn snapshot() -> HostSnapshot {
             category: "proxy".to_owned(),
             version: None,
         }],
+        container_runtime: None,
         observed_at: "2026-08-12T20:00:00Z".to_owned(),
     }
 }
@@ -42,8 +44,12 @@ fn deserializes_every_supported_task_type() {
         ("http", CheckType::Http),
         ("tcp", CheckType::Tcp),
         ("dns", CheckType::Dns),
+        ("icmp", CheckType::Icmp),
+        ("wan", CheckType::Wan),
         ("host", CheckType::Host),
         ("disk", CheckType::Disk),
+        ("docker", CheckType::Docker),
+        ("database", CheckType::Database),
     ] {
         let task: AgentTask = serde_json::from_value(json!({
             "id": "task",
@@ -51,6 +57,7 @@ fn deserializes_every_supported_task_type() {
             "type": value,
             "timeoutMs": 5000,
             "config": {},
+            "secret": null,
             "issuedAt": "2026-08-12T20:00:00Z"
         }))
         .unwrap();
@@ -69,6 +76,7 @@ fn rejects_unknown_and_mis_cased_task_types() {
             "type": value,
             "timeoutMs": 5000,
             "config": {},
+            "secret": null,
             "issuedAt": "2026-08-12T20:00:00Z"
         }));
         assert!(result.is_err());
@@ -85,6 +93,7 @@ fn deserializes_poll_configuration_and_trigger_tasks() {
             "type": "host",
             "timeoutMs": 5000,
             "config": {},
+            "secret": null,
             "issuedAt": "2026-08-12T20:00:00Z"
         }]
     }))

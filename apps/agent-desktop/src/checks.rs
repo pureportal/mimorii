@@ -18,6 +18,8 @@ use time::format_description::well_known::Rfc3339;
 use url::Url;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
+use crate::database::{self, DatabaseConfig};
+use crate::icmp;
 use crate::models::{AgentTask, CheckState, CheckType, HostSnapshot, TaskResult};
 use crate::target_policy::{TargetPolicy, TargetProtocol};
 use crate::time_now;
@@ -27,14 +29,11 @@ const MAX_BODY_BYTES: u64 = 512 * 1024;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct HttpConfig {
-    url: String,
-    method: String,
+    target: HttpTarget,
     expected_statuses: Vec<u16>,
     response_contains: Option<String>,
     expected_headers: Option<BTreeMap<String, String>>,
-    json_pointer: Option<String>,
-    #[serde(default)]
-    expected_json_value: Value,
+    json_assertions: Option<JsonAssertionGroup>,
     latency_warning_ms: Option<f64>,
     certificate_warning_days: Option<i64>,
     follow_redirects: bool,
@@ -42,7 +41,64 @@ struct HttpConfig {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HttpTarget {
+    url: String,
+    method: String,
+    headers: Option<BTreeMap<String, String>>,
+    secret_header_name: Option<String>,
+    body: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum JsonAssertionNode {
+    Assertion {
+        name: String,
+        pointer: String,
+        operator: JsonAssertionOperator,
+        #[serde(rename = "expectedValue", default)]
+        expected_value: Value,
+    },
+    Group {
+        operator: JsonGroupOperator,
+        conditions: Vec<JsonAssertionNode>,
+    },
+}
+
+#[derive(Deserialize)]
+struct JsonAssertionGroup {
+    operator: JsonGroupOperator,
+    conditions: Vec<JsonAssertionNode>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum JsonAssertionOperator {
+    Equals,
+    NotEquals,
+    Contains,
+    Exists,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum JsonGroupOperator {
+    And,
+    Or,
+}
+
+#[derive(Deserialize)]
 struct TcpConfig {
+    target: TcpTarget,
+}
+
+#[derive(Deserialize)]
+struct TcpTarget {
     host: String,
     port: u16,
 }
@@ -50,9 +106,43 @@ struct TcpConfig {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DnsConfig {
-    hostname: String,
+    target: DnsTarget,
     record_type: String,
     expected_value: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DnsTarget {
+    hostname: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IcmpConfig {
+    target: IcmpTarget,
+    packet_count: usize,
+    minimum_success_percent: f64,
+    latency_warning_ms: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct IcmpTarget {
+    host: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WanConfig {
+    targets: Vec<WanTarget>,
+    required_successful_targets: usize,
+    packet_count: usize,
+    latency_warning_ms: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct WanTarget {
+    name: String,
+    host: String,
 }
 
 #[derive(Deserialize)]
@@ -74,6 +164,17 @@ struct DiskConfig {
     mount: String,
     warning_percent: f64,
     critical_percent: f64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DockerConfig {
+    container_name_pattern: Option<String>,
+    require_healthy: bool,
+    require_running: bool,
+    maximum_restarts: u64,
+    cpu_warning_percent: f64,
+    memory_warning_percent: f64,
 }
 
 #[derive(Debug)]
@@ -106,8 +207,12 @@ pub fn execute(
         CheckType::Http => http(task, target_policy),
         CheckType::Tcp => tcp(task, target_policy),
         CheckType::Dns => dns(task),
+        CheckType::Icmp => icmp_check(task, target_policy),
+        CheckType::Wan => wan(task, target_policy),
         CheckType::Host => host(task, snapshot),
         CheckType::Disk => disk(task, snapshot),
+        CheckType::Docker => docker(task, snapshot),
+        CheckType::Database => database_check(task, target_policy),
     };
     result_or_down(task, result)
 }
@@ -117,7 +222,10 @@ pub fn execute_network(task: &AgentTask, target_policy: &TargetPolicy) -> Result
         CheckType::Http => http(task, target_policy),
         CheckType::Tcp => tcp(task, target_policy),
         CheckType::Dns => dns(task),
-        CheckType::Host | CheckType::Disk => {
+        CheckType::Icmp => icmp_check(task, target_policy),
+        CheckType::Wan => wan(task, target_policy),
+        CheckType::Database => database_check(task, target_policy),
+        CheckType::Host | CheckType::Disk | CheckType::Docker => {
             bail!("check runner received an unsupported host telemetry task")
         }
     };
@@ -139,11 +247,14 @@ fn http_with_resolver(
 ) -> Result<TaskResult> {
     let config: HttpConfig =
         serde_json::from_value(task.config.clone()).context("HTTP configuration is invalid")?;
+    if config.target.secret_header_name.is_some() != task.secret.is_some() {
+        bail!("HTTP secret header configuration is invalid");
+    }
     if config.expected_statuses.is_empty() || config.expected_statuses.len() > 20 {
         bail!("HTTP expected status configuration is invalid");
     }
-    let mut url = Url::parse(&config.url)?;
-    let method = Method::from_str(&config.method)?;
+    let mut url = Url::parse(&config.target.url)?;
+    let method = Method::from_str(&config.target.method)?;
     if ![
         Method::GET,
         Method::HEAD,
@@ -158,6 +269,7 @@ fn http_with_resolver(
         bail!("HTTP method is not allowed");
     }
     let started = Instant::now();
+    let mut send_secret = true;
     for redirect in 0..=3 {
         let (protocol, hostname, port) = http_target(&url)?;
         target_policy.authorize_request(protocol, hostname, port)?;
@@ -173,13 +285,28 @@ fn http_with_resolver(
             client = client.resolve_to_addrs(hostname, &addresses);
         }
         let client = client.build()?;
-        let response = client
-            .request(method.clone(), url.clone())
-            .header(
-                "user-agent",
-                format!("mimorii-agent-desktop/{}", env!("CARGO_PKG_VERSION")),
-            )
-            .send()?;
+        let mut request = client.request(method.clone(), url.clone()).header(
+            "user-agent",
+            format!("mimorii-agent-desktop/{}", env!("CARGO_PKG_VERSION")),
+        );
+        if let Some(headers) = &config.target.headers {
+            for (name, value) in headers {
+                if name.eq_ignore_ascii_case("authorization") {
+                    bail!("HTTP authorization must use the encrypted secret header");
+                }
+                request = request.header(name, value);
+            }
+        }
+        if send_secret
+            && let (Some(name), Some(value)) =
+                (&config.target.secret_header_name, task.secret.as_deref())
+        {
+            request = request.header(name, value);
+        }
+        if let Some(body) = &config.target.body {
+            request = request.body(body.clone());
+        }
+        let response = request.send()?;
         let status = response.status().as_u16();
         let server = response
             .headers()
@@ -227,10 +354,12 @@ fn http_with_resolver(
                 .get(reqwest::header::LOCATION)
                 .and_then(|value| value.to_str().ok())
                 .context("redirect location is invalid")?;
-            url = url.join(location)?;
-            if url.scheme() != "http" && url.scheme() != "https" {
+            let next_url = url.join(location)?;
+            if next_url.scheme() != "http" && next_url.scheme() != "https" {
                 bail!("redirect protocol is not allowed");
             }
+            send_secret &= next_url.origin() == url.origin();
+            url = next_url;
             continue;
         }
         let latency = elapsed_ms(started);
@@ -287,7 +416,7 @@ fn http_with_resolver(
                 metrics,
             ));
         }
-        if let Some(pointer) = &config.json_pointer {
+        if let Some(assertions) = &config.json_assertions {
             let Ok(parsed) = serde_json::from_str::<Value>(&body) else {
                 return Ok(down(
                     &task.id,
@@ -297,21 +426,10 @@ fn http_with_resolver(
                     metrics,
                 ));
             };
-            let Some(actual) = parsed.pointer(pointer) else {
+            if let Err(name) = evaluate_json_group(assertions, &parsed) {
                 return Ok(down(
                     &task.id,
-                    "Expected JSON value was not found",
-                    latency,
-                    Some(status),
-                    metrics,
-                ));
-            };
-            if task.config.get("expectedJsonValue").is_some()
-                && &config.expected_json_value != actual
-            {
-                return Ok(down(
-                    &task.id,
-                    "JSON value did not match",
+                    format!("JSON assertion failed: {name}"),
                     latency,
                     Some(status),
                     metrics,
@@ -380,6 +498,86 @@ fn http_target(url: &Url) -> Result<(TargetProtocol, &str, u16)> {
     Ok((protocol, hostname, port))
 }
 
+fn evaluate_json_group(group: &JsonAssertionGroup, document: &Value) -> Result<(), String> {
+    evaluate_json_nodes(group.operator, &group.conditions, document)
+}
+
+fn evaluate_json_nodes(
+    operator: JsonGroupOperator,
+    conditions: &[JsonAssertionNode],
+    document: &Value,
+) -> Result<(), String> {
+    let results = conditions
+        .iter()
+        .map(|condition| evaluate_json_node(condition, document))
+        .collect::<Vec<_>>();
+    match operator {
+        JsonGroupOperator::And => results.into_iter().find(Result::is_err).unwrap_or(Ok(())),
+        JsonGroupOperator::Or => {
+            if results.iter().any(Result::is_ok) {
+                Ok(())
+            } else {
+                results
+                    .into_iter()
+                    .find_map(Result::err)
+                    .map_or(Ok(()), Err)
+            }
+        }
+    }
+}
+
+fn evaluate_json_node(node: &JsonAssertionNode, document: &Value) -> Result<(), String> {
+    match node {
+        JsonAssertionNode::Group {
+            operator,
+            conditions,
+        } => evaluate_json_nodes(*operator, conditions, document),
+        JsonAssertionNode::Assertion {
+            name,
+            pointer,
+            operator,
+            expected_value,
+        } => {
+            let actual = document.pointer(pointer);
+            let matches = match operator {
+                JsonAssertionOperator::Exists => actual.is_some(),
+                JsonAssertionOperator::Equals => actual == Some(expected_value),
+                JsonAssertionOperator::NotEquals => {
+                    actual.is_some_and(|value| value != expected_value)
+                }
+                JsonAssertionOperator::Contains => {
+                    actual.is_some_and(|value| json_contains(value, expected_value))
+                }
+                JsonAssertionOperator::GreaterThan => {
+                    json_number(actual) > json_number(Some(expected_value))
+                }
+                JsonAssertionOperator::GreaterThanOrEqual => {
+                    json_number(actual) >= json_number(Some(expected_value))
+                }
+                JsonAssertionOperator::LessThan => {
+                    json_number(actual) < json_number(Some(expected_value))
+                }
+                JsonAssertionOperator::LessThanOrEqual => {
+                    json_number(actual) <= json_number(Some(expected_value))
+                }
+            };
+            if matches { Ok(()) } else { Err(name.clone()) }
+        }
+    }
+}
+
+fn json_contains(actual: &Value, expected: &Value) -> bool {
+    match (actual, expected) {
+        (Value::String(actual), Value::String(expected)) => actual.contains(expected),
+        (Value::Array(actual), expected) => actual.contains(expected),
+        _ => false,
+    }
+}
+
+fn json_number(value: Option<&Value>) -> f64 {
+    value.and_then(Value::as_f64).unwrap_or(f64::NAN)
+}
+
 fn tcp(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
     tcp_with_resolver(task, target_policy, resolve_addresses)
 }
@@ -391,8 +589,13 @@ fn tcp_with_resolver(
 ) -> Result<TaskResult> {
     let config: TcpConfig =
         serde_json::from_value(task.config.clone()).context("TCP configuration is invalid")?;
-    target_policy.authorize_request(TargetProtocol::Tcp, &config.host, config.port)?;
-    let addresses = target_policy.authorize_addresses(resolve(&config.host, config.port)?)?;
+    target_policy.authorize_request(
+        TargetProtocol::Tcp,
+        &config.target.host,
+        config.target.port,
+    )?;
+    let addresses =
+        target_policy.authorize_addresses(resolve(&config.target.host, config.target.port)?)?;
     let started = Instant::now();
     let timeout = Duration::from_millis(task.timeout_ms);
     let mut connected = false;
@@ -412,7 +615,12 @@ fn tcp_with_resolver(
         ));
     }
     let latency = elapsed_ms(started);
-    Ok(tcp_success(&task.id, config.port, latency, task.timeout_ms))
+    Ok(tcp_success(
+        &task.id,
+        config.target.port,
+        latency,
+        task.timeout_ms,
+    ))
 }
 
 fn resolve_addresses(hostname: &str, port: u16) -> Result<Vec<SocketAddr>> {
@@ -453,7 +661,7 @@ fn dns_with_config(task: &AgentTask, resolver_config: ResolverConfig) -> Result<
     options.attempts = 1;
     let resolver = Resolver::new(resolver_config, options)?;
     let started = Instant::now();
-    let lookup = resolver.lookup(config.hostname.as_str(), record_type)?;
+    let lookup = resolver.lookup(config.target.hostname.as_str(), record_type)?;
     let values: Vec<String> = lookup.iter().map(|record| record.to_string()).collect();
     let latency = elapsed_ms(started);
     let mut metrics = BTreeMap::new();
@@ -476,6 +684,148 @@ fn dns_with_config(task: &AgentTask, resolver_config: ResolverConfig) -> Result<
         status_code: None,
         message: None,
         metrics,
+        checked_at: time_now(),
+    })
+}
+
+fn icmp_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
+    let config: IcmpConfig =
+        serde_json::from_value(task.config.clone()).context("ICMP configuration is invalid")?;
+    let result = icmp::ping(
+        &config.target.host,
+        config.packet_count,
+        task.timeout_ms,
+        target_policy,
+    )?;
+    let success_percent = result.received as f64 / result.sent as f64 * 100.0;
+    let latency_warning = config.latency_warning_ms.is_some_and(|threshold| {
+        result
+            .average_latency_ms
+            .is_some_and(|value| value >= threshold)
+    });
+    let mut metrics = BTreeMap::new();
+    metrics.insert("packetsSent".to_owned(), json!(result.sent));
+    metrics.insert("packetsReceived".to_owned(), json!(result.received));
+    metrics.insert("successPercent".to_owned(), json!(success_percent));
+    metrics.insert(
+        "packetLossPercent".to_owned(),
+        json!(100.0 - success_percent),
+    );
+    metrics.insert(
+        "minimumLatencyMs".to_owned(),
+        json!(result.minimum_latency_ms),
+    );
+    metrics.insert(
+        "maximumLatencyMs".to_owned(),
+        json!(result.maximum_latency_ms),
+    );
+    if success_percent < config.minimum_success_percent {
+        return Ok(down(
+            &task.id,
+            "ICMP packet success threshold was not met",
+            result.average_latency_ms,
+            None,
+            metrics,
+        ));
+    }
+    Ok(TaskResult {
+        task_id: task.id.clone(),
+        status: if latency_warning {
+            CheckState::Degraded
+        } else {
+            CheckState::Up
+        },
+        latency_ms: result.average_latency_ms,
+        status_code: None,
+        message: latency_warning.then(|| "ICMP latency reached the warning threshold".to_owned()),
+        metrics,
+        checked_at: time_now(),
+    })
+}
+
+fn wan(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
+    let config: WanConfig =
+        serde_json::from_value(task.config.clone()).context("WAN configuration is invalid")?;
+    let mut successful = 0;
+    let mut warned = false;
+    let mut latencies = Vec::new();
+    let mut metrics = BTreeMap::new();
+    for (index, target) in config.targets.iter().enumerate() {
+        target_policy.authorize_host(TargetProtocol::Icmp, &target.host)?;
+        match icmp::ping(
+            &target.host,
+            config.packet_count,
+            task.timeout_ms,
+            target_policy,
+        ) {
+            Ok(result) if result.received > 0 => {
+                successful += 1;
+                if let Some(latency) = result.average_latency_ms {
+                    warned |= config
+                        .latency_warning_ms
+                        .is_some_and(|value| latency >= value);
+                    latencies.push(latency);
+                    metrics.insert(format!("target{index}LatencyMs"), json!(latency));
+                }
+                metrics.insert(
+                    format!("target{index}SuccessPercent"),
+                    json!(result.received as f64 / result.sent as f64 * 100.0),
+                );
+            }
+            _ => {
+                metrics.insert(format!("target{index}SuccessPercent"), json!(0));
+            }
+        }
+        metrics.insert(format!("target{index}Name"), json!(target.name));
+    }
+    metrics.insert("successfulTargets".to_owned(), json!(successful));
+    metrics.insert("targetCount".to_owned(), json!(config.targets.len()));
+    let average_latency =
+        (!latencies.is_empty()).then(|| latencies.iter().sum::<f64>() / latencies.len() as f64);
+    if successful < config.required_successful_targets {
+        return Ok(down(
+            &task.id,
+            "WAN reachability threshold was not met",
+            average_latency,
+            None,
+            metrics,
+        ));
+    }
+    Ok(TaskResult {
+        task_id: task.id.clone(),
+        status: if warned {
+            CheckState::Degraded
+        } else {
+            CheckState::Up
+        },
+        latency_ms: average_latency,
+        status_code: None,
+        message: warned.then(|| "WAN latency reached the warning threshold".to_owned()),
+        metrics,
+        checked_at: time_now(),
+    })
+}
+
+fn database_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
+    let config: DatabaseConfig =
+        serde_json::from_value(task.config.clone()).context("Database configuration is invalid")?;
+    let result = database::check(
+        &config,
+        task.secret.as_deref(),
+        task.timeout_ms,
+        target_policy,
+    )?;
+    Ok(TaskResult {
+        task_id: task.id.clone(),
+        status: if result.degraded {
+            CheckState::Degraded
+        } else {
+            CheckState::Up
+        },
+        latency_ms: Some(result.latency_ms),
+        status_code: None,
+        message: result.message,
+        metrics: result.metrics,
         checked_at: time_now(),
     })
 }
@@ -561,6 +911,106 @@ fn disk(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
         message: critical
             .then(|| "Disk usage critical threshold was reached".to_owned())
             .or_else(|| degraded.then(|| "Disk usage warning threshold was reached".to_owned())),
+        metrics,
+        checked_at: time_now(),
+    })
+}
+
+fn docker(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
+    let config: DockerConfig =
+        serde_json::from_value(task.config.clone()).context("Docker configuration is invalid")?;
+    let runtime = snapshot
+        .container_runtime
+        .as_ref()
+        .context("Docker runtime is unavailable")?;
+    let pattern = config
+        .container_name_pattern
+        .as_deref()
+        .map(glob::Pattern::new)
+        .transpose()
+        .context("Container name pattern is invalid")?;
+    let containers = runtime
+        .containers
+        .iter()
+        .filter(|container| {
+            pattern
+                .as_ref()
+                .is_none_or(|value| value.matches(&container.name))
+        })
+        .collect::<Vec<_>>();
+    if containers.is_empty() {
+        bail!("No containers matched the check");
+    }
+    let state_failed = config.require_running
+        && containers
+            .iter()
+            .any(|container| container.state != "running");
+    let health_failed = config.require_healthy
+        && containers
+            .iter()
+            .any(|container| container.health != "healthy");
+    let restarts_failed = containers
+        .iter()
+        .any(|container| container.restart_count > config.maximum_restarts);
+    let cpu_warning = containers
+        .iter()
+        .any(|container| container.cpu_percent >= config.cpu_warning_percent);
+    let memory_warning = containers.iter().any(|container| {
+        container.memory_limit_bytes > 0
+            && container.memory_used_bytes as f64 / container.memory_limit_bytes as f64 * 100.0
+                >= config.memory_warning_percent
+    });
+    let mut metrics = BTreeMap::new();
+    metrics.insert("containerCount".to_owned(), json!(containers.len()));
+    metrics.insert(
+        "runningContainerCount".to_owned(),
+        json!(
+            containers
+                .iter()
+                .filter(|container| container.state == "running")
+                .count()
+        ),
+    );
+    metrics.insert(
+        "unhealthyContainerCount".to_owned(),
+        json!(
+            containers
+                .iter()
+                .filter(|container| container.health == "unhealthy")
+                .count()
+        ),
+    );
+    metrics.insert(
+        "restartCount".to_owned(),
+        json!(
+            containers
+                .iter()
+                .map(|container| container.restart_count)
+                .sum::<u64>()
+        ),
+    );
+    let failed = state_failed || health_failed || restarts_failed;
+    let degraded = cpu_warning || memory_warning;
+    Ok(TaskResult {
+        task_id: task.id.clone(),
+        status: if failed {
+            CheckState::Down
+        } else if degraded {
+            CheckState::Degraded
+        } else {
+            CheckState::Up
+        },
+        latency_ms: None,
+        status_code: None,
+        message: state_failed
+            .then(|| "A container is not running".to_owned())
+            .or_else(|| health_failed.then(|| "A container is not healthy".to_owned()))
+            .or_else(|| {
+                restarts_failed.then(|| "A container exceeded the restart threshold".to_owned())
+            })
+            .or_else(|| {
+                degraded.then(|| "A container resource warning threshold was reached".to_owned())
+            }),
         metrics,
         checked_at: time_now(),
     })

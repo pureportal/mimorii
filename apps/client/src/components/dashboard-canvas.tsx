@@ -5,7 +5,18 @@ import type {
   DashboardUptimeViewItem,
   DashboardViewItem,
 } from "@mimorii/contracts";
-import { Activity, Clock3, Gauge, TriangleAlert } from "lucide-react";
+import {
+  Activity,
+  Battery,
+  Boxes,
+  Clock3,
+  Cpu,
+  Gauge,
+  HardDrive,
+  MemoryStick,
+  TriangleAlert,
+} from "lucide-react";
+import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { formatLatency, formatPercent, formatRelative } from "../lib/format";
 import { cn } from "../lib/cn";
 import { StatusBadge } from "./ui/badge";
@@ -54,6 +65,13 @@ function MetricPanel({ item }: { item: DashboardMetricViewItem }) {
     averageLatency: Clock3,
     monitorCount: Activity,
     openIncidents: TriangleAlert,
+    cpuPercent: Cpu,
+    memoryPercent: MemoryStick,
+    storagePercent: HardDrive,
+    loadAverage: Activity,
+    batteryPercent: Battery,
+    containerCount: Boxes,
+    unhealthyContainerCount: TriangleAlert,
   }[item.metric];
   const value =
     item.format === "percent"
@@ -77,6 +95,21 @@ function MetricPanel({ item }: { item: DashboardMetricViewItem }) {
         </span>
       </div>
       <p className="mt-auto pt-6 font-display text-4xl font-black tracking-tight">{value}</p>
+      {item.series.length > 1 ? (
+        <div className="mt-3 h-12">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={item.series}>
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="var(--color-lavender)"
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
     </Card>
   );
 }

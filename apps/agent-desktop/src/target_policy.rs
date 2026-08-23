@@ -11,6 +11,7 @@ pub enum TargetProtocol {
     Http,
     Https,
     Tcp,
+    Icmp,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -31,6 +32,7 @@ impl Default for TargetPolicy {
                 TargetProtocol::Http,
                 TargetProtocol::Https,
                 TargetProtocol::Tcp,
+                TargetProtocol::Icmp,
             ],
             allowed_ports: Vec::new(),
         }
@@ -68,6 +70,13 @@ impl TargetPolicy {
             || (!self.allowed_ports.is_empty() && !self.allowed_ports.contains(&port))
             || !self.hostname_allowed(hostname)
         {
+            bail!("Target is not allowed by agent policy");
+        }
+        Ok(())
+    }
+
+    pub fn authorize_host(&self, protocol: TargetProtocol, hostname: &str) -> Result<()> {
+        if !self.allowed_protocols.contains(&protocol) || !self.hostname_allowed(hostname) {
             bail!("Target is not allowed by agent policy");
         }
         Ok(())

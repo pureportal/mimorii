@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { Interval } from "@nestjs/schedule";
 import type { AgentTask, CheckConfig, AgentCapability, AgentKind } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
+import { decryptConfiguration } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckRunnerService } from "./check-runner.service.js";
@@ -33,10 +34,10 @@ export class CheckOrchestratorService {
     try {
       await this.expireAgentTasks();
       const due = await this.database.all<ScheduledCheckRow>(
-        `SELECT c.*, r.agent_id, a.kind AS agent_kind,
+        `SELECT c.*, a.kind AS agent_kind,
           a.capabilities_json AS agent_capabilities_json
-         FROM checks c JOIN resources r ON r.id = c.resource_id
-         LEFT JOIN agents a ON a.id = r.agent_id AND a.revoked_at IS NULL
+         FROM checks c
+         LEFT JOIN agents a ON a.id = c.agent_id AND a.revoked_at IS NULL
          WHERE c.enabled = 1 AND c.next_check_at IS NOT NULL AND c.next_check_at <= ?
          ORDER BY c.next_check_at LIMIT 50`,
         new Date().toISOString()
@@ -54,10 +55,10 @@ export class CheckOrchestratorService {
   async runNow(userId: string, teamId: string, checkId: string) {
     await this.access.require(userId, teamId, "member");
     const check = await this.database.get<ScheduledCheckRow>(
-      `SELECT c.*, r.agent_id, a.kind AS agent_kind,
+      `SELECT c.*, a.kind AS agent_kind,
         a.capabilities_json AS agent_capabilities_json
-       FROM checks c JOIN resources r ON r.id = c.resource_id
-       LEFT JOIN agents a ON a.id = r.agent_id AND a.revoked_at IS NULL
+       FROM checks c
+       LEFT JOIN agents a ON a.id = c.agent_id AND a.revoked_at IS NULL
        WHERE c.id = ? AND c.team_id = ?`,
       checkId,
       teamId
@@ -83,6 +84,9 @@ export class CheckOrchestratorService {
         id: check.id,
         type: check.type,
         config: JSON.parse(check.config_json) as CheckConfig,
+        secret: check.encrypted_secret
+          ? decryptConfiguration<string>(check.encrypted_secret)
+          : null,
         timeoutMs: check.timeout_ms,
       });
       return this.results.record(check.id, result);
@@ -113,6 +117,7 @@ export class CheckOrchestratorService {
       type: check.type,
       timeoutMs: check.timeout_ms,
       config: JSON.parse(check.config_json) as CheckConfig,
+      secret: null,
       issuedAt,
     };
     await this.database.run(

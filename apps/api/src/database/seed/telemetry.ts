@@ -60,7 +60,9 @@ async function seedSnapshots(context: SeedContext, identity: SeedIdentityIds): P
   ];
   for (const snapshot of snapshots) {
     const observedAt = at(context, snapshot.offset);
+    const snapshotId = seedId(context, `snapshot:${snapshot.key}`);
     const value = {
+      snapshotId,
       hostname: snapshot.key.startsWith("local") ? "app-01" : snapshot.key,
       platform: snapshot.key === "warehouse" ? "Windows Server 2025" : "Linux 6.12",
       version: applicationVersion,
@@ -84,6 +86,7 @@ async function seedSnapshots(context: SeedContext, identity: SeedIdentityIds): P
         { name: "docker", category: "container", version: "27" },
         { name: "postgres", category: "database", version: "17" },
       ],
+      containerRuntime: null,
       observedAt,
     };
     await context.database.run(
@@ -91,7 +94,7 @@ async function seedSnapshots(context: SeedContext, identity: SeedIdentityIds): P
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET snapshot_json = excluded.snapshot_json,
        observed_at = excluded.observed_at, received_at = excluded.received_at`,
-      seedId(context, `snapshot:${snapshot.key}`),
+      snapshotId,
       snapshot.agentId,
       JSON.stringify(value),
       observedAt,

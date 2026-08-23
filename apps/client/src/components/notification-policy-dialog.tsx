@@ -24,6 +24,8 @@ const defaultEvents: NotificationEvent[] = [
   "incident.resolved",
   "check.degraded",
   "check.recovered",
+  "resource.alert.triggered",
+  "resource.alert.recovered",
 ];
 
 const fields = [
@@ -36,6 +38,8 @@ const fields = [
   "resourceTags",
   "latencyMs",
   "statusCode",
+  "metric",
+  "value",
   "metrics.usedPercent",
   "metrics.cpuPercent",
   "metrics.memoryPercent",
@@ -53,6 +57,8 @@ const eventLabels: Record<NotificationEvent, string> = {
   "maintenance.started": "Maintenance started",
   "maintenance.completed": "Maintenance completed",
   "slo.breached": "SLO breached",
+  "resource.alert.triggered": "Resource alert triggered",
+  "resource.alert.recovered": "Resource alert recovered",
 };
 
 export function NotificationPolicyDialog({

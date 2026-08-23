@@ -119,6 +119,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(openapi.body.paths["/api/teams/{teamId}/dashboards"]).toBeDefined();
     expect(openapi.body.paths["/api/dashboards/{slug}"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/notifications/policies"]).toBeDefined();
+    expect(openapi.body.paths["/api/teams/{teamId}/resources/{id}/metrics"]).toBeDefined();
+    expect(openapi.body.paths["/api/teams/{teamId}/resources/{resourceId}/alerts"]).toBeDefined();
   });
 
   it("lists published sponsors and accepts validated sponsorship applications", async () => {
@@ -382,7 +384,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Fixture", kind: "endpoint", target: fixtureUrl, tags: ["test"] })
+      .send({ name: "Fixture", kind: "service", tags: ["test"] })
       .expect(201);
     expect(resource.body.imageUpdatedAt).toBeNull();
 
@@ -456,12 +458,6 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(replacementStoredImage!.image_data).not.toEqual(firstStoredImage!.image_data);
 
     await request(app.getHttpServer())
-      .post(`/api/teams/${teamId}/resources/${resource.body.id}/favicon`)
-      .set("authorization", authorization)
-      .expect(502)
-      .expect(({ body }) => expect(body.message).toBe("Favicon could not be retrieved"));
-
-    await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/resources/${resource.body.id}`)
       .set("authorization", authorization)
       .expect(200)
@@ -474,17 +470,23 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         name: "Fixture HTTP",
         type: "http",
         config: {
-          url: fixtureUrl,
-          method: "GET",
+          target: { url: fixtureUrl, method: "GET" },
           expectedStatuses: [200],
           responseContains: "healthy",
           followRedirects: true,
           validateTls: true,
         },
+        execution: { kind: "direct" },
         intervalSeconds: 60,
         timeoutMs: 3_000,
       })
       .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources/${resource.body.id}/favicon`)
+      .set("authorization", authorization)
+      .expect(502)
+      .expect(({ body }) => expect(body.message).toBe("Favicon could not be retrieved"));
 
     const run = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks/${check.body.id}/run`)
@@ -508,7 +510,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const unsafeResource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Private direct", kind: "service", target: "127.0.0.1" })
+      .send({ name: "Private direct", kind: "service" })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks`)
@@ -517,7 +519,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         resourceId: unsafeResource.body.id,
         name: "Unsafe port",
         type: "tcp",
-        config: { host: "127.0.0.1", port: 22 },
+        config: { target: { host: "127.0.0.1", port: 22 } },
+        execution: { kind: "direct" },
       })
       .expect(400);
     process.env.MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS = "true";
@@ -531,7 +534,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "JSON fixture", kind: "endpoint", target: url })
+      .send({ name: "JSON fixture", kind: "service" })
       .expect(201);
     const check = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks`)
@@ -541,16 +544,30 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         name: "JSON health",
         type: "http",
         config: {
-          url,
+          target: { url, method: "GET" },
           expectedStatuses: [200],
           expectedHeaders: {
             "content-type": "application/json",
             "x-fixture-state": "ready",
           },
-          jsonPointer: "/service/state",
-          expectedJsonValue: "ready",
+          jsonAssertions: {
+            kind: "group",
+            operator: "and",
+            conditions: [
+              {
+                kind: "assertion",
+                name: "Service state",
+                pointer: "/service/state",
+                operator: "equals",
+                expectedValue: "ready",
+              },
+            ],
+          },
           latencyWarningMs: 30_000,
+          followRedirects: false,
+          validateTls: true,
         },
+        execution: { kind: "direct" },
       })
       .expect(201);
     await request(app.getHttpServer())
@@ -558,6 +575,70 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(200)
       .expect(({ body }) => expect(body.result.status).toBe("up"));
+  });
+
+  it("collects PostgreSQL statistics and evaluates a read-only assertion", async () => {
+    const account = await register("database-check@example.com", "Database Check");
+    const teamId = account.teams[0]!.id;
+    const authorization = `Bearer ${account.accessToken}`;
+    const resource = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .send({ name: "Mimorii database", kind: "service" })
+      .expect(201);
+    const check = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks`)
+      .set("authorization", authorization)
+      .send({
+        resourceId: resource.body.id,
+        name: "PostgreSQL health",
+        type: "database",
+        config: {
+          target: {
+            engine: "postgresql",
+            host: process.env.MIMORII_DB_HOST,
+            port: Number(process.env.MIMORII_DB_PORT),
+            database: process.env.MIMORII_DB_NAME,
+            username: process.env.MIMORII_DB_USER,
+            tls: false,
+          },
+          connectionWarningPercent: 100,
+          query: { statement: "SELECT 1 AS value", expectedValue: 1 },
+        },
+        secret: process.env.MIMORII_DB_PASSWORD,
+        execution: { kind: "direct" },
+      })
+      .expect(201);
+    expect(check.body).toMatchObject({
+      type: "database",
+      secretConfigured: true,
+      execution: { kind: "direct" },
+    });
+    expect(check.body).not.toHaveProperty("secret");
+    expect(check.body).not.toHaveProperty("encryptedSecret");
+
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks/${check.body.id}/run`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.result).toMatchObject({
+          status: "up",
+          metrics: {
+            engine: "postgresql",
+            version: expect.any(String),
+            connections: expect.any(Number),
+            maxConnections: expect.any(Number),
+            connectionUtilizationPercent: expect.any(Number),
+            databaseSizeBytes: expect.any(Number),
+            transactionsCommitted: expect.any(Number),
+            transactionsRolledBack: expect.any(Number),
+            deadlocks: expect.any(Number),
+            slowQueries: expect.any(Number),
+            replicationLagSeconds: expect.any(Number),
+          },
+        })
+      );
   });
 
   it("queues relay checks, ingests agent metrics, and tracks incidents", async () => {
@@ -577,7 +658,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .send({ name: "Production network", collectionIntervalSeconds: 60 })
       .expect(200)
       .expect(({ body }) => {
-        expect(body.name).toBe("Production network");
+        expect(body.resourceName).toBe("Production network");
         expect(body.collectionIntervalSeconds).toBe(60);
       });
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
@@ -586,9 +667,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .send({
         name: "Internal database",
-        kind: "server",
-        target: "database.internal",
-        agentId: createdAgent.body.id,
+        kind: "service",
       })
       .expect(201);
     const check = await request(app.getHttpServer())
@@ -598,7 +677,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         resourceId: resource.body.id,
         name: "PostgreSQL",
         type: "tcp",
-        config: { host: "database.internal", port: 5432 },
+        config: { target: { host: "database.internal", port: 5432 } },
+        execution: { kind: "agent", agentId: createdAgent.body.id },
         failureThreshold: 2,
       })
       .expect(201);
@@ -632,6 +712,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         networkTransmittedBytes: 5_000_000,
         disks: [{ mount: "/", usedBytes: 20_000_000, totalBytes: 100_000_000 }],
         technologies: [{ name: "postgres", category: "database", version: "16" }],
+        containerRuntime: null,
       };
       await request(app.getHttpServer())
         .post("/api/agent/heartbeat")
@@ -639,8 +720,13 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         .send({
           agentVersion: "2.1.0",
           snapshots: [
-            { ...snapshot, cpuPercent: 20, observedAt: previousTimestamp },
-            { ...snapshot, observedAt: timestamp },
+            {
+              ...snapshot,
+              snapshotId: randomUUID(),
+              cpuPercent: 20,
+              observedAt: previousTimestamp,
+            },
+            { ...snapshot, snapshotId: randomUUID(), observedAt: timestamp },
           ],
           results: [
             {
@@ -738,21 +824,25 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .send({
         name: "Container network target",
         kind: "service",
-        target: "service.internal",
-        agentId: createdAgent.body.id,
       })
       .expect(201);
     const checkDefinitions = [
-      ["HTTP", "http", { url: "https://example.com/health" }],
-      ["TCP", "tcp", { host: "database.internal", port: 5432 }],
-      ["DNS", "dns", { hostname: "service.internal", recordType: "A" }],
+      ["HTTP", "http", { target: { url: "https://example.com/health", method: "GET" } }],
+      ["TCP", "tcp", { target: { host: "database.internal", port: 5432 } }],
+      ["DNS", "dns", { target: { hostname: "service.internal" }, recordType: "A" }],
     ] as const;
     const createdChecks = await Promise.all(
       checkDefinitions.map(async ([name, type, config]) => {
         const response = await request(app.getHttpServer())
           .post(`/api/teams/${teamId}/checks`)
           .set("authorization", authorization)
-          .send({ resourceId: resource.body.id, name, type, config })
+          .send({
+            resourceId: resource.body.id,
+            name,
+            type,
+            config,
+            execution: { kind: "agent", agentId: createdAgent.body.id },
+          })
           .expect(201);
         const id = response.body.id;
         if (typeof id !== "string") throw new Error("Created check ID is missing");
@@ -808,6 +898,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
           swapWarningPercent: 80,
           swapCriticalPercent: 90,
         },
+        execution: { kind: "agent", agentId: createdAgent.body.id },
       })
       .expect(400);
 
@@ -837,6 +928,18 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       capabilities: ["device-status"],
       collectionIntervalSeconds: 900,
     });
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          id: createdAgent.body.resourceId,
+          name: "Field phone",
+          kind: "device",
+          agent: { id: createdAgent.body.id, kind: "mobile" },
+        })
+      );
 
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
     await request(app.getHttpServer())
@@ -846,7 +949,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(({ body }) =>
         expect(body).toEqual({
           agentId: createdAgent.body.id,
-          name: "Field phone",
+          resourceId: createdAgent.body.resourceId,
+          resourceName: "Field phone",
           kind: "mobile",
           collectionIntervalSeconds: 900,
         })
@@ -952,14 +1056,110 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         })
       );
 
+    const alert = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/alerts`)
+      .set("authorization", authorization)
+      .send({
+        name: "Low battery",
+        metric: "batteryPercent",
+        operator: "lessThan",
+        threshold: 70,
+        recoveryThreshold: 75,
+        requiredSamples: 1,
+      })
+      .expect(201);
+    expect(alert.body).toMatchObject({ active: false, enabled: true, threshold: 70 });
+
+    const lowBatteryStatus = {
+      ...status,
+      submissionId: randomUUID(),
+      observedAt: new Date().toISOString(),
+      battery: { ...status.battery, percent: 68 },
+    };
     await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send(lowBatteryStatus)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/alerts`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual([expect.objectContaining({ id: alert.body.id, active: true })]);
+        expect(new Date(body[0].lastEvaluatedAt).toISOString()).toBe(lowBatteryStatus.observedAt);
+        expect(new Date(body[0].triggeredAt).toISOString()).toBe(lowBatteryStatus.observedAt);
+      });
+
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/metrics`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => {
+        const battery = body.find(
+          (series: { metric: string }) => series.metric === "batteryPercent"
+        );
+        const normalizedPoints = battery.points.map(
+          (point: { observedAt: string; value: number }) => ({
+            ...point,
+            observedAt: new Date(point.observedAt).toISOString(),
+          })
+        );
+        expect(normalizedPoints).toEqual(
+          expect.arrayContaining([
+            { value: 72, observedAt },
+            { value: 68, observedAt: lowBatteryStatus.observedAt },
+          ])
+        );
+      });
+
+    const recoveredStatus = {
+      ...status,
+      submissionId: randomUUID(),
+      observedAt: new Date().toISOString(),
+      battery: { ...status.battery, percent: 76 },
+    };
+    await request(app.getHttpServer())
+      .post("/api/agent/device-status")
+      .set("authorization", agentAuthorization)
+      .send(recoveredStatus)
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/alerts`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body[0]).toMatchObject({
+          id: alert.body.id,
+          active: false,
+          triggeredAt: null,
+        });
+        expect(new Date(body[0].lastEvaluatedAt).toISOString()).toBe(recoveredStatus.observedAt);
+      });
+
+    const mobileTarget = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
       .send({
         name: "Mobile-routed resource",
-        kind: "server",
-        target: "device.internal",
-        agentId: createdAgent.body.id,
+        kind: "service",
+      })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks`)
+      .set("authorization", authorization)
+      .send({
+        resourceId: mobileTarget.body.id,
+        name: "Mobile relay",
+        type: "http",
+        config: {
+          target: { url: "https://example.com/", method: "GET" },
+          expectedStatuses: [200],
+          followRedirects: false,
+          validateTls: true,
+        },
+        execution: { kind: "agent", agentId: createdAgent.body.id },
       })
       .expect(400);
 
@@ -976,7 +1176,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Public API", kind: "endpoint", target: fixtureUrl })
+      .send({ name: "Public API", kind: "service" })
       .expect(201);
     const check = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks`)
@@ -986,12 +1186,12 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         name: "API health",
         type: "http",
         config: {
-          url: fixtureUrl,
-          method: "GET",
+          target: { url: fixtureUrl, method: "GET" },
           expectedStatuses: [200],
           followRedirects: true,
           validateTls: true,
         },
+        execution: { kind: "direct" },
       })
       .expect(201);
     await request(app.getHttpServer())
@@ -1088,7 +1288,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Dashboard API", kind: "endpoint", target: fixtureUrl })
+      .send({ name: "Dashboard API", kind: "service" })
       .expect(201);
     const check = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/checks`)
@@ -1098,12 +1298,12 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         name: "Dashboard health",
         type: "http",
         config: {
-          url: fixtureUrl,
-          method: "GET",
+          target: { url: fixtureUrl, method: "GET" },
           expectedStatuses: [200],
           followRedirects: true,
           validateTls: true,
         },
+        execution: { kind: "direct" },
       })
       .expect(201);
     await request(app.getHttpServer())
@@ -1400,7 +1600,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Production worker", kind: "service", target: "worker", tags: ["production"] })
+      .send({ name: "Production worker", kind: "service", tags: ["production"] })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/incidents`)
@@ -1490,7 +1690,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const resource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)
-      .send({ name: "Nightly import", kind: "service", target: "nightly-import" })
+      .send({ name: "Nightly import", kind: "service" })
       .expect(201);
     const created = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/heartbeats`)

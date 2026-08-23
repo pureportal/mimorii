@@ -13,6 +13,17 @@ import {
   Min,
 } from "class-validator";
 
+export class CheckExecutionDto {
+  @ApiProperty({ enum: ["direct", "agent"] })
+  @IsIn(["direct", "agent"])
+  kind!: "direct" | "agent";
+
+  @ApiPropertyOptional({ format: "uuid" })
+  @IsOptional()
+  @IsUUID()
+  agentId?: string;
+}
+
 export class CreateCheckDto {
   @ApiProperty({ format: "uuid" })
   @IsUUID()
@@ -30,6 +41,16 @@ export class CreateCheckDto {
   @ApiProperty({ additionalProperties: true })
   @IsObject()
   config!: Record<string, unknown>;
+
+  @ApiProperty({ type: CheckExecutionDto })
+  @IsObject()
+  execution!: CheckExecutionDto;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  @IsOptional()
+  @IsString()
+  @Length(0, 2048)
+  secret?: string | null;
 
   @ApiPropertyOptional({ default: 60, minimum: 30, maximum: 86400 })
   @IsOptional()

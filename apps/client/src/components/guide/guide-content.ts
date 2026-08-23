@@ -134,7 +134,7 @@ export const guideTopics: readonly GuideTopic[] = [
     title: "Resources",
     group: "monitoring",
     summary:
-      "Resources are the websites, services, ports, and servers you monitor. Open one to review its checks, current health, and history.",
+      "Resources are the hosts, devices, and services you monitor. Open one to review its checks, current health, and history.",
     to: appRoutes.resources,
     exactPaths: [appRoutes.resources],
     keywords: ["website", "service", "server", "endpoint", "host", "target", "tags"],
@@ -144,8 +144,8 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "What you find here",
         items: [
           "Every resource, its current state, check count, last result, and tags.",
-          "Search across names, addresses, and tags.",
-          "Quick setup for a website, a TCP port, or a server connected through an agent.",
+          "Search across names and tags.",
+          "Quick setup for a website, TCP service, or service endpoint.",
         ],
       },
       {
@@ -163,15 +163,18 @@ export const guideTopics: readonly GuideTopic[] = [
       },
       {
         title: "Check",
-        text: "A test Mimorii runs against that resource, such as loading a URL or checking disk use.",
+        text: "An observation with its own target, schedule, thresholds, and execution route.",
+      },
+      {
+        title: "Agent",
+        text: "A collector attached to its own host or device resource that can execute checks.",
       },
     ],
     tour: [
       {
         target: '[data-guide-page="resources-toolbar"]',
         title: "Search or start monitoring",
-        content:
-          "Search by name, address, or tag, or add a website, port, or server with its first check.",
+        content: "Search by name or tag, or add a website or service with its first check.",
       },
       {
         target: '[data-guide-page="resources-list"]',
@@ -197,7 +200,7 @@ export const guideTopics: readonly GuideTopic[] = [
       {
         title: "What you see",
         items: [
-          "The target, tags, status, and maintenance state at the top.",
+          "The resource identity, tags, status, and maintenance state at the top.",
           "Latency history for any attached check, plus compact check and heartbeat lists.",
           "CPU, memory, load, volumes, network, and technology details when an agent supplies them.",
         ],
@@ -205,7 +208,7 @@ export const guideTopics: readonly GuideTopic[] = [
       {
         title: "What you can change",
         items: [
-          "Edit the name, target, description, tags, or agent connection.",
+          "Edit the name, description, or tags.",
           "Open Manage checks or Manage heartbeats with this resource already selected.",
         ],
       },
@@ -969,7 +972,7 @@ export const guideWorkflows: readonly GuideWorkflow[] = [
   {
     id: "monitor-server",
     title: "Monitor a server",
-    summary: "Connect an agent, add the server, and inspect its machine health.",
+    summary: "Connect an agent and inspect its host resource.",
     keywords: ["server", "agent", "cpu", "memory", "disk"],
     steps: [
       {
@@ -985,14 +988,8 @@ export const guideWorkflows: readonly GuideWorkflow[] = [
         action: "Open agents",
       },
       {
-        title: "Add the server resource",
-        text: "In Resources, choose Server, select the connected agent, and save the resource.",
-        to: appRoutes.newResource,
-        action: "Add server",
-      },
-      {
         title: "Review machine health",
-        text: "Open the resource to see CPU, memory, load, disk, swap, network, volumes, and detected technology as data arrives.",
+        text: "Open the agent's resource to see CPU, memory, load, disk, containers, network, and detected technology as data arrives.",
         to: appRoutes.resources,
         action: "Open resources",
       },

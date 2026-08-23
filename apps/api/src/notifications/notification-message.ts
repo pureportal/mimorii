@@ -11,6 +11,8 @@ const defaultBodies: Record<NotificationEvent, string> = {
   "maintenance.started": "Maintenance started.",
   "maintenance.completed": "Maintenance completed.",
   "slo.breached": "The service level objective was breached.",
+  "resource.alert.triggered": "A resource alert condition was met.",
+  "resource.alert.recovered": "A resource alert condition recovered.",
 };
 
 export interface PushMessage {
@@ -48,7 +50,10 @@ function notificationPath(event: NotificationEvent, payload: Record<string, unkn
     return payload.path.slice(0, 500);
   }
   if (
-    (event === "check.degraded" || event === "check.recovered") &&
+    (event === "check.degraded" ||
+      event === "check.recovered" ||
+      event === "resource.alert.triggered" ||
+      event === "resource.alert.recovered") &&
     typeof payload.resourceId === "string"
   ) {
     return appRoutes.resource(payload.resourceId);

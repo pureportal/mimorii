@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/com
 import type { MobileDeviceStatus, MobileDeviceStatusResponse } from "@mimorii/contracts";
 import { isDeepStrictEqual } from "node:util";
 import { DatabaseService } from "../database/database.service.js";
+import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
+import { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { MobileDeviceStatusDto } from "./mobile-device-status.dto.js";
 
@@ -16,7 +18,11 @@ interface ExistingSubmissionRow extends MobileDeviceStatusRow {
 
 @Injectable()
 export class MobileDeviceStatusService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly telemetry: ResourceTelemetryService,
+    private readonly alerts: ResourceAlertsService
+  ) {}
 
   async report(
     agent: AuthenticatedAgent,
@@ -32,7 +38,7 @@ export class MobileDeviceStatusService {
     const receivedAt = new Date().toISOString();
     const status = this.normalize(input);
 
-    const acceptedAt = await this.database.transaction(async () => {
+    const submission = await this.database.transaction(async () => {
       const inserted = await this.database.run(
         `INSERT INTO mobile_device_statuses
          (id, agent_id, status_json, observed_at, received_at)
@@ -70,11 +76,20 @@ export class MobileDeviceStatusService {
         agent.id
       );
       if (update.changes === 0) throw new ForbiddenException("Agent key was rejected");
-      return submissionAcceptedAt;
+      return { acceptedAt: submissionAcceptedAt, inserted: inserted.changes > 0 };
     });
 
+    if (submission.inserted) {
+      await this.alerts.evaluate(
+        agent.teamId,
+        agent.resourceId,
+        this.telemetry.values(status),
+        status.observedAt
+      );
+    }
+
     return {
-      acceptedAt,
+      acceptedAt: submission.acceptedAt,
       collectionIntervalSeconds: agent.collectionIntervalSeconds,
     };
   }

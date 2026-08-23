@@ -1566,6 +1566,58 @@
         ]
       }
     },
+    "/api/teams/{teamId}/resources/{id}/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resources"
+        ]
+      }
+    },
     "/api/teams/{teamId}/resources/{id}/image": {
       "get": {
         "operationId": "image",
@@ -2414,6 +2466,182 @@
         ],
         "tags": [
           "Notifications"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/resources/{resourceId}/alerts": {
+      "get": {
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResourceAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/resources/{resourceId}/alerts/{id}": {
+      "patch": {
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      },
+      "delete": {
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
         ]
       }
     },
@@ -4819,7 +5047,14 @@
               "uptime",
               "averageLatency",
               "monitorCount",
-              "openIncidents"
+              "openIncidents",
+              "cpuPercent",
+              "memoryPercent",
+              "storagePercent",
+              "loadAverage",
+              "batteryPercent",
+              "containerCount",
+              "unhealthyContainerCount"
             ]
           },
           "resourceId": {
@@ -4931,14 +5166,10 @@
           "kind": {
             "type": "string",
             "enum": [
-              "server",
-              "service",
-              "endpoint"
+              "host",
+              "device",
+              "service"
             ]
-          },
-          "target": {
-            "type": "string",
-            "maxLength": 2048
           },
           "description": {
             "type": "string",
@@ -4950,17 +5181,11 @@
             "items": {
               "type": "string"
             }
-          },
-          "agentId": {
-            "type": "object",
-            "format": "uuid",
-            "nullable": true
           }
         },
         "required": [
           "name",
-          "kind",
-          "target"
+          "kind"
         ]
       },
       "UpdateResourceDto": {
@@ -4974,14 +5199,10 @@
           "kind": {
             "type": "string",
             "enum": [
-              "server",
-              "service",
-              "endpoint"
+              "host",
+              "device",
+              "service"
             ]
-          },
-          "target": {
-            "type": "string",
-            "maxLength": 2048
           },
           "description": {
             "type": "string",
@@ -4993,11 +5214,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "agentId": {
-            "type": "object",
-            "format": "uuid",
-            "nullable": true
           }
         }
       },
@@ -5303,7 +5519,9 @@
                 "check.recovered",
                 "maintenance.started",
                 "maintenance.completed",
-                "slo.breached"
+                "slo.breached",
+                "resource.alert.triggered",
+                "resource.alert.recovered"
               ]
             }
           },
@@ -5354,7 +5572,9 @@
                 "check.recovered",
                 "maintenance.started",
                 "maintenance.completed",
-                "slo.breached"
+                "slo.breached",
+                "resource.alert.triggered",
+                "resource.alert.recovered"
               ]
             }
           },
@@ -5413,6 +5633,165 @@
           "installationId"
         ]
       },
+      "CreateResourceAlertDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "cpuPercent",
+              "memoryPercent",
+              "storagePercent",
+              "loadAverage",
+              "batteryPercent",
+              "batteryTemperatureCelsius",
+              "containerCount",
+              "unhealthyContainerCount",
+              "internetAvailable",
+              "lowMemory",
+              "backgroundRestricted"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "greaterThan",
+              "greaterThanOrEqual",
+              "lessThan",
+              "lessThanOrEqual",
+              "equals"
+            ]
+          },
+          "threshold": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "recoveryThreshold": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "requiredSamples": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "metric",
+          "operator",
+          "threshold"
+        ]
+      },
+      "UpdateResourceAlertDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "cpuPercent",
+              "memoryPercent",
+              "storagePercent",
+              "loadAverage",
+              "batteryPercent",
+              "batteryTemperatureCelsius",
+              "containerCount",
+              "unhealthyContainerCount",
+              "internetAvailable",
+              "lowMemory",
+              "backgroundRestricted"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "greaterThan",
+              "greaterThanOrEqual",
+              "lessThan",
+              "lessThanOrEqual",
+              "equals"
+            ]
+          },
+          "threshold": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "recoveryThreshold": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "requiredSamples": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "CheckExecutionDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "agent"
+            ]
+          },
+          "agentId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
       "CreateCheckDto": {
         "type": "object",
         "properties": {
@@ -5431,13 +5810,25 @@
               "http",
               "tcp",
               "dns",
+              "icmp",
+              "wan",
               "host",
-              "disk"
+              "disk",
+              "docker",
+              "database"
             ]
           },
           "config": {
             "type": "object",
             "additionalProperties": true
+          },
+          "execution": {
+            "$ref": "#/components/schemas/CheckExecutionDto"
+          },
+          "secret": {
+            "type": "object",
+            "nullable": true,
+            "maxLength": 2048
           },
           "intervalSeconds": {
             "type": "number",
@@ -5472,7 +5863,8 @@
           "resourceId",
           "name",
           "type",
-          "config"
+          "config",
+          "execution"
         ]
       },
       "UpdateCheckDto": {
@@ -5493,13 +5885,25 @@
               "http",
               "tcp",
               "dns",
+              "icmp",
+              "wan",
               "host",
-              "disk"
+              "disk",
+              "docker",
+              "database"
             ]
           },
           "config": {
             "type": "object",
             "additionalProperties": true
+          },
+          "execution": {
+            "$ref": "#/components/schemas/CheckExecutionDto"
+          },
+          "secret": {
+            "type": "object",
+            "nullable": true,
+            "maxLength": 2048
           },
           "intervalSeconds": {
             "type": "number",
@@ -5769,15 +6173,17 @@
       "UpdateAgentDto": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
           "collectionIntervalSeconds": {
             "type": "number",
             "minimum": 15,
             "maximum": 3600
           }
-        },
-        "required": [
-          "collectionIntervalSeconds"
-        ]
+        }
       },
       "DiskSnapshotDto": {
         "type": "object",
@@ -5828,9 +6234,124 @@
           "category"
         ]
       },
+      "ContainerSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "created",
+              "running",
+              "paused",
+              "restarting",
+              "exited",
+              "dead",
+              "unknown"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy",
+              "starting",
+              "none"
+            ]
+          },
+          "restartCount": {
+            "type": "number"
+          },
+          "cpuPercent": {
+            "type": "number"
+          },
+          "memoryUsedBytes": {
+            "type": "number"
+          },
+          "memoryLimitBytes": {
+            "type": "number"
+          },
+          "networkReceivedBytes": {
+            "type": "number"
+          },
+          "networkTransmittedBytes": {
+            "type": "number"
+          },
+          "blockReadBytes": {
+            "type": "number"
+          },
+          "blockWrittenBytes": {
+            "type": "number"
+          },
+          "composeProject": {
+            "type": "object",
+            "nullable": true
+          },
+          "composeService": {
+            "type": "object",
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startedAt": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "image",
+          "state",
+          "health",
+          "restartCount",
+          "cpuPercent",
+          "memoryUsedBytes",
+          "memoryLimitBytes",
+          "networkReceivedBytes",
+          "networkTransmittedBytes",
+          "blockReadBytes",
+          "blockWrittenBytes",
+          "ports"
+        ]
+      },
+      "ContainerRuntimeSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "engineVersion": {
+            "type": "string"
+          },
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSnapshotDto"
+            }
+          }
+        },
+        "required": [
+          "engineVersion",
+          "containers"
+        ]
+      },
       "HostSnapshotDto": {
         "type": "object",
         "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "hostname": {
             "type": "string"
           },
@@ -5882,11 +6403,21 @@
               "$ref": "#/components/schemas/TechnologySnapshotDto"
             }
           },
+          "containerRuntime": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContainerRuntimeSnapshotDto"
+              }
+            ]
+          },
           "observedAt": {
             "type": "string"
           }
         },
         "required": [
+          "snapshotId",
           "hostname",
           "platform",
           "version",
