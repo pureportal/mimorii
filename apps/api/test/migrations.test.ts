@@ -223,7 +223,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260825000000");
+      expect(migration?.name).toBe("Migration20260826000000");
     } finally {
       await orm.close(true);
     }
