@@ -2,6 +2,7 @@ import {
   ArrowRight,
   BarChart3,
   Database,
+  Download,
   Gauge,
   HeartPulse,
   LockKeyhole,
@@ -41,6 +42,29 @@ const monitoringDetails = [
     icon: BarChart3,
     title: "History",
     description: "See uptime, response times, and incident duration together.",
+  },
+];
+
+const downloads = [
+  {
+    name: "Windows agent",
+    platform: "Windows x64 · MSI",
+    href: "https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-windows-x64.msi",
+  },
+  {
+    name: "Ubuntu / Debian agent",
+    platform: "Linux x64 · TAR.GZ",
+    href: "https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-ubuntu-debian-x64.tar.gz",
+  },
+  {
+    name: "Android agent",
+    platform: "Android · APK",
+    href: "https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-android.apk",
+  },
+  {
+    name: "Android client",
+    platform: "Android · APK",
+    href: "https://github.com/pureportal/mimorii/releases/latest/download/mimorii-client-android.apk",
   },
 ];
 
@@ -156,6 +180,39 @@ export function LandingPage() {
         <Reveal className="lg:order-1" delay={0.08}>
           <AgentTopology />
         </Reveal>
+      </section>
+
+      <section id="download" className="scroll-mt-20 border-y border-line bg-surface/72">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-24 lg:grid-cols-[.62fr_1.38fr] lg:gap-16 lg:px-8 lg:py-28">
+          <Reveal>
+            <h2 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
+              Download Mimorii
+            </h2>
+          </Reveal>
+          <Reveal className="grid gap-3 sm:grid-cols-2" delay={0.08}>
+            {downloads.map((download) => (
+              <a
+                key={download.name}
+                href={download.href}
+                className="group flex min-h-28 items-center gap-4 rounded-2xl border border-line bg-canvas/72 p-5 outline-none transition hover:-translate-y-0.5 hover:border-lavender hover:bg-lavender-soft focus-visible:ring-2 focus-visible:ring-coral-strong"
+              >
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-coral/14 text-coral-strong transition group-hover:bg-coral group-hover:text-night">
+                  <Download className="size-5" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <strong className="block font-display text-lg">{download.name}</strong>
+                  <small className="mt-1 block text-sm font-medium text-muted">
+                    {download.platform}
+                  </small>
+                </span>
+                <ArrowRight
+                  className="ml-auto size-5 shrink-0 text-muted transition group-hover:translate-x-1 group-hover:text-ink"
+                  aria-hidden="true"
+                />
+              </a>
+            ))}
+          </Reveal>
+        </div>
       </section>
 
       <section id="sponsors" className="bg-night text-white">

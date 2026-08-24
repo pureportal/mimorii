@@ -51,6 +51,9 @@ function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeTog
           <a href="/#agents" className="transition hover:text-ink">
             Agents
           </a>
+          <a href="/#download" className="transition hover:text-ink">
+            Download
+          </a>
           <Link to="/sponsors" className="transition hover:text-ink">
             Sponsors
           </Link>
@@ -103,6 +106,9 @@ function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeTog
               </MobileHeaderLink>
               <MobileHeaderLink href="/#agents" onNavigate={() => setMenuOpen(false)}>
                 Agents
+              </MobileHeaderLink>
+              <MobileHeaderLink href="/#download" onNavigate={() => setMenuOpen(false)}>
+                Download
               </MobileHeaderLink>
               <Link
                 to="/sponsors"
