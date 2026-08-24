@@ -2,6 +2,7 @@ export const chartColors = {
   grid: "var(--color-line)",
   ink: "var(--color-ink)",
   lavender: "var(--color-lavender)",
+  coral: "var(--color-coral)",
   muted: "var(--color-muted)",
   success: "var(--color-success)",
 } as const;

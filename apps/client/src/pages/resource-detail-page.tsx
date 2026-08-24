@@ -21,6 +21,7 @@ import {
   Bell,
   Cpu,
   Database,
+  Eye,
   Gauge,
   ImageIcon,
   MemoryStick,
@@ -33,6 +34,8 @@ import {
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { CheckDetailsDialog } from "../components/check-details-dialog";
+import { CheckHealthSummary } from "../components/check-health-summary";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
 import { ResourceImageDialog } from "../components/resource-image-dialog";
@@ -48,12 +51,10 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import {
-  formatBytes,
-  formatCount,
-  formatLatency,
-  formatPercent,
-  formatRelative,
-} from "../lib/format";
+  createCheckHistorySeries as createTypedCheckHistorySeries,
+  formatCheckMetric as formatTypedCheckMetric,
+} from "../lib/check-health";
+import { formatBytes, formatCount, formatPercent, formatRelative } from "../lib/format";
 import {
   CartesianGrid,
   Line,
@@ -75,6 +76,7 @@ export function ResourceDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedCheckId, setSelectedCheckId] = useState<string | null>(null);
+  const [detailsCheck, setDetailsCheck] = useState<CheckSummary | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<ResourceAlertRuleSummary | null>(null);
   const resource = useQuery({
@@ -157,9 +159,27 @@ export function ResourceDetailPage() {
       />
     );
   const currentSnapshot = snapshots.data?.[0];
+  const primaryStorage = currentSnapshot?.disks
+    .filter((disk) => disk.totalBytes > 0 && disk.usedBytes <= disk.totalBytes)
+    .toSorted(
+      (left, right) => right.usedBytes / right.totalBytes - left.usedBytes / left.totalBytes
+    )[0];
   const currentAgent = agents.data?.find((agent) => agent.id === resource.data.agent?.id);
   const deviceStatus = currentAgent?.deviceStatus;
   const chartData = (history.data ?? []).toReversed();
+  const activeCheck = checks.data?.find((check) => check.id === activeCheckId);
+  const primaryHistorySeries = activeCheck
+    ? createTypedCheckHistorySeries(activeCheck.type, chartData).slice(0, 2)
+    : [];
+  const primaryHistoryData = chartData.map((result) => ({
+    checkedAt: result.checkedAt,
+    ...Object.fromEntries(
+      primaryHistorySeries.map((series, index) => [
+        `metric${index}`,
+        series.points.find((point) => point.checkedAt === result.checkedAt)?.value ?? null,
+      ])
+    ),
+  }));
   const checkMetricSeries = createCheckMetricSeries(chartData);
 
   async function removeResource() {
@@ -253,11 +273,11 @@ export function ResourceDetailPage() {
             icon={Database}
             label="Disk"
             value={
-              currentSnapshot.disks[0]
-                ? `${((currentSnapshot.disks[0].usedBytes / currentSnapshot.disks[0].totalBytes) * 100).toFixed(1)}%`
+              primaryStorage
+                ? `${((primaryStorage.usedBytes / primaryStorage.totalBytes) * 100).toFixed(1)}%`
                 : "—"
             }
-            detail={currentSnapshot.disks[0]?.mount}
+            detail={primaryStorage?.mount}
           />
           <HostMetric
             icon={Gauge}
@@ -343,9 +363,12 @@ export function ResourceDetailPage() {
           <CardContent className="h-72 pl-1 sm:pl-3">
             {history.isLoading ? (
               <LoadingState />
-            ) : chartData.length ? (
+            ) : primaryHistorySeries.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                <LineChart
+                  data={primaryHistoryData}
+                  margin={{ top: 8, right: 12, left: -18, bottom: 0 }}
+                >
                   <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
                   <XAxis
                     dataKey="checkedAt"
@@ -362,7 +385,13 @@ export function ResourceDetailPage() {
                     axisLine={false}
                     tickLine={false}
                     width={48}
-                    unit="ms"
+                    unit={
+                      primaryHistorySeries.every((series) =>
+                        series.key.toLowerCase().includes("percent")
+                      )
+                        ? "%"
+                        : undefined
+                    }
                   />
                   <Tooltip
                     labelFormatter={(value) =>
@@ -370,20 +399,29 @@ export function ResourceDetailPage() {
                         ? new Date(value).toLocaleString()
                         : ""
                     }
-                    formatter={(value) => [
-                      `${typeof value === "string" || typeof value === "number" ? value : "—"} ms`,
-                      "Latency",
-                    ]}
+                    formatter={(value, name) => {
+                      const series = primaryHistorySeries.find((item) => item.label === name);
+                      return [
+                        typeof value === "number" && series
+                          ? formatTypedCheckMetric(series.key, value)
+                          : "—",
+                        name,
+                      ];
+                    }}
                     contentStyle={chartTooltipStyle}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="latencyMs"
-                    stroke={chartColors.lavender}
-                    strokeWidth={2.5}
-                    dot={false}
-                    connectNulls={false}
-                  />
+                  {primaryHistorySeries.map((series, index) => (
+                    <Line
+                      key={series.key}
+                      type="monotone"
+                      dataKey={`metric${index}`}
+                      name={series.label}
+                      stroke={index === 0 ? chartColors.lavender : chartColors.coral}
+                      strokeWidth={2.5}
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -414,11 +452,21 @@ export function ResourceDetailPage() {
                       <p className="truncate text-sm font-semibold">{check.name}</p>
                       <p className="text-xs text-muted">
                         {checkExecutionLabel(check.execution, agents.data ?? [])} ·{" "}
-                        {formatPercent(check.uptime24h)} · {formatLatency(check.lastLatencyMs)}
+                        {formatPercent(check.uptime24h)}
                       </p>
                     </div>
                     <StatusBadge status={check.status} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Show details"
+                      aria-label={`Show details for ${check.name}`}
+                      onClick={() => setDetailsCheck(check)}
+                    >
+                      <Eye />
+                    </Button>
                   </div>
+                  <CheckHealthSummary check={check} className="mt-3" />
                   <div className="mt-2 flex justify-between text-[11px] text-muted">
                     <span>{check.intervalSeconds}s interval</span>
                     <span>{formatRelative(check.lastCheckedAt)}</span>
@@ -547,19 +595,26 @@ export function ResourceDetailPage() {
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {currentSnapshot.disks.map((disk) => {
-              const percent = disk.totalBytes ? (disk.usedBytes / disk.totalBytes) * 100 : 0;
+              const percent =
+                disk.totalBytes > 0 && disk.usedBytes <= disk.totalBytes
+                  ? (disk.usedBytes / disk.totalBytes) * 100
+                  : null;
               return (
                 <div key={disk.mount} className="rounded-xl border border-line p-4">
                   <div className="flex justify-between text-sm">
                     <span className="font-semibold">{disk.mount}</span>
-                    <span className="text-muted">{percent.toFixed(1)}%</span>
+                    <span className="text-muted">
+                      {percent === null ? "—" : `${percent.toFixed(1)}%`}
+                    </span>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink/6">
-                    <div
-                      className={`h-full rounded-full ${percent >= 90 ? "bg-danger" : percent >= 80 ? "bg-warning" : "bg-success"}`}
-                      style={{ width: `${Math.min(percent, 100)}%` }}
-                    />
-                  </div>
+                  {percent === null ? null : (
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink/6">
+                      <div
+                        className={`h-full rounded-full ${percent >= 90 ? "bg-danger" : percent >= 80 ? "bg-warning" : "bg-success"}`}
+                        style={{ width: `${Math.min(percent, 100)}%` }}
+                      />
+                    </div>
+                  )}
                   <p className="mt-2 text-xs text-muted">
                     {formatBytes(disk.usedBytes)} / {formatBytes(disk.totalBytes)}
                   </p>
@@ -687,6 +742,15 @@ export function ResourceDetailPage() {
         onOpenChange={setImageOpen}
         resource={resource.data}
         onSaved={refresh}
+      />
+      <CheckDetailsDialog
+        open={Boolean(detailsCheck)}
+        onOpenChange={(open) => {
+          if (!open) setDetailsCheck(null);
+        }}
+        teamId={teamId}
+        check={detailsCheck}
+        resourceName={resource.data.name}
       />
       <ConfirmationDialog
         open={deleteOpen}

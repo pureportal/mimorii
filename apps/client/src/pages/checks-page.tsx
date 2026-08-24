@@ -1,10 +1,12 @@
 import type { CheckSummary, ResourceSummary } from "@mimorii/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, MoreHorizontal, Play, Plus, Search, Settings2, Trash2 } from "lucide-react";
+import { Activity, Eye, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckDialog, type CheckPayload } from "../components/check-dialog";
+import { CheckHealthSummary } from "../components/check-health-summary";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -14,7 +16,7 @@ import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { formatLatency, formatPercent, formatRelative } from "../lib/format";
+import { formatPercent, formatRelative } from "../lib/format";
 
 export function ChecksPage() {
   const { activeTeam } = useAuth();
@@ -25,6 +27,7 @@ export function ChecksPage() {
   const [status, setStatus] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState<CheckSummary | null>(null);
+  const [detailsCheck, setDetailsCheck] = useState<CheckSummary | null>(null);
   const [deleteCheck, setDeleteCheck] = useState<CheckSummary | null>(null);
   const resourceId = searchParams.get("resourceId") ?? "";
   const checks = useQuery({
@@ -169,14 +172,14 @@ export function ChecksPage() {
       {filtered.length ? (
         <Card data-guide-page="checks-list" className="overflow-hidden">
           <CardContent className="overflow-x-auto p-0">
-            <table className="w-full min-w-[880px] text-left text-sm">
+            <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="border-b border-line bg-ink/[.025] text-xs text-muted">
                 <tr>
                   <th className="px-5 py-3.5 font-medium">Check</th>
                   <th className="px-4 py-3.5 font-medium">Resource</th>
                   <th className="px-4 py-3.5 font-medium">State</th>
                   <th className="px-4 py-3.5 font-medium">Uptime · 24h</th>
-                  <th className="px-4 py-3.5 font-medium">Latency</th>
+                  <th className="px-4 py-3.5 font-medium">Health</th>
                   <th className="px-4 py-3.5 font-medium">Last run</th>
                   <th className="px-5 py-3.5" />
                 </tr>
@@ -203,41 +206,56 @@ export function ChecksPage() {
                       <StatusBadge status={check.status} />
                     </td>
                     <td className="px-4 py-4 font-semibold">{formatPercent(check.uptime24h)}</td>
-                    <td className="px-4 py-4 text-muted">{formatLatency(check.lastLatencyMs)}</td>
+                    <td className="w-72 px-4 py-4">
+                      <CheckHealthSummary check={check} />
+                    </td>
                     <td className="px-4 py-4 text-muted">{formatRelative(check.lastCheckedAt)}</td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
+                          title="Show details"
+                          aria-label={`Show details for ${check.name}`}
+                          onClick={() => setDetailsCheck(check)}
+                        >
+                          <Eye />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           title="Run now"
+                          aria-label={`Run ${check.name} now`}
                           onClick={() => run.mutate(check.id)}
                         >
-                          <Play />
+                          <RefreshCw />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           title="Edit"
+                          aria-label={`Edit ${check.name}`}
                           onClick={() => {
                             setSelected(check);
                             setDialogOpen(true);
                           }}
                         >
-                          <Settings2 />
+                          <Pencil />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           title={check.enabled ? "Pause" : "Enable"}
+                          aria-label={`${check.enabled ? "Pause" : "Enable"} ${check.name}`}
                           onClick={() => toggle.mutate({ id: check.id, enabled: !check.enabled })}
                         >
-                          <MoreHorizontal />
+                          {check.enabled ? <Pause /> : <Play />}
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           title="Delete"
+                          aria-label={`Delete ${check.name}`}
                           className="text-danger"
                           onClick={() => setDeleteCheck(check)}
                         >
@@ -272,6 +290,15 @@ export function ChecksPage() {
         initial={selected}
         defaultResourceId={resourceId}
         onSubmit={save}
+      />
+      <CheckDetailsDialog
+        open={Boolean(detailsCheck)}
+        onOpenChange={(open) => {
+          if (!open) setDetailsCheck(null);
+        }}
+        teamId={teamId}
+        check={detailsCheck}
+        resourceName={detailsCheck ? resourceNames.get(detailsCheck.resourceId) : undefined}
       />
       <ConfirmationDialog
         open={Boolean(deleteCheck)}
