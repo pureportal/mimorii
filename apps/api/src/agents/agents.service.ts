@@ -15,6 +15,8 @@ import {
   type CheckType,
   type AgentCapability,
   type AgentKind,
+  type DesktopAgentPlatform,
+  type HostCheckConfig,
   type HostSnapshot,
   type MobileDeviceStatus,
 } from "@mimorii/contracts";
@@ -37,6 +39,7 @@ import { TechnologiesService } from "../technologies/technologies.service.js";
 import { MobileDeviceStatusService } from "./mobile-device-status.service.js";
 import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
 import { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
+import { ResourceImagesService } from "../resources/resource-images.service.js";
 
 interface AgentRow {
   id: string;
@@ -60,6 +63,8 @@ interface TaskRow {
   status: string;
   issued_at: string;
   encrypted_secret: string | null;
+  check_enabled: boolean | number;
+  favicon_request_id: string | null;
 }
 
 @Injectable()
@@ -72,7 +77,8 @@ export class AgentsService {
     private readonly technologies: TechnologiesService,
     private readonly mobileDeviceStatuses: MobileDeviceStatusService,
     private readonly telemetry: ResourceTelemetryService,
-    private readonly alerts: ResourceAlertsService
+    private readonly alerts: ResourceAlertsService,
+    private readonly images: ResourceImagesService
   ) {}
 
   async list(userId: string, teamId: string): Promise<AgentSummary[]> {
@@ -91,7 +97,14 @@ export class AgentsService {
 
   async create(userId: string, teamId: string, input: CreateAgentDto) {
     await this.access.require(userId, teamId, "admin");
+    if (input.kind === "desktop" && !input.platform) {
+      throw new BadRequestException("Desktop agent platform is required");
+    }
+    if (input.kind === "mobile" && input.platform) {
+      throw new BadRequestException("Mobile agents do not use a desktop platform");
+    }
     const id = randomUUID();
+    const hostCheckId = input.kind === "desktop" ? randomUUID() : null;
     const enrollmentKey = createSecret("mim_agent");
     const now = new Date().toISOString();
     const collectionIntervalSeconds = this.collectionInterval(
@@ -114,8 +127,8 @@ export class AgentsService {
       await this.database.run(
         `INSERT INTO agents
          (id, team_id, resource_id, key_hash, kind, capabilities_json,
-          collection_interval_seconds, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          collection_interval_seconds, platform, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         teamId,
         id,
@@ -123,9 +136,32 @@ export class AgentsService {
         input.kind,
         JSON.stringify(capabilities),
         collectionIntervalSeconds,
+        input.platform ?? null,
         now,
         now
       );
+      if (hostCheckId && input.platform) {
+        await this.database.run(
+          `INSERT INTO checks
+           (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
+            interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
+            current_status, next_check_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'host', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
+          hostCheckId,
+          teamId,
+          id,
+          "Host health",
+          JSON.stringify(this.defaultHostCheckConfig(input.platform)),
+          id,
+          60,
+          5_000,
+          2,
+          1,
+          now,
+          now,
+          now
+        );
+      }
     });
     await this.audit.record({
       teamId,
@@ -133,7 +169,7 @@ export class AgentsService {
       action: "agent.created",
       subjectType: "agent",
       subjectId: id,
-      metadata: { kind: input.kind },
+      metadata: { kind: input.kind, ...(input.platform ? { platform: input.platform } : {}) },
     });
     return { ...this.map(await this.requireRow(teamId, id), null), enrollmentKey };
   }
@@ -225,7 +261,7 @@ export class AgentsService {
       throw new BadRequestException("Mobile agents do not submit host snapshots");
     }
     const capabilities = JSON.parse(agent.capabilities_json) as AgentCapability[];
-    if (!capabilities.includes("host") && !capabilities.includes("disk")) return [];
+    if (!capabilities.includes("host") && !capabilities.includes("docker")) return [];
     const rows = await this.database.all<{ snapshot_json: string }>(
       `SELECT snapshot_json FROM host_snapshots WHERE agent_id = ?
        ORDER BY observed_at DESC LIMIT ?`,
@@ -250,7 +286,8 @@ export class AgentsService {
     }
     const now = new Date().toISOString();
     const rows = await this.database.all<TaskRow>(
-      `SELECT at.*, c.encrypted_secret FROM agent_tasks at
+      `SELECT at.*, c.encrypted_secret, c.enabled AS check_enabled, c.favicon_request_id
+       FROM agent_tasks at
        JOIN checks c ON c.id = at.check_id
        WHERE at.agent_id = ? AND at.status IN ('pending', 'claimed')
        ORDER BY at.issued_at LIMIT ?`,
@@ -264,13 +301,23 @@ export class AgentsService {
         : null;
       return { row, task };
     });
-    const supported = tasks.filter(({ task }) => agent.capabilities.includes(task.type));
-    const unsupported = tasks.filter(({ task }) => !agent.capabilities.includes(task.type));
-    if (unsupported.length > 0) {
-      const ids = unsupported.map(() => "?").join(",");
+    const supported = tasks.filter(
+      ({ row, task }) => Boolean(row.check_enabled) && agent.capabilities.includes(task.type)
+    );
+    const expired = tasks.filter(
+      ({ row, task }) => !row.check_enabled || !agent.capabilities.includes(task.type)
+    );
+    let assignedFaviconRequest = false;
+    for (const { row, task } of supported) {
+      const requestId = task.type === "http" ? row.favicon_request_id : null;
+      task.faviconRequestId = !assignedFaviconRequest ? requestId : null;
+      assignedFaviconRequest ||= requestId !== null;
+    }
+    if (expired.length > 0) {
+      const ids = expired.map(() => "?").join(",");
       await this.database.run(
         `UPDATE agent_tasks SET status = 'expired' WHERE id IN (${ids})`,
-        ...unsupported.map(({ row }) => row.id)
+        ...expired.map(({ row }) => row.id)
       );
     }
     if (supported.length > 0) {
@@ -287,8 +334,16 @@ export class AgentsService {
       now,
       agent.id
     );
+    const telemetry = await this.database.get<{ enabled: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM checks
+         WHERE agent_id = ? AND enabled = 1 AND type IN ('host', 'docker')
+       ) AS enabled`,
+      agent.id
+    );
     return {
       collectionIntervalSeconds: agent.collectionIntervalSeconds,
+      collectHostTelemetry: Boolean(telemetry?.enabled),
       tasks: supported.map(({ task }) => task),
     };
   }
@@ -309,11 +364,8 @@ export class AgentsService {
       throw new BadRequestException("Desktop agent capabilities are invalid");
     }
     const reportsHostTelemetry = input.snapshots.length > 0;
-    const supportsHostTelemetry =
-      capabilities.includes("host") ||
-      capabilities.includes("disk") ||
-      capabilities.includes("docker");
-    if (reportsHostTelemetry !== supportsHostTelemetry) {
+    const supportsHostTelemetry = capabilities.includes("host") || capabilities.includes("docker");
+    if (reportsHostTelemetry && !supportsHostTelemetry) {
       throw new BadRequestException("Agent telemetry does not match its capabilities");
     }
     const receivedAt = new Date().toISOString();
@@ -326,7 +378,7 @@ export class AgentsService {
 
     await this.database.transaction(async () => {
       await this.database.run(
-        `UPDATE agents SET platform = ?, version = ?, capabilities_json = ?, last_seen_at = ?, updated_at = ?
+        `UPDATE agents SET platform = COALESCE(?, platform), version = ?, capabilities_json = ?, last_seen_at = ?, updated_at = ?
          WHERE id = ? AND revoked_at IS NULL`,
         latestSnapshot?.platform.slice(0, 100) ?? null,
         input.agentVersion.trim().slice(0, 40),
@@ -382,6 +434,9 @@ export class AgentsService {
   }
 
   private normalizeSnapshot(input: HostSnapshotDto, receivedAt: string): HostSnapshot {
+    if (input.disks.some((disk) => disk.usedBytes > disk.totalBytes)) {
+      throw new BadRequestException("Disk usage exceeds total capacity");
+    }
     return {
       snapshotId: input.snapshotId,
       hostname: input.hostname,
@@ -441,8 +496,11 @@ export class AgentsService {
     receivedAt: string,
     capabilities: AgentCapability[]
   ): Promise<boolean> {
-    const task = await this.database.get<TaskRow & { type: CheckType }>(
-      `SELECT at.*, c.type FROM agent_tasks at JOIN checks c ON c.id = at.check_id
+    const task = await this.database.get<
+      TaskRow & { type: CheckType; resource_id: string; favicon_request_id: string | null }
+    >(
+      `SELECT at.*, c.type, c.resource_id, c.favicon_request_id
+       FROM agent_tasks at JOIN checks c ON c.id = at.check_id
        WHERE at.id = ? AND at.agent_id = ? AND at.status IN ('pending', 'claimed')
        AND c.enabled = 1`,
       input.taskId,
@@ -458,6 +516,17 @@ export class AgentsService {
       metrics: this.cleanMetrics(input.metrics),
       checkedAt,
     });
+    if (input.favicon && input.favicon.requestId === task.favicon_request_id) {
+      this.validateFaviconResult(input.favicon);
+      await this.images.acceptAgentFavicon(
+        task.resource_id,
+        task.check_id,
+        input.favicon.requestId,
+        input.favicon.status === "retrieved"
+          ? Buffer.from(input.favicon.dataBase64!, "base64")
+          : null
+      );
+    }
     await this.database.run(
       "UPDATE agent_tasks SET status = 'completed', completed_at = ? WHERE id = ?",
       receivedAt,
@@ -475,6 +544,16 @@ export class AgentsService {
           typeof value === "string" ? value.slice(0, 500) : value,
         ])
     );
+  }
+
+  private validateFaviconResult(input: NonNullable<AgentTaskResultDto["favicon"]>): void {
+    const retrieved = input.status === "retrieved";
+    if (
+      (retrieved && (!input.dataBase64 || input.message !== undefined)) ||
+      (!retrieved && (!input.message || input.dataBase64 !== undefined))
+    ) {
+      throw new BadRequestException("Agent favicon result is invalid");
+    }
   }
 
   private safeObservedAt(value: string, fallback: string): string {
@@ -543,5 +622,24 @@ export class AgentsService {
       );
     }
     return interval;
+  }
+
+  private defaultHostCheckConfig(platform: DesktopAgentPlatform): HostCheckConfig {
+    return {
+      cpuWarningPercent: 90,
+      cpuCriticalPercent: 98,
+      memoryWarningPercent: 90,
+      memoryCriticalPercent: 98,
+      ...(platform === "linux" ? { loadWarning: 4, loadCritical: 8 } : {}),
+      swapWarningPercent: 90,
+      swapCriticalPercent: 98,
+      storage: [
+        {
+          mount: platform === "windows" ? "C:" : "/",
+          warningPercent: 85,
+          criticalPercent: 95,
+        },
+      ],
+    };
   }
 }

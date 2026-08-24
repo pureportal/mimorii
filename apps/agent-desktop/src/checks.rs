@@ -5,6 +5,8 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use hickory_resolver::Resolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::proto::rr::RecordType;
@@ -19,8 +21,9 @@ use url::Url;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::database::{self, DatabaseConfig};
+use crate::favicon;
 use crate::icmp;
-use crate::models::{AgentTask, CheckState, CheckType, HostSnapshot, TaskResult};
+use crate::models::{AgentTask, CheckState, CheckType, FaviconResult, HostSnapshot, TaskResult};
 use crate::target_policy::{TargetPolicy, TargetProtocol};
 use crate::time_now;
 
@@ -152,15 +155,16 @@ struct HostConfig {
     cpu_critical_percent: f32,
     memory_warning_percent: f64,
     memory_critical_percent: f64,
-    load_warning: f64,
-    load_critical: f64,
+    load_warning: Option<f64>,
+    load_critical: Option<f64>,
     swap_warning_percent: f64,
     swap_critical_percent: f64,
+    storage: Vec<StorageConfig>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DiskConfig {
+struct StorageConfig {
     mount: String,
     warning_percent: f64,
     critical_percent: f64,
@@ -210,11 +214,10 @@ pub fn execute(
         CheckType::Icmp => icmp_check(task, target_policy),
         CheckType::Wan => wan(task, target_policy),
         CheckType::Host => host(task, snapshot),
-        CheckType::Disk => disk(task, snapshot),
         CheckType::Docker => docker(task, snapshot),
         CheckType::Database => database_check(task, target_policy),
     };
-    result_or_down(task, result)
+    with_favicon(task, target_policy, result_or_down(task, result))
 }
 
 pub fn execute_network(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
@@ -225,11 +228,42 @@ pub fn execute_network(task: &AgentTask, target_policy: &TargetPolicy) -> Result
         CheckType::Icmp => icmp_check(task, target_policy),
         CheckType::Wan => wan(task, target_policy),
         CheckType::Database => database_check(task, target_policy),
-        CheckType::Host | CheckType::Disk | CheckType::Docker => {
+        CheckType::Host | CheckType::Docker => {
             bail!("check runner received an unsupported host telemetry task")
         }
     };
-    Ok(result_or_down(task, result))
+    Ok(with_favicon(
+        task,
+        target_policy,
+        result_or_down(task, result),
+    ))
+}
+
+fn with_favicon(
+    task: &AgentTask,
+    target_policy: &TargetPolicy,
+    mut result: TaskResult,
+) -> TaskResult {
+    let Some(request_id) = task.favicon_request_id.as_ref() else {
+        return result;
+    };
+    let favicon = task
+        .config
+        .pointer("/target/url")
+        .and_then(Value::as_str)
+        .context("Favicon URL is unavailable")
+        .and_then(|url| favicon::retrieve(url, task.timeout_ms, target_policy));
+    result.favicon = Some(match favicon {
+        Ok(data) => FaviconResult::Retrieved {
+            request_id: request_id.clone(),
+            data_base64: BASE64.encode(data),
+        },
+        Err(error) => FaviconResult::Failed {
+            request_id: request_id.clone(),
+            message: truncate(&error.to_string(), 500),
+        },
+    });
+    result
 }
 
 fn result_or_down(task: &AgentTask, result: Result<TaskResult>) -> TaskResult {
@@ -477,6 +511,7 @@ fn http_with_resolver(
                 }),
             metrics,
             checked_at: time_now(),
+            favicon: None,
         });
     }
     bail!("HTTP check failed")
@@ -624,7 +659,10 @@ fn tcp_with_resolver(
 }
 
 fn resolve_addresses(hostname: &str, port: u16) -> Result<Vec<SocketAddr>> {
-    Ok((hostname, port).to_socket_addrs()?.collect())
+    (hostname, port)
+        .to_socket_addrs()
+        .with_context(|| format!("DNS lookup failed for {hostname}"))
+        .map(Iterator::collect)
 }
 
 fn tcp_success(task_id: &str, port: u16, latency: Option<f64>, timeout_ms: u64) -> TaskResult {
@@ -643,6 +681,7 @@ fn tcp_success(task_id: &str, port: u16, latency: Option<f64>, timeout_ms: u64) 
         message: degraded.then(|| "Connection is near the timeout".to_owned()),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     }
 }
 
@@ -661,7 +700,9 @@ fn dns_with_config(task: &AgentTask, resolver_config: ResolverConfig) -> Result<
     options.attempts = 1;
     let resolver = Resolver::new(resolver_config, options)?;
     let started = Instant::now();
-    let lookup = resolver.lookup(config.target.hostname.as_str(), record_type)?;
+    let lookup = resolver
+        .lookup(config.target.hostname.as_str(), record_type)
+        .with_context(|| format!("DNS lookup failed for {}", config.target.hostname))?;
     let values: Vec<String> = lookup.iter().map(|record| record.to_string()).collect();
     let latency = elapsed_ms(started);
     let mut metrics = BTreeMap::new();
@@ -685,6 +726,7 @@ fn dns_with_config(task: &AgentTask, resolver_config: ResolverConfig) -> Result<
         message: None,
         metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
@@ -740,6 +782,7 @@ fn icmp_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResu
         message: latency_warning.then(|| "ICMP latency reached the warning threshold".to_owned()),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
@@ -772,9 +815,10 @@ fn wan(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
                     json!(result.received as f64 / result.sent as f64 * 100.0),
                 );
             }
-            _ => {
+            Ok(_) => {
                 metrics.insert(format!("target{index}SuccessPercent"), json!(0));
             }
+            Err(error) => return Err(error.context(format!("WAN target {} failed", target.name))),
         }
         metrics.insert(format!("target{index}Name"), json!(target.name));
     }
@@ -803,6 +847,7 @@ fn wan(task: &AgentTask, target_policy: &TargetPolicy) -> Result<TaskResult> {
         message: warned.then(|| "WAN latency reached the warning threshold".to_owned()),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
@@ -827,12 +872,17 @@ fn database_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<Task
         message: result.message,
         metrics: result.metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
 fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
     let config: HostConfig =
         serde_json::from_value(task.config.clone()).context("host configuration is invalid")?;
+    if config.storage.is_empty() || config.load_warning.is_some() != config.load_critical.is_some()
+    {
+        bail!("host configuration is invalid");
+    }
     let memory_percent = if snapshot.memory_total_bytes == 0 {
         0.0
     } else {
@@ -843,20 +893,63 @@ fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
     } else {
         snapshot.swap_used_bytes as f64 / snapshot.swap_total_bytes as f64 * 100.0
     };
-    let critical = snapshot.cpu_percent >= config.cpu_critical_percent
+    let resource_critical = snapshot.cpu_percent >= config.cpu_critical_percent
         || memory_percent >= config.memory_critical_percent
-        || snapshot.load_average >= config.load_critical
+        || config
+            .load_critical
+            .is_some_and(|threshold| snapshot.load_average >= threshold)
         || swap_percent >= config.swap_critical_percent;
-    let degraded = snapshot.cpu_percent >= config.cpu_warning_percent
+    let resource_degraded = snapshot.cpu_percent >= config.cpu_warning_percent
         || memory_percent >= config.memory_warning_percent
-        || snapshot.load_average >= config.load_warning
+        || config
+            .load_warning
+            .is_some_and(|threshold| snapshot.load_average >= threshold)
         || swap_percent >= config.swap_warning_percent;
     let mut metrics = BTreeMap::new();
     metrics.insert("cpuPercent".to_owned(), json!(snapshot.cpu_percent));
     metrics.insert("memoryPercent".to_owned(), json!(memory_percent));
-    metrics.insert("loadAverage".to_owned(), json!(snapshot.load_average));
+    if config.load_warning.is_some() {
+        metrics.insert("loadAverage".to_owned(), json!(snapshot.load_average));
+    }
     metrics.insert("swapPercent".to_owned(), json!(swap_percent));
     metrics.insert("processCount".to_owned(), json!(snapshot.process_count));
+    metrics.insert("storageCount".to_owned(), json!(config.storage.len()));
+
+    let mut unavailable = Vec::new();
+    let mut storage_critical = false;
+    let mut storage_degraded = false;
+    let mut highest_storage_percent: Option<f64> = None;
+    for (index, monitored) in config.storage.iter().enumerate() {
+        metrics.insert(format!("storage{index}Mount"), json!(monitored.mount));
+        let disk = snapshot
+            .disks
+            .iter()
+            .find(|disk| mount_identity(&disk.mount) == mount_identity(&monitored.mount));
+        let Some(disk) = disk else {
+            unavailable.push(monitored.mount.clone());
+            continue;
+        };
+        if disk.total_bytes == 0 || disk.used_bytes > disk.total_bytes {
+            unavailable.push(monitored.mount.clone());
+            continue;
+        }
+        let used_percent = disk.used_bytes as f64 / disk.total_bytes as f64 * 100.0;
+        highest_storage_percent =
+            Some(highest_storage_percent.map_or(used_percent, |current| current.max(used_percent)));
+        storage_critical |= used_percent >= monitored.critical_percent;
+        storage_degraded |= used_percent >= monitored.warning_percent;
+        metrics.insert(format!("storage{index}UsedPercent"), json!(used_percent));
+        metrics.insert(format!("storage{index}UsedBytes"), json!(disk.used_bytes));
+        metrics.insert(format!("storage{index}TotalBytes"), json!(disk.total_bytes));
+    }
+    metrics.insert("storagePercent".to_owned(), json!(highest_storage_percent));
+    metrics.insert(
+        "unavailableStorageCount".to_owned(),
+        json!(unavailable.len()),
+    );
+
+    let critical = !unavailable.is_empty() || resource_critical || storage_critical;
+    let degraded = resource_degraded || storage_degraded;
     Ok(TaskResult {
         task_id: task.id.clone(),
         status: if critical {
@@ -868,52 +961,38 @@ fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
         },
         latency_ms: None,
         status_code: None,
-        message: critical
-            .then(|| "A host resource critical threshold was reached".to_owned())
+        message: (!unavailable.is_empty())
+            .then(|| {
+                format!(
+                    "Monitored storage is unavailable: {}",
+                    unavailable.join(", ")
+                )
+            })
+            .or_else(|| {
+                critical.then(|| "A host resource critical threshold was reached".to_owned())
+            })
             .or_else(|| {
                 degraded.then(|| "A host resource warning threshold was reached".to_owned())
             }),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
-fn disk(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
-    let config: DiskConfig =
-        serde_json::from_value(task.config.clone()).context("disk configuration is invalid")?;
-    let disk = snapshot
-        .disks
-        .iter()
-        .find(|disk| disk.mount.eq_ignore_ascii_case(&config.mount))
-        .context("configured disk mount was not found")?;
-    let used_percent = if disk.total_bytes == 0 {
-        0.0
+fn mount_identity(mount: &str) -> String {
+    let replaced = mount.trim().replace('\\', "/");
+    let normalized = replaced.trim_end_matches('/');
+    let normalized = if normalized.is_empty() {
+        "/"
     } else {
-        disk.used_bytes as f64 / disk.total_bytes as f64 * 100.0
+        normalized
     };
-    let degraded = used_percent >= config.warning_percent;
-    let critical = used_percent >= config.critical_percent;
-    let mut metrics = BTreeMap::new();
-    metrics.insert("usedPercent".to_owned(), json!(used_percent));
-    metrics.insert("usedBytes".to_owned(), json!(disk.used_bytes));
-    metrics.insert("totalBytes".to_owned(), json!(disk.total_bytes));
-    Ok(TaskResult {
-        task_id: task.id.clone(),
-        status: if critical {
-            CheckState::Down
-        } else if degraded {
-            CheckState::Degraded
-        } else {
-            CheckState::Up
-        },
-        latency_ms: None,
-        status_code: None,
-        message: critical
-            .then(|| "Disk usage critical threshold was reached".to_owned())
-            .or_else(|| degraded.then(|| "Disk usage warning threshold was reached".to_owned())),
-        metrics,
-        checked_at: time_now(),
-    })
+    if normalized.as_bytes().get(1) == Some(&b':') || normalized.starts_with("//") {
+        normalized.to_ascii_lowercase()
+    } else {
+        normalized.to_owned()
+    }
 }
 
 fn docker(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
@@ -1013,6 +1092,7 @@ fn docker(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
             }),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     })
 }
 
@@ -1031,6 +1111,7 @@ fn down(
         message: Some(message.into()),
         metrics,
         checked_at: time_now(),
+        favicon: None,
     }
 }
 
@@ -1050,13 +1131,24 @@ fn safe_error(error: &anyhow::Error) -> String {
         message
     } else if details.contains("timed out") || details.contains("timeout") {
         "Check timed out".to_owned()
-    } else if details.contains("dns") || details.contains("resolve") {
-        "Target could not be resolved".to_owned()
+    } else if details.contains("dns") || details.contains("resolve") || details.contains("lookup") {
+        truncate(
+            &error
+                .chain()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(": "),
+            500,
+        )
     } else if details.contains("certificate") || details.contains("tls") {
         "TLS validation failed".to_owned()
     } else {
         "Connection failed".to_owned()
     }
+}
+
+fn truncate(value: &str, maximum: usize) -> String {
+    value.chars().take(maximum).collect()
 }
 
 #[cfg(test)]

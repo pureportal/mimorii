@@ -20,8 +20,99 @@ const resource: ResourceSummary = {
   createdAt: "2026-08-22T08:00:00.000Z",
 };
 
+const windowsResource: ResourceSummary = {
+  ...resource,
+  id: "5a6e77e0-acde-46e9-8dde-199f470f7e8f",
+  name: "Windows server",
+  agent: {
+    id: "1887e099-1fc2-40c9-8cc3-b7f58b9a4d24",
+    kind: "desktop",
+    status: "never",
+    platform: "windows",
+    version: null,
+    lastSeenAt: null,
+  },
+};
+
 describe("CheckDialog", () => {
   afterEach(cleanup);
+
+  it("opens a new check with an empty name", () => {
+    render(
+      <CheckDialog
+        open
+        onOpenChange={vi.fn()}
+        resources={[resource]}
+        onSubmit={vi.fn(async (_payload: CheckPayload) => undefined)}
+      />
+    );
+
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("");
+  });
+
+  it("uses the selected type as the name when no name is entered", async () => {
+    const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
+
+    render(<CheckDialog open onOpenChange={vi.fn()} resources={[resource]} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Type" }), {
+      target: { value: "dns" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save check" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ name: "DNS record" }));
+  });
+
+  it("preserves a name entered by the user", async () => {
+    const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
+
+    render(<CheckDialog open onOpenChange={vi.fn()} resources={[resource]} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+      target: { value: "Public endpoint" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save check" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ name: "Public endpoint" }));
+  });
+
+  it("edits Windows Host health storage and thresholds", async () => {
+    const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
+    render(
+      <CheckDialog open onOpenChange={vi.fn()} resources={[windowsResource]} onSubmit={onSubmit} />
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Type" }), {
+      target: { value: "host" },
+    });
+    expect(screen.getByRole("checkbox", { name: "Load average" })).not.toBeChecked();
+    expect(screen.getByRole("textbox", { name: "Mount" })).toHaveValue("C:");
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "CPU warning · %" }), {
+      target: { value: "75" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add storage" }));
+    const mounts = screen.getAllByRole("textbox", { name: "Mount" });
+    fireEvent.change(mounts[1]!, { target: { value: "D:" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save check" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Host health",
+        type: "host",
+        config: expect.objectContaining({
+          cpuWarningPercent: 75,
+          storage: [
+            { mount: "C:", warningPercent: 85, criticalPercent: 95 },
+            { mount: "D:", warningPercent: 85, criticalPercent: 95 },
+          ],
+        }),
+      })
+    );
+  });
 
   it.each(["", "missing-resource"])(
     "submits the first available resource when the default is %j",

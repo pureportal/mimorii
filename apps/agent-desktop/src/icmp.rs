@@ -22,12 +22,12 @@ pub fn ping(
     policy.authorize_host(TargetProtocol::Icmp, host)?;
     let addresses = (host, 0)
         .to_socket_addrs()
-        .context("target could not be resolved")?
+        .with_context(|| format!("DNS lookup failed for {host}"))?
         .collect::<Vec<SocketAddr>>();
     let authorized = policy.authorize_addresses(addresses)?;
     let address = authorized
         .first()
-        .context("target could not be resolved")?
+        .with_context(|| format!("DNS lookup failed for {host}"))?
         .ip();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

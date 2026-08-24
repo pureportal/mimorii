@@ -227,6 +227,39 @@ describe("AgentsPage confirmations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy enrollment code" }));
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith(enrollmentCode));
   });
+
+  it("submits the selected desktop platform", async () => {
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/agents" && options?.method === "POST") {
+        return Promise.resolve({
+          ...warehouseRelay,
+          platform: "windows",
+          enrollmentKey: `mim_agent_${"d".repeat(32)}`,
+        });
+      }
+      if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByText("No agents yet");
+    fireEvent.click(screen.getAllByRole("button", { name: "Add agent" })[0]!);
+    fireEvent.change(screen.getByLabelText("Operating system"), {
+      target: { value: "windows" },
+    });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Windows server" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+
+    await screen.findByText("Connect agent");
+    const request = apiMock.mock.calls.find(
+      ([path, options]) => path === "/teams/team-1/agents" && options?.method === "POST"
+    );
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
+      name: "Windows server",
+      kind: "desktop",
+      platform: "windows",
+    });
+  });
 });
 
 function renderPage() {

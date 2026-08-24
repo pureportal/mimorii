@@ -239,14 +239,14 @@ export const guideTopics: readonly GuideTopic[] = [
     summary: "Tests that Mimorii runs on a schedule to decide whether a resource is healthy.",
     to: appRoutes.checks,
     exactPaths: [appRoutes.checks],
-    keywords: ["http", "tcp", "dns", "host", "disk", "run", "pause", "threshold"],
+    keywords: ["http", "tcp", "dns", "host", "storage", "run", "pause", "threshold"],
     navigationId: "checks",
     sections: [
       {
         title: "Available checks",
         items: [
           "HTTP for pages and APIs, TCP for open ports, and DNS for records.",
-          "Server health and disk usage when an agent supplies machine data.",
+          "Server health and storage usage when an agent supplies machine data.",
           "Timing, timeout, failure, and recovery settings under Advanced.",
         ],
       },

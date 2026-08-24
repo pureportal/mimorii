@@ -31,6 +31,7 @@ fn task(check_type: CheckType, config: Value) -> AgentTask {
         timeout_ms: 2_000,
         config,
         secret: None,
+        favicon_request_id: None,
         _issued_at: "2026-08-12T20:00:00Z".to_owned(),
     }
 }

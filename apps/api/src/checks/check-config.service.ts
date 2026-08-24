@@ -7,7 +7,6 @@ import {
   type CheckType,
   type DatabaseCheckConfig,
   type DatabaseEngine,
-  type DiskCheckConfig,
   type DnsCheckConfig,
   type DockerCheckConfig,
   type HostCheckConfig,
@@ -18,6 +17,8 @@ import {
   type TcpCheckConfig,
   type WanCheckConfig,
 } from "@mimorii/contracts";
+import { isIP } from "node:net";
+import { domainToASCII } from "node:url";
 
 const dnsRecordTypes = new Set(["A", "AAAA", "CNAME", "MX", "NS", "SRV", "TXT"]);
 const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -38,8 +39,6 @@ export class CheckConfigService {
         return this.wan(value);
       case "host":
         return this.host(value);
-      case "disk":
-        return this.disk(value);
       case "docker":
         return this.docker(value);
       case "database":
@@ -60,6 +59,7 @@ export class CheckConfigService {
     if (!new Set(["http:", "https:"]).has(url.protocol) || url.username || url.password) {
       this.invalid("HTTP URL must use HTTP or HTTPS without credentials");
     }
+    this.hostName(url.hostname, "HTTP host");
     const method = target.method ?? "GET";
     if (!this.httpMethod(method)) this.invalid("HTTP method is invalid");
     const statuses = value.expectedStatuses ?? [200];
@@ -139,9 +139,7 @@ export class CheckConfigService {
 
   private tcp(value: Record<string, unknown>): TcpCheckConfig {
     const target = this.object(value.target, "TCP target");
-    if (typeof target.host !== "string" || !target.host.trim() || target.host.length > 253) {
-      this.invalid("TCP host is invalid");
-    }
+    const host = this.hostName(target.host, "TCP host");
     if (
       !Number.isInteger(target.port) ||
       (target.port as number) < 1 ||
@@ -151,7 +149,7 @@ export class CheckConfigService {
     }
     return {
       target: {
-        host: (target.host as string).trim().toLowerCase(),
+        host,
         port: target.port as number,
       },
     };
@@ -159,13 +157,7 @@ export class CheckConfigService {
 
   private dns(value: Record<string, unknown>): DnsCheckConfig {
     const target = this.object(value.target, "DNS target");
-    if (
-      typeof target.hostname !== "string" ||
-      !target.hostname.trim() ||
-      target.hostname.length > 253
-    ) {
-      this.invalid("DNS hostname is invalid");
-    }
+    const hostname = this.hostName(target.hostname, "DNS hostname", true);
     const recordType = value.recordType ?? "A";
     if (typeof recordType !== "string" || !dnsRecordTypes.has(recordType)) {
       this.invalid("DNS record type is invalid");
@@ -176,7 +168,7 @@ export class CheckConfigService {
       }
     }
     return {
-      target: { hostname: (target.hostname as string).trim().toLowerCase() },
+      target: { hostname },
       recordType: recordType as DnsCheckConfig["recordType"],
       ...(value.expectedValue ? { expectedValue: value.expectedValue as string } : {}),
     };
@@ -242,8 +234,42 @@ export class CheckConfigService {
       value.memoryWarningPercent ?? 90,
       "Memory warning"
     );
-    const loadWarning = this.number(value.loadWarning ?? 4, 0.1, 10_000, "Load warning");
+    if ((value.loadWarning === undefined) !== (value.loadCritical === undefined)) {
+      this.invalid("Load warning and critical thresholds must be configured together");
+    }
+    const loadWarning =
+      value.loadWarning === undefined
+        ? undefined
+        : this.number(value.loadWarning, 0.1, 10_000, "Load warning");
     const swapWarningPercent = this.percentage(value.swapWarningPercent ?? 90, "Swap warning");
+    if (!Array.isArray(value.storage) || value.storage.length < 1 || value.storage.length > 20) {
+      this.invalid("Monitored storage is invalid");
+    }
+    const storage = value.storage.map((item) => {
+      const storageConfig = this.object(item, "Monitored storage");
+      if (
+        typeof storageConfig.mount !== "string" ||
+        !storageConfig.mount.trim() ||
+        storageConfig.mount.length > 260
+      ) {
+        this.invalid("Storage mount is invalid");
+      }
+      const warningPercent = this.percentage(storageConfig.warningPercent ?? 85, "Storage warning");
+      return {
+        mount: storageConfig.mount.trim(),
+        warningPercent,
+        criticalPercent: this.criticalPercentage(
+          storageConfig.criticalPercent ?? Math.max(95, warningPercent),
+          warningPercent,
+          "Storage critical"
+        ),
+      };
+    });
+    if (
+      new Set(storage.map((item) => this.storageMountIdentity(item.mount))).size !== storage.length
+    ) {
+      this.invalid("Storage mounts must be unique");
+    }
     return {
       cpuWarningPercent,
       cpuCriticalPercent: this.criticalPercentage(
@@ -257,35 +283,24 @@ export class CheckConfigService {
         memoryWarningPercent,
         "Memory critical"
       ),
-      loadWarning,
-      loadCritical: this.criticalNumber(
-        value.loadCritical ?? Math.max(8, loadWarning),
-        loadWarning,
-        10_000,
-        "Load critical"
-      ),
+      ...(loadWarning === undefined
+        ? {}
+        : {
+            loadWarning,
+            loadCritical: this.criticalNumber(
+              value.loadCritical,
+              loadWarning,
+              10_000,
+              "Load critical"
+            ),
+          }),
       swapWarningPercent,
       swapCriticalPercent: this.criticalPercentage(
         value.swapCriticalPercent ?? Math.max(98, swapWarningPercent),
         swapWarningPercent,
         "Swap critical"
       ),
-    };
-  }
-
-  private disk(value: Record<string, unknown>): DiskCheckConfig {
-    if (typeof value.mount !== "string" || !value.mount.trim() || value.mount.length > 260) {
-      this.invalid("Disk mount is invalid");
-    }
-    const warningPercent = this.percentage(value.warningPercent ?? 85, "Disk warning");
-    return {
-      mount: (value.mount as string).trim(),
-      warningPercent,
-      criticalPercent: this.criticalPercentage(
-        value.criticalPercent ?? Math.max(95, warningPercent),
-        warningPercent,
-        "Disk critical"
-      ),
+      storage,
     };
   }
 
@@ -490,11 +505,22 @@ export class CheckConfigService {
     return result;
   }
 
-  private hostName(value: unknown, label: string): string {
-    if (typeof value !== "string" || !value.trim() || value.length > 253) {
+  private hostName(value: unknown, label: string, allowServiceLabels = false): string {
+    if (typeof value !== "string") {
       this.invalid(`${label} is invalid`);
     }
-    return value.trim().toLowerCase();
+    const unwrapped = value.trim().replace(/^\[|\]$/g, "");
+    if (!unwrapped || unwrapped.length > 253) this.invalid(`${label} is invalid`);
+    if (isIP(unwrapped)) return unwrapped.toLowerCase();
+
+    const ascii = domainToASCII(unwrapped).toLowerCase().replace(/\.$/, "");
+    const labelPattern = allowServiceLabels
+      ? /^(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?|\*)$/
+      : /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    if (!ascii || ascii.length > 253 || ascii.split(".").some((part) => !labelPattern.test(part))) {
+      this.invalid(`${label} is invalid`);
+    }
+    return ascii;
   }
 
   private object(value: unknown, label: string): Record<string, unknown> {
@@ -526,6 +552,12 @@ export class CheckConfigService {
     const critical = this.number(value, warning, maximum, label);
     if (critical < warning) this.invalid(`${label} must be at least the warning threshold`);
     return critical;
+  }
+
+  private storageMountIdentity(mount: string): string {
+    const normalized = mount.trim().replaceAll("\\", "/").replace(/\/+$/, "") || "/";
+    const windowsMount = /^[a-z]:($|\/)/i.test(normalized) || normalized.startsWith("//");
+    return windowsMount ? normalized.toLowerCase() : normalized;
   }
 
   private number(value: unknown, minimum: number, maximum: number, label: string): number {

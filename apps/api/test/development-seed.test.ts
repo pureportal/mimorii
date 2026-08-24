@@ -108,17 +108,7 @@ describe("development seed", () => {
     expect(agentChecks.length).toBeGreaterThanOrEqual(20);
     expect(directChecks.length).toBeGreaterThanOrEqual(8);
     expect(new Set(checks.map((call) => call.parameters[5]))).toEqual(
-      new Set<CheckType>([
-        "http",
-        "tcp",
-        "dns",
-        "icmp",
-        "wan",
-        "host",
-        "disk",
-        "docker",
-        "database",
-      ])
+      new Set<CheckType>(["http", "tcp", "dns", "icmp", "wan", "host", "docker", "database"])
     );
     const validator = new CheckConfigService();
     for (const check of checks) {

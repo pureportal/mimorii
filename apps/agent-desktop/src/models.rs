@@ -82,6 +82,7 @@ pub struct AgentTask {
     pub timeout_ms: u64,
     pub config: Value,
     pub secret: Option<String>,
+    pub favicon_request_id: Option<String>,
     #[serde(rename = "issuedAt")]
     pub _issued_at: String,
 }
@@ -90,6 +91,7 @@ pub struct AgentTask {
 #[serde(rename_all = "camelCase")]
 pub struct AgentPollResponse {
     pub collection_interval_seconds: u64,
+    pub collect_host_telemetry: bool,
     pub tasks: Vec<AgentTask>,
 }
 
@@ -102,7 +104,6 @@ pub enum CheckType {
     Icmp,
     Wan,
     Host,
-    Disk,
     Docker,
     Database,
 }
@@ -117,6 +118,25 @@ pub struct TaskResult {
     pub message: Option<String>,
     pub metrics: BTreeMap<String, Value>,
     pub checked_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favicon: Option<FaviconResult>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "status"
+)]
+pub enum FaviconResult {
+    Retrieved {
+        request_id: String,
+        data_base64: String,
+    },
+    Failed {
+        request_id: String,
+        message: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

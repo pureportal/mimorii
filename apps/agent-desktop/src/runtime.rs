@@ -18,7 +18,7 @@ const TRIGGER_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const CONFIGURATION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const NATIVE_CAPABILITIES: &[&str] = &[
-    "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database",
+    "http", "tcp", "dns", "icmp", "wan", "host", "docker", "database",
 ];
 const CHECK_RUNNER_CAPABILITIES: &[&str] = &["http", "tcp", "dns", "icmp", "wan", "database"];
 
@@ -75,7 +75,9 @@ pub(crate) fn run_until_stopped(
             }
             if Instant::now() >= next_trigger {
                 let worker = collection.as_mut().unwrap();
-                match cycle(&config, &store, |seconds| worker.configure(seconds)) {
+                match cycle(&config, &store, |seconds, enabled| {
+                    worker.configure(seconds, enabled)
+                }) {
                     Ok(outcome) => {
                         if let Err(error) = outcome.heartbeat {
                             reporter.error(&format!("trigger transfer failed: {error:#}"));
@@ -108,7 +110,7 @@ pub(crate) fn run_until_stopped(
 pub(crate) fn run_configured_cycle(
     path: &Path,
     store: &SnapshotStore,
-    configure_collection: impl FnOnce(u64) -> Result<()>,
+    configure_collection: impl FnOnce(u64, bool) -> Result<()>,
 ) -> Result<CycleOutcome> {
     let config = AgentConfig::load_from(path)?;
     cycle(&config, store, configure_collection)
@@ -117,8 +119,12 @@ pub(crate) fn run_configured_cycle(
 pub(crate) fn run_once() -> Result<()> {
     let config = AgentConfig::load()?;
     let store = SnapshotStore::new(collection_path()?);
-    store.append(&crate::collector::collect())?;
-    let outcome = cycle(&config, &store, |_| Ok(()))?;
+    let outcome = cycle(&config, &store, |_, enabled| {
+        if enabled {
+            store.append(&crate::collector::collect())?;
+        }
+        Ok(())
+    })?;
     match outcome.heartbeat? {
         Some(response) => println!(
             "trigger accepted at {} with {} snapshot(s) and {} result(s)",
@@ -189,12 +195,37 @@ pub(crate) fn check_runner_cycle(config: &AgentConfig) -> Result<Option<Heartbea
 pub(crate) fn cycle(
     config: &AgentConfig,
     store: &SnapshotStore,
-    configure_collection: impl FnOnce(u64) -> Result<()>,
+    configure_collection: impl FnOnce(u64, bool) -> Result<()>,
 ) -> Result<CycleOutcome> {
     let client = ApiClient::new(config.clone())?;
     let poll = client.poll(100)?;
     validate_collection_interval(poll.collection_interval_seconds)?;
-    configure_collection(poll.collection_interval_seconds)?;
+    configure_collection(
+        poll.collection_interval_seconds,
+        poll.collect_host_telemetry,
+    )?;
+    if !poll.collect_host_telemetry {
+        store.clear()?;
+        if poll.tasks.is_empty() {
+            return Ok(CycleOutcome {
+                heartbeat: Ok(None),
+            });
+        }
+        let results = poll
+            .tasks
+            .iter()
+            .map(|task| crate::checks::execute_network(task, &config.target_policy))
+            .collect::<Result<Vec<_>>>()?;
+        let heartbeat = client
+            .heartbeat(&HeartbeatRequest {
+                agent_version: AGENT_VERSION,
+                snapshots: Vec::new(),
+                results,
+                capabilities: NATIVE_CAPABILITIES.to_vec(),
+            })
+            .map(Some);
+        return Ok(CycleOutcome { heartbeat });
+    }
     if poll.tasks.is_empty() && store.load()?.is_empty() {
         return Ok(CycleOutcome {
             heartbeat: Ok(None),
@@ -243,33 +274,47 @@ pub(crate) struct CycleOutcome {
 
 pub(crate) struct CollectionWorker {
     pub(crate) interval: Duration,
-    pub(crate) interval_sender: Sender<Duration>,
+    pub(crate) enabled: bool,
+    command_sender: Sender<CollectionCommand>,
     pub(crate) error_receiver: Receiver<anyhow::Error>,
 }
 
+struct CollectionCommand {
+    interval: Duration,
+    enabled: bool,
+    applied: Sender<()>,
+}
+
 impl CollectionWorker {
-    fn start(store: SnapshotStore) -> Result<Self> {
-        store.append(&crate::collector::collect())?;
+    pub(crate) fn start(store: SnapshotStore) -> Result<Self> {
         let interval = Duration::from_secs(DEFAULT_COLLECTION_INTERVAL_SECONDS);
-        let (interval_sender, interval_receiver) = mpsc::channel();
+        let (command_sender, command_receiver) = mpsc::channel();
         let (error_sender, error_receiver) = mpsc::channel();
-        thread::spawn(move || collect_locally(store, interval, interval_receiver, error_sender));
+        thread::spawn(move || collect_locally(store, command_receiver, error_sender));
         Ok(Self {
             interval,
-            interval_sender,
+            enabled: false,
+            command_sender,
             error_receiver,
         })
     }
 
-    pub(crate) fn configure(&mut self, seconds: u64) -> Result<()> {
+    pub(crate) fn configure(&mut self, seconds: u64, enabled: bool) -> Result<()> {
         let interval = Duration::from_secs(seconds);
-        if interval == self.interval {
+        if interval == self.interval && enabled == self.enabled {
             return Ok(());
         }
-        self.interval_sender
-            .send(interval)
+        let (applied, confirmation) = mpsc::channel();
+        self.command_sender
+            .send(CollectionCommand {
+                interval,
+                enabled,
+                applied,
+            })
             .context("local agent stopped")?;
+        confirmation.recv().context("local agent stopped")?;
         self.interval = interval;
+        self.enabled = enabled;
         Ok(())
     }
 
@@ -284,20 +329,34 @@ impl CollectionWorker {
 
 fn collect_locally(
     store: SnapshotStore,
-    mut interval: Duration,
-    interval_receiver: Receiver<Duration>,
+    command_receiver: Receiver<CollectionCommand>,
     error_sender: Sender<anyhow::Error>,
 ) {
+    let mut interval = Duration::from_secs(DEFAULT_COLLECTION_INTERVAL_SECONDS);
+    let mut enabled = false;
     loop {
-        match interval_receiver.recv_timeout(interval) {
-            Ok(configured_interval) => interval = configured_interval,
-            Err(RecvTimeoutError::Timeout) => {
-                if let Err(error) = store.append(&crate::collector::collect()) {
-                    let _ = error_sender.send(error);
-                    return;
+        let command = if enabled {
+            match command_receiver.recv_timeout(interval) {
+                Ok(command) => Some(command),
+                Err(RecvTimeoutError::Timeout) => {
+                    if let Err(error) = store.append(&crate::collector::collect()) {
+                        let _ = error_sender.send(error);
+                        return;
+                    }
+                    None
                 }
+                Err(RecvTimeoutError::Disconnected) => return,
             }
-            Err(RecvTimeoutError::Disconnected) => return,
+        } else {
+            match command_receiver.recv() {
+                Ok(command) => Some(command),
+                Err(_) => return,
+            }
+        };
+        if let Some(command) = command {
+            interval = command.interval;
+            enabled = command.enabled;
+            let _ = command.applied.send(());
         }
     }
 }

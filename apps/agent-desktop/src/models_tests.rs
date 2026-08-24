@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use super::{
-    AgentPollResponse, AgentTask, CheckState, CheckType, DiskSnapshot, HeartbeatRequest,
-    HeartbeatResponse, HostSnapshot, TaskResult, TechnologySnapshot,
+    AgentPollResponse, AgentTask, CheckState, CheckType, DiskSnapshot, FaviconResult,
+    HeartbeatRequest, HeartbeatResponse, HostSnapshot, TaskResult, TechnologySnapshot,
 };
 
 fn snapshot() -> HostSnapshot {
@@ -47,7 +47,6 @@ fn deserializes_every_supported_task_type() {
         ("icmp", CheckType::Icmp),
         ("wan", CheckType::Wan),
         ("host", CheckType::Host),
-        ("disk", CheckType::Disk),
         ("docker", CheckType::Docker),
         ("database", CheckType::Database),
     ] {
@@ -58,12 +57,17 @@ fn deserializes_every_supported_task_type() {
             "timeoutMs": 5000,
             "config": {},
             "secret": null,
+            "faviconRequestId": "b6e4cb23-3b08-49c7-8163-45e4cce6040f",
             "issuedAt": "2026-08-12T20:00:00Z"
         }))
         .unwrap();
         assert_eq!(task.check_type, expected);
         assert_eq!(task._check_id, "check");
         assert_eq!(task._issued_at, "2026-08-12T20:00:00Z");
+        assert_eq!(
+            task.favicon_request_id.as_deref(),
+            Some("b6e4cb23-3b08-49c7-8163-45e4cce6040f")
+        );
     }
 }
 
@@ -77,6 +81,7 @@ fn rejects_unknown_and_mis_cased_task_types() {
             "timeoutMs": 5000,
             "config": {},
             "secret": null,
+            "faviconRequestId": null,
             "issuedAt": "2026-08-12T20:00:00Z"
         }));
         assert!(result.is_err());
@@ -87,6 +92,7 @@ fn rejects_unknown_and_mis_cased_task_types() {
 fn deserializes_poll_configuration_and_trigger_tasks() {
     let response: AgentPollResponse = serde_json::from_value(json!({
         "collectionIntervalSeconds": 45,
+        "collectHostTelemetry": true,
         "tasks": [{
             "id": "task",
             "checkId": "check",
@@ -94,6 +100,7 @@ fn deserializes_poll_configuration_and_trigger_tasks() {
             "timeoutMs": 5000,
             "config": {},
             "secret": null,
+            "faviconRequestId": null,
             "issuedAt": "2026-08-12T20:00:00Z"
         }]
     }))
@@ -115,6 +122,10 @@ fn serializes_heartbeat_payloads_with_transport_field_names() {
             message: Some("Slow".to_owned()),
             metrics: BTreeMap::from([("responseBytes".to_owned(), json!(128))]),
             checked_at: "2026-08-12T20:00:01Z".to_owned(),
+            favicon: Some(FaviconResult::Retrieved {
+                request_id: "b6e4cb23-3b08-49c7-8163-45e4cce6040f".to_owned(),
+                data_base64: "aWNvbg==".to_owned(),
+            }),
         }],
         capabilities: vec!["http"],
     };
@@ -132,6 +143,8 @@ fn serializes_heartbeat_payloads_with_transport_field_names() {
     assert_eq!(value["results"][0]["taskId"], "task");
     assert_eq!(value["results"][0]["status"], "degraded");
     assert_eq!(value["results"][0]["checkedAt"], "2026-08-12T20:00:01Z");
+    assert_eq!(value["results"][0]["favicon"]["status"], "retrieved");
+    assert_eq!(value["results"][0]["favicon"]["dataBase64"], "aWNvbg==");
 }
 
 #[test]

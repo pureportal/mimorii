@@ -15,7 +15,7 @@ export interface SeedMonitoringIds {
   tcpCheckId: string;
   dnsCheckId: string;
   hostCheckId: string;
-  diskCheckId: string;
+  storageCheckId: string;
   pendingCheckId: string;
   pausedCheckId: string;
   dnsOpeningResultId: string;
@@ -73,7 +73,7 @@ function monitoringIds(context: SeedContext, identity: SeedIdentityIds): SeedMon
     tcpCheckId: seedId(context, "check:tcp"),
     dnsCheckId: seedId(context, "check:dns"),
     hostCheckId: seedId(context, "check:host"),
-    diskCheckId: seedId(context, "check:disk"),
+    storageCheckId: seedId(context, "check:storage"),
     pendingCheckId: seedId(context, "check:pending"),
     pausedCheckId: seedId(context, "check:paused"),
     dnsOpeningResultId: seedId(context, "result:dns:9"),
@@ -176,6 +176,7 @@ async function seedChecks(
     loadCritical: 8,
     swapWarningPercent: 70,
     swapCriticalPercent: 90,
+    storage: [{ mount: "/", warningPercent: 80, criticalPercent: 95 }],
   };
   const checks: CheckSeed[] = [
     {
@@ -264,12 +265,12 @@ async function seedChecks(
       nextCheckAt: at(context, minutes(8)),
     },
     {
-      id: ids.diskCheckId,
+      id: ids.storageCheckId,
       resourceId: ids.serverResourceId,
-      name: "Root disk",
-      type: "disk",
+      name: "Root storage health",
+      type: "host",
       agentId: context.agentId,
-      config: { mount: "/", warningPercent: 80, criticalPercent: 95 },
+      config: hostConfig,
       intervalSeconds: 300,
       timeoutMs: 5_000,
       failureThreshold: 2,
@@ -326,10 +327,13 @@ async function seedChecks(
     {
       id: ids.pausedCheckId,
       resourceId: ids.pausedResourceId,
-      name: "Archive disk",
-      type: "disk",
+      name: "Archive host health",
+      type: "host",
       agentId: identity.newAgentId,
-      config: { mount: "/archive", warningPercent: 85, criticalPercent: 95 },
+      config: {
+        ...hostConfig,
+        storage: [{ mount: "/archive", warningPercent: 85, criticalPercent: 95 }],
+      },
       intervalSeconds: 600,
       timeoutMs: 5_000,
       failureThreshold: 2,
@@ -447,16 +451,17 @@ async function seedResults(context: SeedContext, ids: SeedMonitoringIds): Promis
   }
   for (let index = 0; index < 6; index += 1) {
     await upsertResult(context, {
-      id: seedId(context, `result:disk:${index}`),
-      checkId: ids.diskCheckId,
+      id: seedId(context, `result:storage:${index}`),
+      checkId: ids.storageCheckId,
       status: index === 2 ? "degraded" : "up",
       latencyMs: null,
       statusCode: null,
-      message: index === 2 ? "Disk usage warning threshold was reached" : null,
+      message: index === 2 ? "A host resource warning threshold was reached" : null,
       metrics: {
-        usedPercent: index === 2 ? 82 : 68 + index,
-        usedBytes: 730_000_000_000,
-        totalBytes: 1_000_000_000_000,
+        storagePercent: index === 2 ? 82 : 68 + index,
+        storage0Mount: "/",
+        storage0UsedBytes: 730_000_000_000,
+        storage0TotalBytes: 1_000_000_000_000,
       },
       checkedAt: at(context, -hours((5 - index) * 12) - minutes(5)),
     });

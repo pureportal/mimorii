@@ -1,4 +1,4 @@
-import type { ResourceSummary } from "@mimorii/contracts";
+import type { ResourceFaviconRefresh, ResourceSummary } from "@mimorii/contracts";
 import { RefreshCw, Upload } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -92,12 +92,16 @@ export function ResourceImageDialog({
     setBusy(true);
     setError("");
     try {
-      await api(
+      const result = await api<ResourceFaviconRefresh>(
         `/teams/${encodeURIComponent(resource.teamId)}/resources/${encodeURIComponent(resource.id)}/favicon`,
         { method: "POST" }
       );
-      await onSaved();
-      toast.success("Favicon updated");
+      if (result.status === "updated") {
+        await onSaved();
+        toast.success("Favicon updated");
+      } else {
+        toast.success("Favicon retrieval queued");
+      }
       onOpenChange(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Favicon could not be updated");

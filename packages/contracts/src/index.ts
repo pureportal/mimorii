@@ -46,7 +46,6 @@ export const checkTypes = [
   "icmp",
   "wan",
   "host",
-  "disk",
   "docker",
   "database",
 ] as const;
@@ -93,6 +92,9 @@ export type AgentStatus = (typeof agentStatuses)[number];
 
 export const agentKinds = ["desktop", "mobile"] as const;
 export type AgentKind = (typeof agentKinds)[number];
+
+export const desktopAgentPlatforms = ["linux", "windows"] as const;
+export type DesktopAgentPlatform = (typeof desktopAgentPlatforms)[number];
 
 export const agentCapabilities = [...checkTypes, "device-status"] as const;
 export type AgentCapability = (typeof agentCapabilities)[number];
@@ -424,16 +426,15 @@ export interface HostCheckConfig {
   cpuCriticalPercent: number;
   memoryWarningPercent: number;
   memoryCriticalPercent: number;
-  loadWarning: number;
-  loadCritical: number;
+  loadWarning?: number;
+  loadCritical?: number;
   swapWarningPercent: number;
   swapCriticalPercent: number;
-}
-
-export interface DiskCheckConfig {
-  mount: string;
-  warningPercent: number;
-  criticalPercent: number;
+  storage: Array<{
+    mount: string;
+    warningPercent: number;
+    criticalPercent: number;
+  }>;
 }
 
 export interface DockerCheckConfig {
@@ -473,7 +474,6 @@ export type CheckConfig =
   | IcmpCheckConfig
   | WanCheckConfig
   | HostCheckConfig
-  | DiskCheckConfig
   | DockerCheckConfig
   | DatabaseCheckConfig;
 
@@ -498,6 +498,7 @@ export interface CheckSummary {
   lastCheckedAt: string | null;
   nextCheckAt: string | null;
   lastLatencyMs: number | null;
+  latestMetrics: Record<string, number | string | boolean | null>;
   uptime24h: number | null;
   uptime30d: number | null;
   createdAt: string;
@@ -1098,11 +1099,13 @@ export interface AgentTask {
   timeoutMs: number;
   config: CheckConfig;
   secret: string | null;
+  faviconRequestId: string | null;
   issuedAt: string;
 }
 
 export interface AgentPollResponse {
   collectionIntervalSeconds: number;
+  collectHostTelemetry: boolean;
   tasks: AgentTask[];
 }
 
@@ -1114,7 +1117,14 @@ export interface AgentTaskResult {
   message: string | null;
   metrics: Record<string, number | string | boolean | null>;
   checkedAt: string;
+  favicon?:
+    | { requestId: string; status: "retrieved"; dataBase64: string }
+    | { requestId: string; status: "failed"; message: string };
 }
+
+export type ResourceFaviconRefresh =
+  | { status: "updated"; imageUpdatedAt: string }
+  | { status: "queued"; imageUpdatedAt: null };
 
 export interface AgentHeartbeatResponse {
   acceptedAt: string;

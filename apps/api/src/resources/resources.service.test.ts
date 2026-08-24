@@ -34,6 +34,7 @@ const row = {
   agent_last_seen_at: null,
   agent_collection_interval_seconds: null,
   status: "pending",
+  has_monitors: false,
   checks_up: 0,
   checks_total: 0,
   last_checked_at: null,
@@ -42,6 +43,61 @@ const row = {
 } as const;
 
 describe("ResourcesService", () => {
+  it("reports a reachable host without configured monitors as up", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
+    try {
+      const database = {
+        get: vi.fn(async () => ({
+          ...row,
+          name: "Homeserver",
+          kind: "host",
+          agent_id: "agent-1",
+          agent_kind: "desktop",
+          agent_platform: "linux",
+          agent_version: "8.0.1",
+          agent_last_seen_at: "2026-08-25T11:59:30.000Z",
+          agent_collection_interval_seconds: 30,
+        })),
+      };
+
+      await expect(service(database).get("user-1", "team-1", "resource-1")).resolves.toMatchObject({
+        status: "up",
+        checksTotal: 0,
+        agent: { status: "online" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a reachable host pending while a configured check is pending", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
+    try {
+      const database = {
+        get: vi.fn(async () => ({
+          ...row,
+          kind: "host",
+          agent_id: "agent-1",
+          agent_kind: "desktop",
+          agent_last_seen_at: "2026-08-25T11:59:30.000Z",
+          agent_collection_interval_seconds: 30,
+          has_monitors: true,
+          checks_total: 1,
+        })),
+      };
+
+      await expect(service(database).get("user-1", "team-1", "resource-1")).resolves.toMatchObject({
+        status: "pending",
+        checksTotal: 1,
+        agent: { status: "online" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("creates a canonical resource without a target or execution route", async () => {
     const database = {
       get: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce(row),

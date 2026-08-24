@@ -11,6 +11,6 @@ import { ResourceImagesService } from "./resource-images.service.js";
   imports: [AuthModule, TeamsModule, MaintenanceModule],
   controllers: [ResourcesController],
   providers: [FaviconFetcherService, ResourceImagesService, ResourcesService],
-  exports: [ResourcesService],
+  exports: [ResourceImagesService, ResourcesService],
 })
 export class ResourcesModule {}

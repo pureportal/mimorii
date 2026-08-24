@@ -118,6 +118,7 @@ export class CheckOrchestratorService {
       timeoutMs: check.timeout_ms,
       config: JSON.parse(check.config_json) as CheckConfig,
       secret: null,
+      faviconRequestId: null,
       issuedAt,
     };
     await this.database.run(

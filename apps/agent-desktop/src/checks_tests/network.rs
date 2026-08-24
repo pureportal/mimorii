@@ -156,7 +156,7 @@ fn dns_check_rejects_invalid_configuration_and_record_types() {
     assert_result(
         &invalid_type,
         CheckState::Down,
-        Some("Target could not be resolved"),
+        Some("DNS record type is invalid"),
         None,
     );
 }
@@ -197,8 +197,8 @@ fn safe_errors_are_reduced_to_supported_messages() {
     for (message, expected) in [
         ("operation timed out", "Check timed out"),
         ("timeout while connecting", "Check timed out"),
-        ("DNS lookup failed", "Target could not be resolved"),
-        ("could not resolve target", "Target could not be resolved"),
+        ("DNS lookup failed", "DNS lookup failed"),
+        ("could not resolve target", "could not resolve target"),
         ("certificate expired", "TLS validation failed"),
         ("TLS handshake failed", "TLS validation failed"),
         ("configuration is invalid", "configuration is invalid"),
@@ -207,6 +207,12 @@ fn safe_errors_are_reduced_to_supported_messages() {
     ] {
         assert_eq!(super::super::safe_error(&anyhow!(message)), expected);
     }
+    let resolution = anyhow!("local resolver returned NXDOMAIN")
+        .context("DNS lookup failed for private-service.internal");
+    assert_eq!(
+        super::super::safe_error(&resolution),
+        "DNS lookup failed for private-service.internal: local resolver returned NXDOMAIN"
+    );
 }
 
 #[test]

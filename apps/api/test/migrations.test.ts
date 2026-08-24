@@ -223,7 +223,26 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260826000000");
+      expect(migration?.name).toBe("Migration20260828000000");
+
+      const faviconRequestColumn = await database.all<{
+        column_name: string;
+        data_type: string;
+      }>(
+        `SELECT column_name, data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'checks'
+           AND column_name = 'favicon_request_id'`
+      );
+      expect(faviconRequestColumn).toEqual([
+        { column_name: "favicon_request_id", data_type: "text" },
+      ]);
+
+      const checkTypeConstraint = await database.get<{ definition: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+         WHERE conname = 'checks_type_check'`
+      );
+      expect(checkTypeConstraint?.definition).toContain("'host'::text");
+      expect(checkTypeConstraint?.definition).not.toContain("'disk'::text");
     } finally {
       await orm.close(true);
     }

@@ -219,22 +219,6 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
         "key_hash": {
           "name": "key_hash",
           "type": "text",
@@ -394,6 +378,22 @@
           "comment": null,
           "enumItems": ["desktop", "mobile"],
           "mappedType": "enum"
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "agents",
@@ -414,6 +414,14 @@
           "keyName": "agents_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": ["resource_id"],
+          "composite": false,
+          "constraint": true,
+          "keyName": "agents_resource_id_unique",
+          "unique": true,
+          "primary": false
         }
       ],
       "checks": [
@@ -425,6 +433,15 @@
         }
       ],
       "foreignKeys": {
+        "agents_resource_id_foreign": {
+          "columnNames": ["resource_id"],
+          "constraintName": "agents_resource_id_foreign",
+          "localTableName": "public.agents",
+          "referencedTableName": "public.resources",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        },
         "agents_team_id_fkey": {
           "columnNames": ["team_id"],
           "constraintName": "agents_team_id_fkey",
@@ -1048,7 +1065,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["http", "tcp", "dns", "host", "disk"],
+          "enumItems": ["http", "tcp", "dns", "icmp", "wan", "host", "docker", "database"],
           "mappedType": "enum"
         },
         "config_json": {
@@ -1274,6 +1291,54 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "encrypted_secret": {
+          "name": "encrypted_secret",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "favicon_request_id": {
+          "name": "favicon_request_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
         }
       },
       "name": "checks",
@@ -1286,6 +1351,14 @@
           "keyName": "checks_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": ["agent_id", "enabled", "next_check_at"],
+          "composite": true,
+          "constraint": false,
+          "keyName": "idx_checks_agent_due",
+          "unique": false,
+          "primary": false
         },
         {
           "columnNames": ["enabled", "next_check_at"],
@@ -1331,6 +1404,15 @@
         }
       ],
       "foreignKeys": {
+        "checks_agent_id_fkey": {
+          "columnNames": ["agent_id"],
+          "constraintName": "checks_agent_id_fkey",
+          "localTableName": "public.checks",
+          "referencedTableName": "public.agents",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "restrict"
+        },
         "checks_resource_id_fkey": {
           "columnNames": ["resource_id"],
           "constraintName": "checks_resource_id_fkey",
@@ -4988,6 +5070,375 @@
     },
     {
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "metric": {
+          "name": "metric",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "cpuPercent",
+            "memoryPercent",
+            "storagePercent",
+            "loadAverage",
+            "batteryPercent",
+            "batteryTemperatureCelsius",
+            "containerCount",
+            "unhealthyContainerCount",
+            "internetAvailable",
+            "lowMemory",
+            "backgroundRestricted"
+          ],
+          "mappedType": "enum"
+        },
+        "operator": {
+          "name": "operator",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "greaterThan",
+            "greaterThanOrEqual",
+            "lessThan",
+            "lessThanOrEqual",
+            "equals"
+          ],
+          "mappedType": "enum"
+        },
+        "threshold_json": {
+          "name": "threshold_json",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "recovery_threshold_json": {
+          "name": "recovery_threshold_json",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "required_samples": {
+          "name": "required_samples",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "active": {
+          "name": "active",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "consecutive_matches": {
+          "name": "consecutive_matches",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "consecutive_recoveries": {
+          "name": "consecutive_recoveries",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "last_evaluated_at": {
+          "name": "last_evaluated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "triggered_at": {
+          "name": "triggered_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "resource_alert_rules",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": ["resource_id", "enabled"],
+          "composite": true,
+          "constraint": false,
+          "keyName": "idx_resource_alert_rules_resource",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": ["id"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "resource_alert_rules_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "resource_alert_rules_required_samples_check",
+          "columnName": "required_samples",
+          "definition": "CHECK (((required_samples >= 1) AND (required_samples <= 10)))",
+          "expression": "(required_samples >= 1) AND (required_samples <= 10)"
+        }
+      ],
+      "foreignKeys": {
+        "resource_alert_rules_created_by_fkey": {
+          "columnNames": ["created_by"],
+          "constraintName": "resource_alert_rules_created_by_fkey",
+          "localTableName": "public.resource_alert_rules",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "set null"
+        },
+        "resource_alert_rules_resource_id_fkey": {
+          "columnNames": ["resource_id"],
+          "constraintName": "resource_alert_rules_resource_id_fkey",
+          "localTableName": "public.resource_alert_rules",
+          "referencedTableName": "public.resources",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        },
+        "resource_alert_rules_team_id_fkey": {
+          "columnNames": ["team_id"],
+          "constraintName": "resource_alert_rules_team_id_fkey",
+          "localTableName": "public.resource_alert_rules",
+          "referencedTableName": "public.teams",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
         "resource_id": {
           "name": "resource_id",
           "type": "text",
@@ -5134,24 +5585,8 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["server", "service", "endpoint"],
+          "enumItems": ["host", "device", "service"],
           "mappedType": "enum"
-        },
-        "target": {
-          "name": "target",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
         },
         "description": {
           "name": "description",
@@ -5181,22 +5616,6 @@
           "precision": null,
           "scale": null,
           "default": "'[]'",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
           "comment": null,
           "enumItems": [],
           "mappedType": "text"
@@ -5256,15 +5675,6 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "resources_agent_id_fkey": {
-          "columnNames": ["agent_id"],
-          "constraintName": "resources_agent_id_fkey",
-          "localTableName": "public.resources",
-          "referencedTableName": "public.agents",
-          "referencedColumnNames": ["id"],
-          "updateRule": "no action",
-          "deleteRule": "set null"
-        },
         "resources_team_id_fkey": {
           "columnNames": ["team_id"],
           "constraintName": "resources_team_id_fkey",
@@ -5512,7 +5922,7 @@
       "checks": [
         {
           "name": "service_level_objectives_check",
-          "columnName": "resource_id",
+          "columnName": "check_id",
           "definition": "CHECK (((resource_id IS NOT NULL) OR (check_id IS NOT NULL)))",
           "expression": "(resource_id IS NOT NULL) OR (check_id IS NOT NULL)"
         },

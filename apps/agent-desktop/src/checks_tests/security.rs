@@ -80,6 +80,24 @@ fn http_connects_only_to_the_single_validated_resolution() {
 }
 
 #[test]
+fn http_dns_failures_are_returned_as_check_errors() {
+    let task = http_task("http://unresolved.internal/", false);
+    let result = super::super::result_or_down(
+        &task,
+        super::super::http_with_resolver(&task, &TargetPolicy::default(), |hostname, _| {
+            anyhow::bail!("DNS lookup failed for {hostname}")
+        }),
+    );
+
+    assert_result(
+        &result,
+        CheckState::Down,
+        Some("DNS lookup failed for unresolved.internal"),
+        None,
+    );
+}
+
+#[test]
 fn tcp_port_policy_is_checked_before_dns_resolution() {
     let policy = TargetPolicy {
         allowed_protocols: vec![TargetProtocol::Tcp],

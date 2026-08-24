@@ -10,6 +10,7 @@ import { AgentsService } from "./agents.service.js";
 import type { MobileDeviceStatusService } from "./mobile-device-status.service.js";
 import type { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
 import type { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
+import type { ResourceImagesService } from "../resources/resource-images.service.js";
 
 const agent: AuthenticatedAgent = {
   id: "agent-1",
@@ -17,7 +18,7 @@ const agent: AuthenticatedAgent = {
   resourceId: "agent-1",
   resourceName: "Relay",
   kind: "desktop",
-  capabilities: ["http", "tcp", "dns", "host", "disk"],
+  capabilities: ["http", "tcp", "dns", "host"],
   collectionIntervalSeconds: 45,
 };
 
@@ -33,6 +34,10 @@ const telemetry = {
 const alerts = {
   evaluate: vi.fn(async () => undefined),
 } as unknown as ResourceAlertsService;
+
+const images = {
+  acceptAgentFavicon: vi.fn(async () => true),
+} as unknown as ResourceImagesService;
 
 function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
   return {
@@ -58,6 +63,97 @@ function snapshot(observedAt: string, cpuPercent: number): HostSnapshotDto {
 }
 
 describe("AgentsService", () => {
+  it.each([
+    ["linux", "/", true],
+    ["windows", "C:", false],
+  ] as const)("creates a default %s Host health check", async (platform, mount, monitorsLoad) => {
+    const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+    const service = new AgentsService(
+      {
+        run,
+        get: vi.fn(async () => ({
+          id: "agent-1",
+          team_id: "team-1",
+          resource_id: "agent-1",
+          resource_name: "Server",
+          kind: "desktop",
+          collection_interval_seconds: 30,
+          platform,
+          version: null,
+          capabilities_json: JSON.stringify([
+            "http",
+            "tcp",
+            "dns",
+            "icmp",
+            "wan",
+            "host",
+            "docker",
+            "database",
+          ]),
+          last_seen_at: null,
+          revoked_at: null,
+          created_at: new Date().toISOString(),
+        })),
+        transaction: async <T>(action: () => Promise<T>) => action(),
+      } as unknown as DatabaseService,
+      { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      images
+    );
+
+    await service.create("user-1", "team-1", {
+      name: "Server",
+      kind: "desktop",
+      platform,
+    });
+
+    const checkInsert = run.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO checks"));
+    expect(checkInsert).toBeDefined();
+    const config = JSON.parse(String(checkInsert![5]));
+    expect(config.storage).toEqual([{ mount, warningPercent: 85, criticalPercent: 95 }]);
+    expect(Object.hasOwn(config, "loadWarning")).toBe(monitorsLoad);
+  });
+
+  it("does not create a Host health check for a mobile agent", async () => {
+    const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+    const service = new AgentsService(
+      {
+        run,
+        get: vi.fn(async () => ({
+          id: "mobile-1",
+          team_id: "team-1",
+          resource_id: "mobile-1",
+          resource_name: "Phone",
+          kind: "mobile",
+          collection_interval_seconds: 900,
+          platform: null,
+          version: null,
+          capabilities_json: '["device-status"]',
+          last_seen_at: null,
+          revoked_at: null,
+          created_at: new Date().toISOString(),
+        })),
+        transaction: async <T>(action: () => Promise<T>) => action(),
+      } as unknown as DatabaseService,
+      { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+      { record: vi.fn(async () => undefined) } as unknown as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      images
+    );
+
+    await service.create("user-1", "team-1", { name: "Phone", kind: "mobile" });
+
+    expect(run.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO checks"))).toBe(false);
+  });
   it("renames an agent without changing its collection interval", async () => {
     const currentAgent = {
       id: "agent-1",
@@ -92,7 +188,8 @@ describe("AgentsService", () => {
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     const response = await service.update("user-1", "team-1", "agent-1", {
@@ -129,7 +226,8 @@ describe("AgentsService", () => {
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     await expect(
@@ -146,7 +244,8 @@ describe("AgentsService", () => {
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     await expect(
@@ -190,7 +289,8 @@ describe("AgentsService", () => {
         {} as TechnologiesService,
         mobileDeviceStatuses,
         telemetry,
-        alerts
+        alerts,
+        images
       );
 
       const response = await service.list("user-1", "team-1");
@@ -209,37 +309,199 @@ describe("AgentsService", () => {
         payload_json: JSON.stringify({
           id: "task-1",
           checkId: "check-1",
-          type: "host",
+          type: "http",
           timeoutMs: 5_000,
-          config: {},
+          config: { target: { url: "http://private.internal/", method: "GET" } },
+          faviconRequestId: null,
           issuedAt: "2026-08-13T08:00:00.000Z",
         }),
         status: "pending",
         issued_at: "2026-08-13T08:00:00.000Z",
+        check_enabled: 1,
+        favicon_request_id: "b6e4cb23-3b08-49c7-8163-45e4cce6040f",
       },
     ]);
     const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
     const service = new AgentsService(
-      { all, run } as unknown as DatabaseService,
+      { all, run, get: vi.fn(async () => ({ enabled: true })) } as unknown as DatabaseService,
       {} as TeamAccessService,
       {} as AuditService,
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     const response = await service.poll(agent);
 
     expect(response.collectionIntervalSeconds).toBe(45);
+    expect(response.collectHostTelemetry).toBe(true);
     expect(response.tasks).toHaveLength(1);
     expect(response.tasks[0]?.id).toBe("task-1");
+    expect(response.tasks[0]?.faviconRequestId).toBe("b6e4cb23-3b08-49c7-8163-45e4cce6040f");
     expect(run).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE agents SET last_seen_at"),
       expect.any(String),
       "agent-1"
     );
+  });
+
+  it("expires queued tasks when their checks are disabled", async () => {
+    const all = vi.fn(async () => [
+      {
+        id: "task-1",
+        check_id: "check-1",
+        payload_json: JSON.stringify({
+          id: "task-1",
+          checkId: "check-1",
+          type: "host",
+          timeoutMs: 5_000,
+          config: {},
+          issuedAt: "2026-08-13T08:00:00.000Z",
+        }),
+        status: "claimed",
+        issued_at: "2026-08-13T08:00:00.000Z",
+        check_enabled: 0,
+        favicon_request_id: null,
+      },
+    ]);
+    const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+    const service = new AgentsService(
+      { all, run, get: vi.fn(async () => ({ enabled: false })) } as unknown as DatabaseService,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      images
+    );
+
+    const response = await service.poll(agent);
+
+    expect(response.collectHostTelemetry).toBe(false);
+    expect(response.tasks).toEqual([]);
+    expect(run).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE agent_tasks SET status = 'expired'"),
+      "task-1"
+    );
+  });
+
+  it("records agent DNS resolution failures as check errors", async () => {
+    const requestId = "b6e4cb23-3b08-49c7-8163-45e4cce6040f";
+    const record = vi.fn(async () => ({}));
+    const database = {
+      get: vi.fn(async () => ({
+        id: "task-1",
+        check_id: "check-1",
+        payload_json: "{}",
+        status: "claimed",
+        issued_at: new Date().toISOString(),
+        encrypted_secret: null,
+        check_enabled: 1,
+        favicon_request_id: requestId,
+        type: "http",
+        resource_id: "resource-1",
+      })),
+      run: vi.fn(async () => ({ changes: 1 })),
+      transaction: async <T>(action: () => Promise<T>) => action(),
+    } as unknown as DatabaseService;
+    const service = new AgentsService(
+      database,
+      {} as TeamAccessService,
+      {} as AuditService,
+      { record } as unknown as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      images
+    );
+
+    await service.heartbeat(agent, {
+      agentVersion: "2.1.0",
+      snapshots: [],
+      results: [
+        {
+          taskId: "task-1",
+          status: "down",
+          latencyMs: null,
+          statusCode: null,
+          message: "DNS lookup failed for private-service.internal",
+          metrics: {},
+          checkedAt: new Date().toISOString(),
+        },
+      ],
+      capabilities: ["http"],
+    });
+
+    expect(record).toHaveBeenCalledWith(
+      "check-1",
+      expect.objectContaining({
+        status: "down",
+        message: "DNS lookup failed for private-service.internal",
+      })
+    );
+  });
+
+  it("accepts a favicon returned with its requested HTTP check result", async () => {
+    const requestId = "b6e4cb23-3b08-49c7-8163-45e4cce6040f";
+    const acceptAgentFavicon = vi.fn(async () => true);
+    const database = {
+      get: vi.fn(async () => ({
+        id: "task-1",
+        check_id: "check-1",
+        payload_json: "{}",
+        status: "claimed",
+        issued_at: new Date().toISOString(),
+        encrypted_secret: null,
+        check_enabled: 1,
+        favicon_request_id: requestId,
+        type: "http",
+        resource_id: "resource-1",
+      })),
+      run: vi.fn(async () => ({ changes: 1 })),
+      transaction: async <T>(action: () => Promise<T>) => action(),
+    } as unknown as DatabaseService;
+    const service = new AgentsService(
+      database,
+      {} as TeamAccessService,
+      {} as AuditService,
+      { record: vi.fn(async () => ({})) } as unknown as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      { acceptAgentFavicon } as unknown as ResourceImagesService
+    );
+    const favicon = Buffer.from("agent favicon");
+
+    await service.heartbeat(agent, {
+      agentVersion: "2.1.0",
+      snapshots: [],
+      results: [
+        {
+          taskId: "task-1",
+          status: "up",
+          latencyMs: 4.2,
+          statusCode: 200,
+          message: null,
+          metrics: {},
+          checkedAt: new Date().toISOString(),
+          favicon: {
+            requestId,
+            status: "retrieved",
+            dataBase64: favicon.toString("base64"),
+          },
+        },
+      ],
+      capabilities: ["http"],
+    });
+
+    expect(acceptAgentFavicon).toHaveBeenCalledWith("resource-1", "check-1", requestId, favicon);
   });
 
   it("persists every snapshot in a triggered transfer", async () => {
@@ -257,7 +519,8 @@ describe("AgentsService", () => {
       { observeAgent } as unknown as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
     const input: AgentHeartbeatDto = {
       agentVersion: "2.1.0",
@@ -299,7 +562,8 @@ describe("AgentsService", () => {
       { observeAgent } as unknown as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     const response = await service.heartbeat(agent, {
@@ -336,7 +600,8 @@ describe("AgentsService", () => {
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     await expect(
@@ -345,14 +610,6 @@ describe("AgentsService", () => {
         snapshots: [snapshot(new Date().toISOString(), 10)],
         results: [],
         capabilities: ["http", "tcp", "dns"],
-      })
-    ).rejects.toThrow("Agent telemetry does not match its capabilities");
-    await expect(
-      service.heartbeat(agent, {
-        agentVersion: "2.1.0",
-        snapshots: [],
-        results: [],
-        capabilities: ["http", "tcp", "dns", "host", "disk"],
       })
     ).rejects.toThrow("Agent telemetry does not match its capabilities");
   });
@@ -382,7 +639,8 @@ describe("AgentsService", () => {
       {} as TechnologiesService,
       mobileDeviceStatuses,
       telemetry,
-      alerts
+      alerts,
+      images
     );
 
     await expect(service.snapshots("user-1", "team-1", "agent-1")).resolves.toEqual([]);

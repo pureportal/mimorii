@@ -56,6 +56,7 @@ fn poll_authenticates_clamps_the_limit_and_deserializes_configuration_and_tasks(
         200,
         json!({
             "collectionIntervalSeconds": 45,
+            "collectHostTelemetry": true,
             "tasks": [{
                 "id": "task-1",
                 "checkId": "check-1",
@@ -88,7 +89,7 @@ fn poll_authenticates_clamps_the_limit_and_deserializes_configuration_and_tasks(
 fn verify_polls_one_task() {
     let server = http_server(vec![MockResponse::new(
         200,
-        r#"{"collectionIntervalSeconds":30,"tasks":[]}"#,
+        r#"{"collectionIntervalSeconds":30,"collectHostTelemetry":false,"tasks":[]}"#,
     )]);
     let client = ApiClient::new(config(server.url)).unwrap();
 
@@ -130,8 +131,9 @@ fn heartbeat_serializes_every_snapshot_and_result_field() {
             message: None,
             metrics: BTreeMap::from([("port".to_owned(), json!(5432))]),
             checked_at: "2026-08-12T20:00:00Z".to_owned(),
+            favicon: None,
         }],
-        capabilities: vec!["http", "tcp", "dns", "host", "disk"],
+        capabilities: vec!["http", "tcp", "dns", "host"],
     };
 
     let response = client.heartbeat(&heartbeat).unwrap();
@@ -157,7 +159,7 @@ fn heartbeat_serializes_every_snapshot_and_result_field() {
     assert_eq!(payload["results"][0]["metrics"]["port"], 5432);
     assert_eq!(
         payload["capabilities"],
-        json!(["http", "tcp", "dns", "host", "disk"])
+        json!(["http", "tcp", "dns", "host"])
     );
 }
 

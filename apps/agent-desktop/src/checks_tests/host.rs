@@ -12,7 +12,8 @@ fn host_config() -> serde_json::Value {
         "loadWarning": 4,
         "loadCritical": 8,
         "swapWarningPercent": 80,
-        "swapCriticalPercent": 90
+        "swapCriticalPercent": 90,
+        "storage": [{ "mount": "/", "warningPercent": 80, "criticalPercent": 90 }]
     })
 }
 
@@ -27,17 +28,20 @@ fn host_check_reports_up_with_complete_metrics() {
     assert_eq!(result.metrics["loadAverage"], 1.0);
     assert_eq!(result.metrics["swapPercent"], 10.0);
     assert_eq!(result.metrics["processCount"], 42);
+    assert_eq!(result.metrics["storagePercent"], 50.0);
+    assert_eq!(result.metrics["storage0Mount"], "/");
 }
 
 #[test]
 fn every_host_warning_threshold_reports_degraded() {
-    for metric in ["cpu", "memory", "load", "swap"] {
+    for metric in ["cpu", "memory", "load", "swap", "storage"] {
         let mut value = snapshot();
         match metric {
             "cpu" => value.cpu_percent = 80.0,
             "memory" => value.memory_used_bytes = 80,
             "load" => value.load_average = 4.0,
             "swap" => value.swap_used_bytes = 80,
+            "storage" => value.disks[0].used_bytes = 80,
             _ => unreachable!(),
         }
         let result = super::execute(&task(CheckType::Host, host_config()), &value);
@@ -52,13 +56,14 @@ fn every_host_warning_threshold_reports_degraded() {
 
 #[test]
 fn every_host_critical_threshold_reports_down() {
-    for metric in ["cpu", "memory", "load", "swap"] {
+    for metric in ["cpu", "memory", "load", "swap", "storage"] {
         let mut value = snapshot();
         match metric {
             "cpu" => value.cpu_percent = 90.0,
             "memory" => value.memory_used_bytes = 90,
             "load" => value.load_average = 8.0,
             "swap" => value.swap_used_bytes = 90,
+            "storage" => value.disks[0].used_bytes = 90,
             _ => unreachable!(),
         }
         let result = super::execute(&task(CheckType::Host, host_config()), &value);
@@ -102,77 +107,91 @@ fn invalid_host_configuration_becomes_a_safe_down_result() {
     assert!(result.metrics.is_empty());
 }
 
-fn disk_config(warning: f64, critical: f64) -> serde_json::Value {
-    json!({ "mount": "/", "warningPercent": warning, "criticalPercent": critical })
-}
-
 #[test]
-fn disk_check_reports_up_warning_and_critical_states() {
-    let up = super::execute(&task(CheckType::Disk, disk_config(80.0, 90.0)), &snapshot());
-    assert_result(&up, CheckState::Up, None, None);
-    assert_eq!(up.metrics["usedPercent"], 50.0);
-    assert_eq!(up.metrics["usedBytes"], 50);
-    assert_eq!(up.metrics["totalBytes"], 100);
-
-    let degraded = super::execute(&task(CheckType::Disk, disk_config(50.0, 90.0)), &snapshot());
-    assert_result(
-        &degraded,
-        CheckState::Degraded,
-        Some("Disk usage warning threshold was reached"),
-        None,
-    );
-
-    let down = super::execute(&task(CheckType::Disk, disk_config(40.0, 50.0)), &snapshot());
-    assert_result(
-        &down,
-        CheckState::Down,
-        Some("Disk usage critical threshold was reached"),
-        None,
-    );
-}
-
-#[test]
-fn disk_mount_matching_is_case_insensitive() {
+fn host_storage_matches_windows_drive_roots_and_additional_volumes() {
     let mut value = snapshot();
-    value.disks[0].mount = "DATA".to_owned();
-    let result = super::execute(
-        &task(
-            CheckType::Disk,
-            json!({ "mount": "data", "warningPercent": 80, "criticalPercent": 90 }),
-        ),
-        &value,
+    value.disks = vec![
+        crate::models::DiskSnapshot {
+            mount: "c:\\".to_owned(),
+            used_bytes: 40,
+            total_bytes: 100,
+        },
+        crate::models::DiskSnapshot {
+            mount: "D:/".to_owned(),
+            used_bytes: 75,
+            total_bytes: 100,
+        },
+    ];
+    let mut config = host_config();
+    config["storage"] = json!([
+        { "mount": "C:", "warningPercent": 80, "criticalPercent": 90 },
+        { "mount": "d:", "warningPercent": 70, "criticalPercent": 90 }
+    ]);
+
+    let result = super::execute(&task(CheckType::Host, config), &value);
+
+    assert_result(
+        &result,
+        CheckState::Degraded,
+        Some("A host resource warning threshold was reached"),
+        None,
     );
-    assert_result(&result, CheckState::Up, None, None);
+    assert_eq!(result.metrics["storagePercent"], 75.0);
+    assert_eq!(result.metrics["storage1UsedPercent"], 75.0);
 }
 
 #[test]
-fn disk_check_handles_zero_capacity() {
+fn host_storage_matches_windows_network_paths_case_insensitively() {
+    let mut value = snapshot();
+    value.disks[0].mount = "\\\\SERVER\\Data\\".to_owned();
+    let mut config = host_config();
+    config["storage"] =
+        json!([{ "mount": "//server/data", "warningPercent": 80, "criticalPercent": 90 }]);
+
+    let result = super::execute(&task(CheckType::Host, config), &value);
+
+    assert_result(&result, CheckState::Up, None, None);
+    assert_eq!(result.metrics["storagePercent"], 50.0);
+}
+
+#[test]
+fn host_storage_reports_missing_and_inaccessible_volumes() {
+    let mut missing_config = host_config();
+    missing_config["storage"] =
+        json!([{ "mount": "/missing", "warningPercent": 80, "criticalPercent": 90 }]);
+    let missing = super::execute(&task(CheckType::Host, missing_config), &snapshot());
+    assert_result(
+        &missing,
+        CheckState::Down,
+        Some("Monitored storage is unavailable: /missing"),
+        None,
+    );
+
     let mut value = snapshot();
     value.disks[0].used_bytes = 1;
     value.disks[0].total_bytes = 0;
-    let result = super::execute(&task(CheckType::Disk, disk_config(80.0, 90.0)), &value);
-    assert_result(&result, CheckState::Up, None, None);
-    assert_eq!(result.metrics["usedPercent"], 0.0);
+    let inaccessible = super::execute(&task(CheckType::Host, host_config()), &value);
+    assert_result(
+        &inaccessible,
+        CheckState::Down,
+        Some("Monitored storage is unavailable: /"),
+        None,
+    );
+    assert_eq!(inaccessible.metrics["unavailableStorageCount"], 1);
 }
 
 #[test]
-fn disk_check_reports_missing_mounts_and_invalid_configuration() {
-    let missing = super::execute(
-        &task(
-            CheckType::Disk,
-            json!({ "mount": "/missing", "warningPercent": 80, "criticalPercent": 90 }),
-        ),
-        &snapshot(),
-    );
-    assert_result(&missing, CheckState::Down, Some("Connection failed"), None);
+fn host_check_can_omit_load_monitoring() {
+    let mut config = host_config();
+    config.as_object_mut().unwrap().remove("loadWarning");
+    config.as_object_mut().unwrap().remove("loadCritical");
+    let mut value = snapshot();
+    value.load_average = 1_000.0;
 
-    let invalid = super::execute(&task(CheckType::Disk, json!({})), &snapshot());
-    assert_result(
-        &invalid,
-        CheckState::Down,
-        Some("disk configuration is invalid"),
-        None,
-    );
+    let result = super::execute(&task(CheckType::Host, config), &value);
+
+    assert_result(&result, CheckState::Up, None, None);
+    assert!(!result.metrics.contains_key("loadAverage"));
 }
 
 fn container(name: &str, state: &str, health: &str) -> ContainerSnapshot {

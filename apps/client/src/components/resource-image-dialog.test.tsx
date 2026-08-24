@@ -75,6 +75,10 @@ describe("resource image dialog", () => {
   });
 
   it("retrieves and replaces a website favicon", async () => {
+    vi.mocked(api).mockResolvedValueOnce({
+      status: "updated",
+      imageUpdatedAt: "2026-08-21T12:00:00.000Z",
+    });
     const { onSaved } = renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: "Update favicon" }));
@@ -85,6 +89,16 @@ describe("resource image dialog", () => {
       })
     );
     expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("closes after queueing agent favicon retrieval", async () => {
+    vi.mocked(api).mockResolvedValueOnce({ status: "queued", imageUpdatedAt: null });
+    const { onOpenChange, onSaved } = renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Update favicon" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
   it("does not show favicon retrieval for non-website resources", () => {

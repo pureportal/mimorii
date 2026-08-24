@@ -1,6 +1,5 @@
 use std::cell::Cell;
 use std::fs;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -66,6 +65,7 @@ fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
 fn triggered_poll(interval_seconds: u64) -> String {
     json!({
         "collectionIntervalSeconds": interval_seconds,
+        "collectHostTelemetry": true,
         "tasks": [{
             "id": "task-1",
             "checkId": "check-1",
@@ -79,7 +79,8 @@ fn triggered_poll(interval_seconds: u64) -> String {
                 "loadWarning": 4,
                 "loadCritical": 8,
                 "swapWarningPercent": 80,
-                "swapCriticalPercent": 90
+                "swapCriticalPercent": 90,
+                "storage": [{ "mount": "/", "warningPercent": 80, "criticalPercent": 90 }]
             },
             "secret": null,
             "issuedAt": "2026-08-13T10:00:30Z"
@@ -264,7 +265,10 @@ fn rejects_missing_arguments_and_local_interval_configuration() {
 #[test]
 fn polling_without_a_task_transfers_collected_telemetry() {
     let server = http_server(vec![
-        MockResponse::new(200, r#"{"collectionIntervalSeconds":45,"tasks":[]}"#),
+        MockResponse::new(
+            200,
+            r#"{"collectionIntervalSeconds":45,"collectHostTelemetry":true,"tasks":[]}"#,
+        ),
         MockResponse::new(
             200,
             r#"{"acceptedAt":"2026-08-13T10:00:31Z","acceptedSnapshots":2,"acceptedResults":0}"#,
@@ -280,10 +284,15 @@ fn polling_without_a_task_transfers_collected_telemetry() {
         .unwrap();
 
     let configured_interval = Cell::new(0);
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |seconds| {
-        configured_interval.set(seconds);
-        Ok(())
-    })
+    let outcome = cycle(
+        &config(&server.url, valid_key()),
+        &store,
+        |seconds, enabled| {
+            configured_interval.set(seconds);
+            assert!(enabled);
+            Ok(())
+        },
+    )
     .unwrap();
 
     assert_eq!(configured_interval.get(), 45);
@@ -308,6 +317,46 @@ fn polling_without_a_task_transfers_collected_telemetry() {
 }
 
 #[test]
+fn disabled_host_collection_clears_pending_telemetry_without_uploading_it() {
+    let server = http_server(vec![MockResponse::new(
+        200,
+        r#"{"collectionIntervalSeconds":45,"collectHostTelemetry":false,"tasks":[]}"#,
+    )]);
+    let directory = temporary_path("collection-disabled");
+    let store = SnapshotStore::new(directory.clone());
+    store
+        .append(&snapshot("2026-08-13T10:00:00Z", 10.0))
+        .unwrap();
+
+    let outcome = cycle(
+        &config(&server.url, valid_key()),
+        &store,
+        |seconds, enabled| {
+            assert_eq!(seconds, 45);
+            assert!(!enabled);
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    assert!(outcome.heartbeat.unwrap().is_none());
+    assert!(store.load().unwrap().is_empty());
+    let request = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    assert!(request.starts_with("GET /api/agent/tasks?limit=100 HTTP/1.1"));
+    assert!(
+        server
+            .requests
+            .recv_timeout(Duration::from_millis(100))
+            .is_err()
+    );
+
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     let server = http_server(vec![
         MockResponse::new(200, triggered_poll(45)),
@@ -325,7 +374,7 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_| Ok(())).unwrap();
+    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
 
     let response = outcome.heartbeat.unwrap().unwrap();
     assert_eq!(response.accepted_snapshots, 2);
@@ -347,7 +396,7 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     assert_eq!(
         payload["capabilities"],
         json!([
-            "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database"
+            "http", "tcp", "dns", "icmp", "wan", "host", "docker", "database"
         ])
     );
 
@@ -367,6 +416,7 @@ fn check_runner_registers_network_capabilities_and_never_sends_host_snapshots() 
             200,
             json!({
                 "collectionIntervalSeconds": 30,
+                "collectHostTelemetry": false,
                 "tasks": [{
                     "id": "task-1",
                     "checkId": "check-1",
@@ -436,7 +486,7 @@ fn trigger_collects_immediately_when_the_store_is_empty() {
     let directory = temporary_path("collected");
     let store = SnapshotStore::new(directory.clone());
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_| Ok(())).unwrap();
+    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
 
     let response = outcome.heartbeat.unwrap().unwrap();
     assert_eq!(response.accepted_snapshots, 1);
@@ -472,7 +522,7 @@ fn failed_trigger_transfer_retains_the_complete_dataset_for_retry() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_| Ok(())).unwrap();
+    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
     assert!(outcome.heartbeat.is_err());
 
     let pending = store.load().unwrap();
@@ -501,7 +551,7 @@ fn partial_snapshot_acknowledgement_retains_the_complete_dataset_for_retry() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_| Ok(())).unwrap();
+    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
 
     assert!(outcome.heartbeat.is_err());
     assert_eq!(store.load().unwrap().snapshots().len(), 2);
@@ -511,30 +561,30 @@ fn partial_snapshot_acknowledgement_retains_the_complete_dataset_for_retry() {
 
 #[test]
 fn collection_worker_honors_the_mimorii_collection_interval() {
-    let (interval_sender, interval_receiver) = mpsc::channel();
-    let (_error_sender, error_receiver) = mpsc::channel();
-    let mut collection = CollectionWorker {
-        interval: Duration::from_secs(30),
-        interval_sender,
-        error_receiver,
-    };
+    let directory = temporary_path("worker-collection");
+    let mut collection = CollectionWorker::start(SnapshotStore::new(directory.clone())).unwrap();
 
-    collection.configure(45).unwrap();
+    collection.configure(45, true).unwrap();
 
-    assert_eq!(
-        interval_receiver
-            .recv_timeout(Duration::from_secs(1))
-            .unwrap(),
-        Duration::from_secs(45)
-    );
     assert_eq!(collection.interval, Duration::from_secs(45));
+    assert!(collection.enabled);
+    drop(collection);
+    if directory.exists() {
+        fs::remove_dir_all(directory).unwrap();
+    }
 }
 
 #[test]
 fn configured_cycles_reload_the_agent_key_and_server_interval() {
     let server = http_server(vec![
-        MockResponse::new(200, r#"{"collectionIntervalSeconds":30,"tasks":[]}"#),
-        MockResponse::new(200, r#"{"collectionIntervalSeconds":45,"tasks":[]}"#),
+        MockResponse::new(
+            200,
+            r#"{"collectionIntervalSeconds":30,"collectHostTelemetry":true,"tasks":[]}"#,
+        ),
+        MockResponse::new(
+            200,
+            r#"{"collectionIntervalSeconds":45,"collectHostTelemetry":true,"tasks":[]}"#,
+        ),
     ]);
     let path = temporary_path("agent-desktop.json");
     let store = SnapshotStore::new(temporary_path("collected"));
@@ -546,8 +596,9 @@ fn configured_cycles_reload_the_agent_key_and_server_interval() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
         let configured_interval = Cell::new(0);
-        let outcome = run_configured_cycle(&path, &store, |seconds| {
+        let outcome = run_configured_cycle(&path, &store, |seconds, enabled| {
             configured_interval.set(seconds);
+            assert!(enabled);
             Ok(())
         })
         .unwrap();

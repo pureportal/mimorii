@@ -55,7 +55,6 @@ export class CheckRunnerService {
             checkedAt
           );
         case "host":
-        case "disk":
         case "docker":
           return this.down("Check requires an agent", checkedAt);
       }

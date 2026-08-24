@@ -69,12 +69,12 @@ pub fn check(
     policy.authorize_request(TargetProtocol::Tcp, &config.target.host, config.target.port)?;
     let addresses = (config.target.host.as_str(), config.target.port)
         .to_socket_addrs()
-        .context("target could not be resolved")?
+        .with_context(|| format!("DNS lookup failed for {}", config.target.host))?
         .collect::<Vec<SocketAddr>>();
     let address = policy
         .authorize_addresses(addresses)?
         .first()
-        .context("target could not be resolved")?
+        .with_context(|| format!("DNS lookup failed for {}", config.target.host))?
         .ip();
     let started = Instant::now();
     let metrics = match config.target.engine {

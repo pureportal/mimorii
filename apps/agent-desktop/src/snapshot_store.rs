@@ -101,6 +101,25 @@ impl SnapshotStore {
         }
         Ok(())
     }
+
+    pub fn clear(&self) -> Result<()> {
+        if !self.directory.exists() {
+            return Ok(());
+        }
+        for entry in fs::read_dir(&self.directory)? {
+            let path = entry?.path();
+            if path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension == "json" || extension == "pending")
+            {
+                fs::remove_file(&path).with_context(|| {
+                    format!("could not remove collected snapshot {}", path.display())
+                })?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn snapshot_file_identity() -> String {

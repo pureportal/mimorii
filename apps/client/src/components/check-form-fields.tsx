@@ -433,93 +433,162 @@ export function DnsCheckFields({ fields, update }: CheckFormFieldsProps) {
 
 export function HostCheckFields({ fields, update }: CheckFormFieldsProps) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <ThresholdField
-        id="host-cpu"
-        label="CPU warning · %"
-        value={fields.cpu}
-        onChange={(value) => update("cpu", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="host-cpu-critical"
-        label="CPU critical · %"
-        value={fields.cpuCritical}
-        onChange={(value) => update("cpuCritical", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="host-memory"
-        label="Memory warning · %"
-        value={fields.memory}
-        onChange={(value) => update("memory", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="host-memory-critical"
-        label="Memory critical · %"
-        value={fields.memoryCritical}
-        onChange={(value) => update("memoryCritical", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="host-load"
-        label="Load warning"
-        value={fields.load}
-        onChange={(value) => update("load", value)}
-        step={0.1}
-      />
-      <ThresholdField
-        id="host-load-critical"
-        label="Load critical"
-        value={fields.loadCritical}
-        onChange={(value) => update("loadCritical", value)}
-        step={0.1}
-      />
-      <ThresholdField
-        id="host-swap"
-        label="Swap warning · %"
-        value={fields.swap}
-        onChange={(value) => update("swap", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="host-swap-critical"
-        label="Swap critical · %"
-        value={fields.swapCritical}
-        onChange={(value) => update("swapCritical", value)}
-        max={100}
-      />
-    </div>
-  );
-}
-
-export function DiskCheckFields({ fields, update }: CheckFormFieldsProps) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-[1fr_140px_140px]">
-      <Field>
-        <FieldLabel htmlFor="disk-mount">Mount</FieldLabel>
-        <Input
-          id="disk-mount"
-          value={fields.mount}
-          onChange={(event) => update("mount", event.target.value)}
-          required
+    <div className="grid gap-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ThresholdField
+          id="host-cpu"
+          label="CPU warning · %"
+          value={fields.cpu}
+          onChange={(value) => update("cpu", value)}
+          max={100}
         />
-      </Field>
-      <ThresholdField
-        id="disk-warning"
-        label="Warning · %"
-        value={fields.disk}
-        onChange={(value) => update("disk", value)}
-        max={100}
-      />
-      <ThresholdField
-        id="disk-critical"
-        label="Critical · %"
-        value={fields.diskCritical}
-        onChange={(value) => update("diskCritical", value)}
-        max={100}
-      />
+        <ThresholdField
+          id="host-cpu-critical"
+          label="CPU critical · %"
+          value={fields.cpuCritical}
+          onChange={(value) => update("cpuCritical", value)}
+          max={100}
+        />
+        <ThresholdField
+          id="host-memory"
+          label="Memory warning · %"
+          value={fields.memory}
+          onChange={(value) => update("memory", value)}
+          max={100}
+        />
+        <ThresholdField
+          id="host-memory-critical"
+          label="Memory critical · %"
+          value={fields.memoryCritical}
+          onChange={(value) => update("memoryCritical", value)}
+          max={100}
+        />
+        <ThresholdField
+          id="host-swap"
+          label="Swap warning · %"
+          value={fields.swap}
+          onChange={(value) => update("swap", value)}
+          max={100}
+        />
+        <ThresholdField
+          id="host-swap-critical"
+          label="Swap critical · %"
+          value={fields.swapCritical}
+          onChange={(value) => update("swapCritical", value)}
+          max={100}
+        />
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={fields.monitorLoad}
+          onChange={(event) => update("monitorLoad", event.target.checked)}
+          className="size-4 accent-[var(--color-lavender)]"
+        />
+        Load average
+      </label>
+      {fields.monitorLoad ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ThresholdField
+            id="host-load"
+            label="Load warning"
+            value={fields.load}
+            onChange={(value) => update("load", value)}
+            step={0.1}
+          />
+          <ThresholdField
+            id="host-load-critical"
+            label="Load critical"
+            value={fields.loadCritical}
+            onChange={(value) => update("loadCritical", value)}
+            step={0.1}
+          />
+        </div>
+      ) : null}
+      <div className="grid gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">Storage</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              update("storage", [
+                ...fields.storage,
+                { id: crypto.randomUUID(), mount: "", warningPercent: "85", criticalPercent: "95" },
+              ])
+            }
+            disabled={fields.storage.length >= 20}
+          >
+            <Plus className="size-4" /> Add storage
+          </Button>
+        </div>
+        {fields.storage.map((storage) => (
+          <div
+            key={storage.id}
+            className="grid items-end gap-3 sm:grid-cols-[1fr_120px_120px_auto]"
+          >
+            <Field>
+              <FieldLabel htmlFor={`${storage.id}-mount`}>Mount</FieldLabel>
+              <Input
+                id={`${storage.id}-mount`}
+                value={storage.mount}
+                onChange={(event) =>
+                  update(
+                    "storage",
+                    fields.storage.map((item) =>
+                      item.id === storage.id ? { ...item, mount: event.target.value } : item
+                    )
+                  )
+                }
+                required
+              />
+            </Field>
+            <ThresholdField
+              id={`${storage.id}-warning`}
+              label="Warning · %"
+              value={storage.warningPercent}
+              onChange={(value) =>
+                update(
+                  "storage",
+                  fields.storage.map((item) =>
+                    item.id === storage.id ? { ...item, warningPercent: value } : item
+                  )
+                )
+              }
+              max={100}
+            />
+            <ThresholdField
+              id={`${storage.id}-critical`}
+              label="Critical · %"
+              value={storage.criticalPercent}
+              onChange={(value) =>
+                update(
+                  "storage",
+                  fields.storage.map((item) =>
+                    item.id === storage.id ? { ...item, criticalPercent: value } : item
+                  )
+                )
+              }
+              max={100}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove ${storage.mount || "storage"}`}
+              disabled={fields.storage.length === 1}
+              onClick={() =>
+                update(
+                  "storage",
+                  fields.storage.filter((item) => item.id !== storage.id)
+                )
+              }
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

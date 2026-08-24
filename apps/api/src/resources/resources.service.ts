@@ -27,6 +27,7 @@ interface ResourceRow {
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
   status: CheckStatus;
+  has_monitors: boolean;
   checks_up: number;
   checks_total: number;
   last_checked_at: string | null;
@@ -193,6 +194,9 @@ export class ResourcesService {
             ) THEN 'paused'
           ELSE 'pending'
         END AS status,
+        (COUNT(c.id) > 0 OR EXISTS (
+          SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id
+        )) AS has_monitors,
         SUM(CASE WHEN c.current_status = 'up' THEN 1 ELSE 0 END) AS checks_up,
         COUNT(c.id) AS checks_total,
         MAX(c.last_checked_at) AS last_checked_at,
@@ -244,6 +248,7 @@ export class ResourcesService {
     const agentStatus = this.agentStatus(row);
     if (agentStatus === "offline") return "down";
     if (agentStatus === "stale" && row.status !== "down") return "degraded";
+    if (agentStatus === "online" && !row.has_monitors) return "up";
     return row.status;
   }
 

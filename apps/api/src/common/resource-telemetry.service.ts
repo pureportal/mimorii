@@ -55,12 +55,14 @@ export class ResourceTelemetryService {
       };
     }
 
-    const storageUsed = telemetry.disks.reduce((sum, disk) => sum + disk.usedBytes, 0);
-    const storageTotal = telemetry.disks.reduce((sum, disk) => sum + disk.totalBytes, 0);
+    const storagePercent = telemetry.disks.reduce<number | undefined>((highest, disk) => {
+      const current = percent(disk.usedBytes, disk.totalBytes);
+      return current === undefined ? highest : Math.max(highest ?? current, current);
+    }, undefined);
     return {
       cpuPercent: telemetry.cpuPercent,
       memoryPercent: percent(telemetry.memoryUsedBytes, telemetry.memoryTotalBytes),
-      storagePercent: percent(storageUsed, storageTotal),
+      storagePercent,
       loadAverage: telemetry.loadAverage,
       containerCount: telemetry.containerRuntime?.containers.length ?? 0,
       unhealthyContainerCount:

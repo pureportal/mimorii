@@ -5813,7 +5813,6 @@
               "icmp",
               "wan",
               "host",
-              "disk",
               "docker",
               "database"
             ]
@@ -5888,7 +5887,6 @@
               "icmp",
               "wan",
               "host",
-              "disk",
               "docker",
               "database"
             ]
@@ -6039,7 +6037,6 @@
           },
           "message": {
             "type": "string",
-            "minLength": 1,
             "maxLength": 2000
           }
         },
@@ -6156,6 +6153,13 @@
             "enum": [
               "desktop",
               "mobile"
+            ]
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "linux",
+              "windows"
             ]
           },
           "collectionIntervalSeconds": {
@@ -6436,6 +6440,34 @@
           "observedAt"
         ]
       },
+      "AgentFaviconResultDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "retrieved",
+              "failed"
+            ]
+          },
+          "dataBase64": {
+            "type": "string",
+            "maxLength": 6990508
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "requestId",
+          "status"
+        ]
+      },
       "AgentTaskResultDto": {
         "type": "object",
         "properties": {
@@ -6469,6 +6501,9 @@
           },
           "checkedAt": {
             "type": "string"
+          },
+          "favicon": {
+            "$ref": "#/components/schemas/AgentFaviconResultDto"
           }
         },
         "required": [

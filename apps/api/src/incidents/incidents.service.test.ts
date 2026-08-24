@@ -9,7 +9,7 @@ const incident = {
   source: "automatic" as const,
   check_id: "check-1",
   heartbeat_id: null,
-  title: "Database: Root disk",
+  title: "Database: Host health",
   impact: "major" as const,
   status: "investigating" as const,
   started_at: "2026-08-13T12:00:00.000Z",
@@ -35,7 +35,7 @@ describe("incident maintenance suppression", () => {
     database.all
       .mockResolvedValueOnce([{ id: incident.id }])
       .mockResolvedValueOnce([{ id: "resource-1", name: "Database" }]);
-    database.get.mockResolvedValueOnce(incident).mockResolvedValueOnce({ type: "disk" });
+    database.get.mockResolvedValueOnce(incident).mockResolvedValueOnce({ type: "host" });
     database.run.mockResolvedValue({ changes: 1 });
     database.transaction.mockImplementation(async (action: () => Promise<void>) => action());
     maintenance.suppressesNotifications.mockResolvedValue(false);
@@ -92,5 +92,84 @@ describe("incident maintenance suppression", () => {
 
     expect(database.run).not.toHaveBeenCalled();
     expect(notifications.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("incident updates", () => {
+  const database = {
+    all: vi.fn(),
+    get: vi.fn(),
+    run: vi.fn().mockResolvedValue({ changes: 1 }),
+    transaction: vi.fn(async (action: () => Promise<void>) => action()),
+  };
+  const access = { require: vi.fn().mockResolvedValue(undefined) };
+  const notifications = { enqueue: vi.fn().mockResolvedValue([]) };
+  const audit = { record: vi.fn().mockResolvedValue(undefined) };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    database.run.mockResolvedValue({ changes: 1 });
+    database.transaction.mockImplementation(async (action: () => Promise<void>) => action());
+    access.require.mockResolvedValue(undefined);
+    notifications.enqueue.mockResolvedValue([]);
+    audit.record.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    { status: "monitoring" as const, message: "" },
+    { status: "resolved" as const, message: "Recovery confirmed." },
+  ])("saves a $status update with message '$message'", async ({ status, message }) => {
+    const updatedIncident = {
+      ...incident,
+      status,
+      acknowledged_at: "2026-08-13T12:05:00.000Z",
+      resolved_at: status === "resolved" ? "2026-08-13T12:05:00.000Z" : null,
+    };
+    database.get.mockResolvedValueOnce(incident).mockResolvedValueOnce(updatedIncident);
+    database.all
+      .mockResolvedValueOnce([{ id: "resource-1", name: "Database" }])
+      .mockResolvedValueOnce([{ id: "resource-1", name: "Database" }])
+      .mockResolvedValueOnce([
+        {
+          id: "update-1",
+          incident_id: incident.id,
+          status,
+          message,
+          created_by_name: "Operator",
+          created_at: "2026-08-13T12:05:00.000Z",
+        },
+      ]);
+    const service = new IncidentsService(
+      database as never,
+      access as never,
+      {} as never,
+      notifications as never,
+      audit as never
+    );
+
+    const result = await service.addUpdate("user-1", "team-1", incident.id, { status, message });
+
+    expect(database.run).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE incidents SET status = ?"),
+      status,
+      expect.any(String),
+      status === "resolved" ? expect.any(String) : null,
+      expect.any(String),
+      incident.id,
+      "team-1"
+    );
+    expect(database.run).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO incident_updates"),
+      expect.any(String),
+      incident.id,
+      status,
+      message,
+      "user-1",
+      expect.any(String)
+    );
+    expect(result).toMatchObject({
+      status,
+      updates: [expect.objectContaining({ status, message })],
+    });
   });
 });

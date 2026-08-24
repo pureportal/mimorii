@@ -22,6 +22,7 @@ export interface CheckRow {
   updated_at: string;
   agent_id: string | null;
   encrypted_secret: string | null;
+  favicon_request_id: string | null;
 }
 
 export interface ExecutedCheckResult {

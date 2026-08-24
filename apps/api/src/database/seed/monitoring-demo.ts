@@ -1,7 +1,6 @@
 import type {
   CheckType,
   DatabaseCheckConfig,
-  DiskCheckConfig,
   DnsCheckConfig,
   DockerCheckConfig,
   HostCheckConfig,
@@ -45,7 +44,6 @@ type DemoCheckSeed =
   | (DemoCheckSeedBase & { type: "tcp"; config: TcpCheckConfig })
   | (DemoCheckSeedBase & { type: "dns"; config: DnsCheckConfig })
   | (DemoCheckSeedBase & { type: "host"; config: HostCheckConfig })
-  | (DemoCheckSeedBase & { type: "disk"; config: DiskCheckConfig })
   | (DemoCheckSeedBase & { type: "icmp"; config: IcmpCheckConfig })
   | (DemoCheckSeedBase & { type: "wan"; config: WanCheckConfig })
   | (DemoCheckSeedBase & { type: "docker"; config: DockerCheckConfig })
@@ -54,6 +52,24 @@ type DemoCheckSeed =
 const recoveredHistory = ["up", "up", "down", "down", "up", "up", "up", "up"] as const;
 const warningHistory = ["up", "up", "up", "degraded", "up", "up", "up", "degraded"] as const;
 const failingHistory = ["up", "up", "degraded", "down", "down", "down", "down", "down"] as const;
+
+function hostConfig(
+  mount: string,
+  warningPercent: number,
+  criticalPercent: number
+): HostCheckConfig {
+  return {
+    cpuWarningPercent: 80,
+    cpuCriticalPercent: 95,
+    memoryWarningPercent: 85,
+    memoryCriticalPercent: 95,
+    loadWarning: 4,
+    loadCritical: 8,
+    swapWarningPercent: 70,
+    swapCriticalPercent: 90,
+    storage: [{ mount, warningPercent, criticalPercent }],
+  };
+}
 
 export async function seedMonitoringDemo(
   context: SeedContext,
@@ -251,13 +267,13 @@ function demoChecks(): DemoCheckSeed[] {
       degradedMessage: "Response latency exceeded the warning threshold",
     },
     {
-      key: "server-var-disk",
+      key: "server-var-storage",
       resourceKey: "server",
-      name: "Application data disk",
-      type: "disk",
-      config: { mount: "/var/lib", warningPercent: 75, criticalPercent: 90 },
+      name: "Application host health",
+      type: "host",
+      config: hostConfig("/var/lib", 75, 90),
       history: warningHistory,
-      degradedMessage: "Disk usage warning threshold was reached",
+      degradedMessage: "A host resource warning threshold was reached",
       intervalSeconds: 300,
     },
     {
@@ -454,19 +470,20 @@ function demoChecks(): DemoCheckSeed[] {
         loadCritical: 12,
         swapWarningPercent: 60,
         swapCriticalPercent: 85,
+        storage: [{ mount: "/", warningPercent: 80, criticalPercent: 95 }],
       },
       history: warningHistory,
       degradedMessage: "A host resource warning threshold was reached",
       intervalSeconds: 30,
     },
     {
-      key: "worker-disk",
+      key: "worker-storage",
       resourceKey: "worker",
-      name: "Worker spool disk",
-      type: "disk",
-      config: { mount: "/var/spool", warningPercent: 70, criticalPercent: 90 },
+      name: "Worker spool health",
+      type: "host",
+      config: hostConfig("/var/spool", 70, 90),
       history: recoveredHistory,
-      downMessage: "Disk usage critical threshold was reached",
+      downMessage: "A host resource critical threshold was reached",
       intervalSeconds: 300,
     },
     {
@@ -612,13 +629,7 @@ async function seedResults(context: SeedContext, checks: DemoCheckSeed[]): Promi
 }
 
 function resultLatency(type: CheckType, status: ResultStatus, index: number): number | null {
-  if (
-    type === "host" ||
-    type === "disk" ||
-    type === "docker" ||
-    (status === "down" && type !== "http")
-  )
-    return null;
+  if (type === "host" || type === "docker" || (status === "down" && type !== "http")) return null;
   if (status === "degraded") return 1_100 + index * 9;
   return 24 + index * 7;
 }
@@ -664,13 +675,10 @@ function resultMetrics(
         loadAverage: status === "degraded" ? 7.2 : 2.1,
         swapPercent: 8,
         processCount: 112,
-      };
-    case "disk":
-      return {
-        mount: check.config.mount,
-        usedPercent: status === "down" ? 94 : status === "degraded" ? 78 : 61 + index,
-        usedBytes: 620_000_000_000,
-        totalBytes: 1_000_000_000_000,
+        storagePercent: status === "down" ? 94 : status === "degraded" ? 78 : 61 + index,
+        storage0Mount: check.config.storage[0]?.mount ?? "/",
+        storage0UsedBytes: 620_000_000_000,
+        storage0TotalBytes: 1_000_000_000_000,
       };
     case "icmp":
       return { packetsSent: 3, packetsReceived: status === "down" ? 0 : 3, packetLossPercent: 0 };

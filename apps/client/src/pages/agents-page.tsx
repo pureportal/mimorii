@@ -1,6 +1,7 @@
 import {
   agentCollectionInterval,
   mobileAgentCollectionInterval,
+  type DesktopAgentPlatform,
   type AgentSummary,
   type AgentKind,
 } from "@mimorii/contracts";
@@ -40,9 +41,7 @@ function agentPlatform(agent: AgentSummary): string {
   const runsNetworkChecks = agent.capabilities.some((capability) =>
     ["http", "tcp", "dns"].includes(capability)
   );
-  const reportsHostTelemetry = agent.capabilities.some((capability) =>
-    ["host", "disk"].includes(capability)
-  );
+  const reportsHostTelemetry = agent.capabilities.includes("host");
   return runsNetworkChecks && !reportsHostTelemetry ? "Check runner" : "Not connected";
 }
 
@@ -313,6 +312,7 @@ function CreateAgentDialog({
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AgentKind>("desktop");
+  const [platform, setPlatform] = useState<DesktopAgentPlatform>("linux");
   const [interval, setInterval] = useState(String(agentCollectionInterval.defaultSeconds));
   const [created, setCreated] = useState<CreatedAgent | null>(null);
   const [error, setError] = useState("");
@@ -321,6 +321,7 @@ function CreateAgentDialog({
   useEffect(() => {
     if (!open) return;
     setKind("desktop");
+    setPlatform("linux");
     setInterval(String(agentCollectionInterval.defaultSeconds));
   }, [open]);
 
@@ -331,7 +332,12 @@ function CreateAgentDialog({
     try {
       const agent = await api<CreatedAgent>(`/teams/${teamId}/agents`, {
         method: "POST",
-        ...jsonBody({ name, kind, collectionIntervalSeconds: Number(interval) }),
+        ...jsonBody({
+          name,
+          kind,
+          ...(kind === "desktop" ? { platform } : {}),
+          collectionIntervalSeconds: Number(interval),
+        }),
       });
       setCreated(agent);
       await onCreated();
@@ -347,6 +353,7 @@ function CreateAgentDialog({
       setCreated(null);
       setName("");
       setKind("desktop");
+      setPlatform("linux");
       setInterval(String(agentCollectionInterval.defaultSeconds));
       setError("");
     }
@@ -444,6 +451,21 @@ function CreateAgentDialog({
                 <option value="mobile">Android device</option>
               </Select>
             </Field>
+            {kind === "desktop" ? (
+              <Field>
+                <FieldLabel htmlFor="agent-platform">Operating system</FieldLabel>
+                <Select
+                  id="agent-platform"
+                  value={platform}
+                  onChange={(event) =>
+                    setPlatform(event.target.value === "windows" ? "windows" : "linux")
+                  }
+                >
+                  <option value="linux">Linux</option>
+                  <option value="windows">Windows</option>
+                </Select>
+              </Field>
+            ) : null}
             <Field>
               <FieldLabel htmlFor="agent-name">Name</FieldLabel>
               <Input

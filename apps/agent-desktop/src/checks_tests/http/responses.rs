@@ -1,10 +1,12 @@
 use std::time::Duration;
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde_json::json;
 
 use super::http_task;
 use crate::checks::tests::{assert_result, snapshot};
-use crate::models::CheckState;
+use crate::models::{CheckState, FaviconResult};
 use crate::test_support::{MockResponse, http_server};
 
 #[test]
@@ -98,6 +100,38 @@ fn http_check_exercises_assertions_and_collects_response_metrics() {
         "user-agent: mimorii-agent-desktop/{}",
         env!("CARGO_PKG_VERSION")
     )));
+}
+
+#[test]
+fn http_check_attaches_a_requested_favicon_to_its_result() {
+    let server = http_server(vec![
+        MockResponse::new(200, "healthy"),
+        MockResponse::new(
+            200,
+            r#"<html><head><link rel="icon" href="/icon.svg" sizes="128x128"></head></html>"#,
+        )
+        .header("Content-Type", "text/html"),
+        MockResponse::new(200, r#"<svg xmlns="http://www.w3.org/2000/svg"></svg>"#)
+            .header("Content-Type", "image/svg+xml"),
+    ]);
+    let mut task = http_task(&server.url, json!({}));
+    task.favicon_request_id = Some("b6e4cb23-3b08-49c7-8163-45e4cce6040f".to_owned());
+
+    let result = crate::checks::tests::execute(&task, &snapshot());
+
+    let Some(FaviconResult::Retrieved {
+        request_id,
+        data_base64,
+    }) = result.favicon
+    else {
+        panic!("favicon should be attached to the check result");
+    };
+    assert_eq!(request_id, "b6e4cb23-3b08-49c7-8163-45e4cce6040f");
+    assert!(
+        String::from_utf8(BASE64.decode(data_base64).unwrap())
+            .unwrap()
+            .contains("<svg")
+    );
 }
 
 #[test]

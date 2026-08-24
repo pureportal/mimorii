@@ -170,8 +170,7 @@ export class ResourcesController {
     @Param("teamId") teamId: string,
     @Param("id") id: string
   ) {
-    const imageUpdatedAt = await this.images.refreshFavicon(user.id, teamId, id);
-    return { imageUpdatedAt };
+    return this.images.refreshFavicon(user.id, teamId, id);
   }
 
   @Delete(":id")

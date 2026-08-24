@@ -500,6 +500,17 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(200);
     expect(history.body).toEqual([expect.objectContaining({ status: "up", statusCode: 200 })]);
 
+    const checks = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(checks.body).toEqual([
+      expect.objectContaining({
+        id: check.body.id,
+        latestMetrics: expect.objectContaining({ responseBytes: expect.any(Number) }),
+      }),
+    ]);
+
     const overview = await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/analytics/overview`)
       .set("authorization", authorization)
@@ -648,10 +659,30 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const createdAgent = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/agents`)
       .set("authorization", authorization)
-      .send({ name: "Private network", kind: "desktop", collectionIntervalSeconds: 45 })
+      .send({
+        name: "Private network",
+        kind: "desktop",
+        platform: "linux",
+        collectionIntervalSeconds: 45,
+      })
       .expect(201);
     expect(createdAgent.body.kind).toBe("desktop");
     expect(createdAgent.body.collectionIntervalSeconds).toBe(45);
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks?resourceId=${createdAgent.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toEqual([
+          expect.objectContaining({
+            name: "Host health",
+            type: "host",
+            config: expect.objectContaining({
+              storage: [{ mount: "/", warningPercent: 85, criticalPercent: 95 }],
+            }),
+          }),
+        ])
+      );
     await request(app.getHttpServer())
       .patch(`/api/teams/${teamId}/agents/${createdAgent.body.id}`)
       .set("authorization", authorization)
@@ -739,7 +770,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
               checkedAt: timestamp,
             },
           ],
-          capabilities: ["http", "tcp", "dns", "host", "disk"],
+          capabilities: ["http", "tcp", "dns", "host"],
         })
         .expect(200)
         .expect(({ body }) => {
@@ -784,9 +815,59 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const createdAgent = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/agents`)
       .set("authorization", authorization)
-      .send({ name: "Container probe", kind: "desktop" })
+      .send({ name: "Container probe", kind: "desktop", platform: "windows" })
       .expect(201);
     const agentAuthorization = `Bearer ${createdAgent.body.enrollmentKey}`;
+
+    const generatedChecks = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks?resourceId=${createdAgent.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(generatedChecks.body).toHaveLength(1);
+    expect(generatedChecks.body[0]).toMatchObject({
+      name: "Host health",
+      type: "host",
+      config: {
+        cpuWarningPercent: 90,
+        cpuCriticalPercent: 98,
+        memoryWarningPercent: 90,
+        memoryCriticalPercent: 98,
+        swapWarningPercent: 90,
+        swapCriticalPercent: 98,
+        storage: [{ mount: "C:", warningPercent: 85, criticalPercent: 95 }],
+      },
+    });
+    expect(generatedChecks.body[0].config).not.toHaveProperty("loadWarning");
+    await request(app.getHttpServer())
+      .patch(`/api/teams/${teamId}/checks/${generatedChecks.body[0].id}`)
+      .set("authorization", authorization)
+      .send({
+        config: {
+          ...generatedChecks.body[0].config,
+          cpuWarningPercent: 75,
+          storage: [
+            { mount: "C:", warningPercent: 80, criticalPercent: 92 },
+            { mount: "D:", warningPercent: 85, criticalPercent: 97 },
+          ],
+        },
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.config.cpuWarningPercent).toBe(75);
+        expect(body.config.storage).toHaveLength(2);
+      });
+    await request(app.getHttpServer())
+      .delete(`/api/teams/${teamId}/checks/${generatedChecks.body[0].id}`)
+      .set("authorization", authorization)
+      .expect(204);
+    await request(app.getHttpServer())
+      .get("/api/agent/tasks")
+      .set("authorization", agentAuthorization)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.collectHostTelemetry).toBe(false);
+        expect(body.tasks).toEqual([]);
+      });
 
     await request(app.getHttpServer())
       .post("/api/agent/heartbeat")
@@ -808,7 +889,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(200);
     expect(agents.body[0]).toMatchObject({
-      platform: null,
+      platform: "windows",
       version: "2.1.0",
       capabilities: ["http", "tcp", "dns"],
     });
@@ -897,6 +978,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
           loadCritical: 8,
           swapWarningPercent: 80,
           swapCriticalPercent: 90,
+          storage: [{ mount: "C:", warningPercent: 80, criticalPercent: 90 }],
         },
         execution: { kind: "agent", agentId: createdAgent.body.id },
       })
@@ -909,9 +991,9 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         agentVersion: "2.1.0",
         snapshots: [],
         results: [],
-        capabilities: ["http", "tcp", "dns", "host", "disk"],
+        capabilities: ["http", "tcp", "dns", "host"],
       })
-      .expect(400);
+      .expect(200);
   });
 
   it("ingests typed mobile status without assigning active checks", async () => {
@@ -1212,9 +1294,24 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/incidents/${incident.body.id}/updates`)
       .set("authorization", authorization)
+      .send({ status: "monitoring", message: "" })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.status).toBe("monitoring");
+        expect(body.updates[0]).toMatchObject({ status: "monitoring", message: "" });
+      });
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/incidents/${incident.body.id}/updates`)
+      .set("authorization", authorization)
       .send({ status: "resolved", message: "Error rates returned to normal." })
       .expect(200)
-      .expect(({ body }) => expect(body.status).toBe("resolved"));
+      .expect(({ body }) => {
+        expect(body.status).toBe("resolved");
+        expect(body.updates[0]).toMatchObject({
+          status: "resolved",
+          message: "Error rates returned to normal.",
+        });
+      });
 
     const startsAt = new Date(Date.now() - 60_000).toISOString();
     const endsAt = new Date(Date.now() + 60 * 60_000).toISOString();

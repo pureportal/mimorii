@@ -19,6 +19,7 @@ import { ResultsService } from "./results.service.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
 
 interface CheckSummaryRow extends CheckRow {
+  latest_metrics_json: string | null;
   uptime_24h: number | null;
   uptime_30d: number | null;
 }
@@ -157,7 +158,7 @@ export class ChecksService {
 
     await this.database.run(
       `UPDATE checks SET resource_id = ?, name = ?, type = ?, config_json = ?, agent_id = ?,
-       encrypted_secret = ?, interval_seconds = ?,
+       encrypted_secret = ?, favicon_request_id = NULL, interval_seconds = ?,
        timeout_ms = ?, failure_threshold = ?, recovery_threshold = ?, enabled = ?, current_status = ?,
        next_check_at = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
       resourceId,
@@ -226,6 +227,9 @@ export class ChecksService {
   private selectSql(where: string): string {
     return `
       SELECT c.*,
+        (SELECT latest.metrics_json FROM check_results latest
+          WHERE latest.check_id = c.id
+          ORDER BY latest.checked_at DESC, latest.id DESC LIMIT 1) AS latest_metrics_json,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
           THEN CASE WHEN cr.status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_24h,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '30 days'
@@ -256,6 +260,9 @@ export class ChecksService {
       lastCheckedAt: row.last_checked_at,
       nextCheckAt: row.next_check_at,
       lastLatencyMs: row.last_latency_ms,
+      latestMetrics: row.latest_metrics_json
+        ? (JSON.parse(row.latest_metrics_json) as CheckSummary["latestMetrics"])
+        : {},
       uptime24h: row.uptime_24h,
       uptime30d: row.uptime_30d,
       createdAt: row.created_at,
@@ -294,12 +301,12 @@ export class ChecksService {
       if (agent?.kind !== "desktop" || !capabilities.includes(type)) {
         throw new BadRequestException(`Assigned agent does not support ${type} checks`);
       }
-      if (["host", "disk", "docker"].includes(type) && agent.resource_id !== resourceId) {
+      if (["host", "docker"].includes(type) && agent.resource_id !== resourceId) {
         throw new BadRequestException(`${type} checks must belong to the agent resource`);
       }
       return;
     }
-    if (type === "host" || type === "disk" || type === "docker") {
+    if (type === "host" || type === "docker") {
       throw new BadRequestException(`${type} checks require their resource agent`);
     }
     if (type === "http") {

@@ -188,6 +188,7 @@ async function seedTasks(context: SeedContext, monitoring: SeedMonitoringIds): P
     loadCritical: 8,
     swapWarningPercent: 70,
     swapCriticalPercent: 90,
+    storage: [{ mount: "/", warningPercent: 80, criticalPercent: 95 }],
   };
   const tasks = [
     {
@@ -202,9 +203,9 @@ async function seedTasks(context: SeedContext, monitoring: SeedMonitoringIds): P
     },
     {
       key: "claimed",
-      checkId: monitoring.diskCheckId,
-      type: "disk",
-      config: { mount: "/", warningPercent: 80, criticalPercent: 95 },
+      checkId: monitoring.storageCheckId,
+      type: "host",
+      config: hostConfig,
       status: "claimed",
       issued: -minutes(1),
       claimed: -30_000,
@@ -222,9 +223,9 @@ async function seedTasks(context: SeedContext, monitoring: SeedMonitoringIds): P
     },
     {
       key: "expired",
-      checkId: monitoring.diskCheckId,
-      type: "disk",
-      config: { mount: "/", warningPercent: 80, criticalPercent: 95 },
+      checkId: monitoring.storageCheckId,
+      type: "host",
+      config: hostConfig,
       status: "expired",
       issued: -hours(3),
       claimed: -hours(3) + 2_000,

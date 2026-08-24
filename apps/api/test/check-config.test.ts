@@ -55,9 +55,11 @@ describe("check configuration", () => {
   });
 
   it("validates resource thresholds", () => {
-    expect(() => service.validate("disk", { mount: "/", warningPercent: 101 })).toThrow(
-      BadRequestException
-    );
+    expect(() =>
+      service.validate("host", {
+        storage: [{ mount: "/", warningPercent: 101 }],
+      })
+    ).toThrow(BadRequestException);
   });
 
   it("normalizes full HTTP assertions", () => {
@@ -102,12 +104,46 @@ describe("check configuration", () => {
       service.validate("host", {
         cpuWarningPercent: 95,
         cpuCriticalPercent: 90,
+        storage: [{ mount: "/", warningPercent: 85, criticalPercent: 95 }],
       })
     ).toThrow(BadRequestException);
-    expect(service.validate("disk", { mount: "/", warningPercent: 90 })).toMatchObject({
-      warningPercent: 90,
-      criticalPercent: 95,
+    expect(
+      service.validate("host", { storage: [{ mount: "/", warningPercent: 90 }] })
+    ).toMatchObject({
+      storage: [{ mount: "/", warningPercent: 90, criticalPercent: 95 }],
     });
+  });
+
+  it("supports multiple unique storage mounts and optional load monitoring", () => {
+    expect(
+      service.validate("host", {
+        storage: [
+          { mount: "C:", warningPercent: 80, criticalPercent: 95 },
+          { mount: "D:", warningPercent: 85, criticalPercent: 97 },
+        ],
+      })
+    ).toMatchObject({
+      storage: [
+        { mount: "C:", warningPercent: 80, criticalPercent: 95 },
+        { mount: "D:", warningPercent: 85, criticalPercent: 97 },
+      ],
+    });
+    expect(() =>
+      service.validate("host", {
+        storage: [
+          { mount: "C:", warningPercent: 80, criticalPercent: 95 },
+          { mount: "c:\\", warningPercent: 85, criticalPercent: 97 },
+        ],
+      })
+    ).toThrow("Storage mounts must be unique");
+    expect(() =>
+      service.validate("host", {
+        storage: [
+          { mount: "\\\\Server\\Data", warningPercent: 80, criticalPercent: 95 },
+          { mount: "//server/data/", warningPercent: 85, criticalPercent: 97 },
+        ],
+      })
+    ).toThrow("Storage mounts must be unique");
   });
 
   it("normalizes ICMP, WAN, Docker, and database configurations", () => {
@@ -146,6 +182,28 @@ describe("check configuration", () => {
       target: { host: "db.example.com", port: 5432, tls: true },
       connectionWarningPercent: 85,
     });
+  });
+
+  it("accepts unresolved internal domains while rejecting malformed hosts", () => {
+    expect(
+      service.validate("http", {
+        target: { url: "http://private-service.internal/health" },
+      })
+    ).toMatchObject({ target: { url: "http://private-service.internal/health" } });
+    expect(
+      service.validate("dns", {
+        target: { hostname: "_postgresql._tcp.database.internal." },
+        recordType: "SRV",
+      })
+    ).toMatchObject({ target: { hostname: "_postgresql._tcp.database.internal" } });
+
+    for (const [type, config] of [
+      ["tcp", { target: { host: "not a host", port: 443 } }],
+      ["icmp", { target: { host: "-invalid.internal" } }],
+      ["database", { target: { engine: "redis", host: "invalid..internal" } }],
+    ] as const) {
+      expect(() => service.validate(type, config)).toThrow(BadRequestException);
+    }
   });
 
   it("rejects impossible WAN requirements and mutating database statements", () => {

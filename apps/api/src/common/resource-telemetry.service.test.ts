@@ -11,7 +11,11 @@ describe("ResourceTelemetryService", () => {
       loadAverage: 1.5,
       memoryUsedBytes: 50,
       memoryTotalBytes: 100,
-      disks: [{ mount: "/", usedBytes: 75, totalBytes: 100 }],
+      disks: [
+        { mount: "/", usedBytes: 75, totalBytes: 100 },
+        { mount: "/data", usedBytes: 90, totalBytes: 100 },
+        { mount: "/unavailable", usedBytes: 0, totalBytes: 0 },
+      ],
       containerRuntime: {
         engineVersion: "27",
         containers: [
@@ -32,7 +36,7 @@ describe("ResourceTelemetryService", () => {
     expect(service.values(desktop)).toMatchObject({
       cpuPercent: 25,
       memoryPercent: 50,
-      storagePercent: 75,
+      storagePercent: 90,
       containerCount: 2,
       unhealthyContainerCount: 1,
     });

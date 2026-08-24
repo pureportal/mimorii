@@ -4,6 +4,7 @@ mod collector;
 mod config;
 mod containers;
 mod database;
+mod favicon;
 mod icmp;
 mod models;
 mod runtime;

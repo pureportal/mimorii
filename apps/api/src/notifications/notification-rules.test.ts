@@ -15,7 +15,7 @@ describe("notification rules", () => {
         kind: "group",
         operator: "or",
         conditions: [
-          { kind: "condition", field: "checkType", operator: "equals", value: "disk" },
+          { kind: "condition", field: "checkType", operator: "equals", value: "host" },
           {
             kind: "condition",
             field: "metrics.usedPercent",
@@ -38,7 +38,7 @@ describe("notification rules", () => {
     expect(
       evaluateNotificationConditionGroup(nestedRule, {
         severity: "info",
-        checkType: "disk",
+        checkType: "host",
         metrics: { usedPercent: 90 },
       })
     ).toBe(false);

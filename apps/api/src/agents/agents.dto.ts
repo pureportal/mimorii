@@ -3,13 +3,17 @@ import {
   agentCollectionInterval,
   agentCapabilities,
   agentKinds,
+  desktopAgentPlatforms,
+  imageAssetMaxBytes,
   type AgentKind,
+  type DesktopAgentPlatform,
 } from "@mimorii/contracts";
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBase64,
   IsIn,
   IsInt,
   IsISO8601,
@@ -23,6 +27,7 @@ import {
   Max,
   Min,
   ValidateNested,
+  ValidateIf,
 } from "class-validator";
 
 export class CreateAgentDto {
@@ -35,6 +40,11 @@ export class CreateAgentDto {
   @ApiProperty({ enum: agentKinds })
   @IsIn(agentKinds)
   kind!: AgentKind;
+
+  @ApiPropertyOptional({ enum: desktopAgentPlatforms })
+  @IsOptional()
+  @IsIn(desktopAgentPlatforms)
+  platform?: DesktopAgentPlatform;
 
   @ApiPropertyOptional({
     minimum: agentCollectionInterval.minimumSeconds,
@@ -303,6 +313,29 @@ export class HostSnapshotDto {
   observedAt!: string;
 }
 
+export class AgentFaviconResultDto {
+  @ApiProperty({ format: "uuid" })
+  @IsUUID()
+  requestId!: string;
+
+  @ApiProperty({ enum: ["retrieved", "failed"] })
+  @IsIn(["retrieved", "failed"])
+  status!: "retrieved" | "failed";
+
+  @ApiPropertyOptional({ maxLength: Math.ceil(imageAssetMaxBytes / 3) * 4 })
+  @ValidateIf((result: AgentFaviconResultDto) => result.status === "retrieved")
+  @IsString()
+  @IsBase64()
+  @Length(1, Math.ceil(imageAssetMaxBytes / 3) * 4)
+  dataBase64?: string;
+
+  @ApiPropertyOptional({ maxLength: 500 })
+  @ValidateIf((result: AgentFaviconResultDto) => result.status === "failed")
+  @IsString()
+  @Length(1, 500)
+  message?: string;
+}
+
 export class AgentTaskResultDto {
   @ApiProperty()
   @IsString()
@@ -339,6 +372,12 @@ export class AgentTaskResultDto {
   @ApiProperty()
   @IsISO8601()
   checkedAt!: string;
+
+  @ApiPropertyOptional({ type: AgentFaviconResultDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AgentFaviconResultDto)
+  favicon?: AgentFaviconResultDto;
 }
 
 export class AgentHeartbeatDto {

@@ -10,10 +10,10 @@ import {
   buildCheckConfig,
   checkFields,
   initialCheckFields,
+  type CheckFields,
   type UpdateCheckField,
 } from "./check-form-config";
 import {
-  DiskCheckFields,
   DockerCheckFields,
   DatabaseCheckFields,
   DnsCheckFields,
@@ -51,6 +51,33 @@ interface CheckDialogProps {
   onSubmit: (payload: CheckPayload) => Promise<void>;
 }
 
+const checkTypeNames: Record<CheckType, string> = {
+  http: "HTTP",
+  tcp: "TCP port",
+  dns: "DNS record",
+  icmp: "ICMP ping",
+  wan: "WAN reachability",
+  host: "Host health",
+  docker: "Docker",
+  database: "Database",
+};
+
+function hostFieldsForResource(fields: CheckFields, resource: ResourceSummary): CheckFields {
+  const windows = resource.agent?.platform?.toLowerCase().includes("windows") === true;
+  return {
+    ...fields,
+    monitorLoad: !windows,
+    storage: [
+      {
+        id: "storage-0",
+        mount: windows ? "C:" : "/",
+        warningPercent: "85",
+        criticalPercent: "95",
+      },
+    ],
+  };
+}
+
 export function CheckDialog({
   open,
   onOpenChange,
@@ -80,7 +107,7 @@ export function CheckDialog({
       (resource) => resource.id === (initial?.resourceId || defaultResourceId)
     );
     setResourceId(selectedResource?.id ?? resources[0]?.id ?? "");
-    setName(initial?.name ?? "Availability");
+    setName(initial?.name ?? "");
     setType(initial?.type ?? "http");
     setInterval(String(initial?.intervalSeconds ?? 60));
     setTimeoutValue(String(initial?.timeoutMs ?? 5000));
@@ -105,7 +132,7 @@ export function CheckDialog({
     try {
       await onSubmit({
         resourceId,
-        name,
+        name: name.trim() ? name : checkTypeNames[type],
         type,
         config: buildCheckConfig(type, fields),
         execution: executionKind === "agent" ? { kind: "agent", agentId } : { kind: "direct" },
@@ -141,9 +168,12 @@ export function CheckDialog({
                 value={resourceId}
                 onChange={(event) => {
                   setResourceId(event.target.value);
-                  if (["host", "disk", "docker"].includes(type)) {
+                  if (["host", "docker"].includes(type)) {
                     const resource = resources.find((item) => item.id === event.target.value);
                     if (resource?.agent) setAgentId(resource.agent.id);
+                    if (type === "host" && resource) {
+                      setFields((current) => hostFieldsForResource(current, resource));
+                    }
                   }
                 }}
                 required
@@ -151,8 +181,7 @@ export function CheckDialog({
                 {resources
                   .filter(
                     (resource) =>
-                      !["host", "disk", "docker"].includes(type) ||
-                      resource.agent?.kind === "desktop"
+                      !["host", "docker"].includes(type) || resource.agent?.kind === "desktop"
                   )
                   .map((resource) => (
                     <option key={resource.id} value={resource.id}>
@@ -168,7 +197,6 @@ export function CheckDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={100}
-                required
               />
             </Field>
           </div>
@@ -181,7 +209,7 @@ export function CheckDialog({
                 const next = checkTypes.find((value) => value === event.target.value);
                 if (next) {
                   setType(next);
-                  if (["host", "disk", "docker"].includes(next)) {
+                  if (["host", "docker"].includes(next)) {
                     const resource =
                       resources.find(
                         (item) => item.id === resourceId && item.agent?.kind === "desktop"
@@ -190,20 +218,19 @@ export function CheckDialog({
                       setResourceId(resource.id);
                       setExecutionKind("agent");
                       setAgentId(resource.agent.id);
+                      if (next === "host") {
+                        setFields((current) => hostFieldsForResource(current, resource));
+                      }
                     }
                   }
                 }
               }}
             >
-              <option value="http">HTTP</option>
-              <option value="tcp">TCP port</option>
-              <option value="dns">DNS record</option>
-              <option value="icmp">ICMP ping</option>
-              <option value="wan">WAN reachability</option>
-              <option value="host">Host health</option>
-              <option value="disk">Disk usage</option>
-              <option value="docker">Docker</option>
-              <option value="database">Database</option>
+              {checkTypes.map((value) => (
+                <option key={value} value={value}>
+                  {checkTypeNames[value]}
+                </option>
+              ))}
             </Select>
           </Field>
 
@@ -213,7 +240,6 @@ export function CheckDialog({
           {type === "icmp" ? <IcmpCheckFields fields={fields} update={update} /> : null}
           {type === "wan" ? <WanCheckFields fields={fields} update={update} /> : null}
           {type === "host" ? <HostCheckFields fields={fields} update={update} /> : null}
-          {type === "disk" ? <DiskCheckFields fields={fields} update={update} /> : null}
           {type === "docker" ? <DockerCheckFields fields={fields} update={update} /> : null}
           {type === "database" ? <DatabaseCheckFields fields={fields} update={update} /> : null}
 
@@ -223,7 +249,7 @@ export function CheckDialog({
               <Select
                 id="check-execution"
                 value={executionKind}
-                disabled={["host", "disk", "docker"].includes(type)}
+                disabled={["host", "docker"].includes(type)}
                 onChange={(event) => {
                   const kind = event.target.value === "agent" ? "agent" : "direct";
                   setExecutionKind(kind);
