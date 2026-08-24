@@ -330,61 +330,59 @@ function QuickResourceDialog({
             </Field>
           ) : null}
 
-          <details className="rounded-2xl border border-line px-4 py-3">
-            <summary className="text-sm font-semibold">Advanced</summary>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {mode === "website" ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="quick-status">Expected status</FieldLabel>
-                    <Input
-                      id="quick-status"
-                      type="number"
-                      min={100}
-                      max={599}
-                      value={statusCode}
-                      onChange={(event) => setStatusCode(event.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="quick-content">Response contains</FieldLabel>
-                    <Input
-                      id="quick-content"
-                      value={content}
-                      onChange={(event) => setContent(event.target.value)}
-                      maxLength={512}
-                    />
-                  </Field>
-                </>
-              ) : null}
-              {mode !== "service" ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
-                    <Input
-                      id="quick-interval"
-                      type="number"
-                      min={30}
-                      max={86400}
-                      value={interval}
-                      onChange={(event) => setInterval(event.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="quick-timeout">Timeout · ms</FieldLabel>
-                    <Input
-                      id="quick-timeout"
-                      type="number"
-                      min={250}
-                      max={30000}
-                      value={timeout}
-                      onChange={(event) => setTimeoutValue(event.target.value)}
-                    />
-                  </Field>
-                </>
-              ) : null}
-            </div>
-          </details>
+          {mode !== "service" ? (
+            <details className="rounded-2xl border border-line px-4 py-3">
+              <summary className="text-sm font-semibold">Advanced</summary>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {mode === "website" ? (
+                  <>
+                    <Field>
+                      <FieldLabel htmlFor="quick-status">Expected status</FieldLabel>
+                      <Input
+                        id="quick-status"
+                        type="number"
+                        min={100}
+                        max={599}
+                        value={statusCode}
+                        onChange={(event) => setStatusCode(event.target.value)}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="quick-content">Response contains</FieldLabel>
+                      <Input
+                        id="quick-content"
+                        value={content}
+                        onChange={(event) => setContent(event.target.value)}
+                        maxLength={512}
+                      />
+                    </Field>
+                  </>
+                ) : null}
+                <Field>
+                  <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
+                  <Input
+                    id="quick-interval"
+                    type="number"
+                    min={30}
+                    max={86400}
+                    value={interval}
+                    onChange={(event) => setInterval(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="quick-timeout">Timeout · ms</FieldLabel>
+                  <Input
+                    id="quick-timeout"
+                    type="number"
+                    min={250}
+                    max={30000}
+                    value={timeout}
+                    onChange={(event) => setTimeoutValue(event.target.value)}
+                  />
+                </Field>
+              </div>
+            </details>
+          ) : null}
           <FieldError>{error}</FieldError>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
