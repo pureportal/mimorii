@@ -170,6 +170,26 @@ fn parses_all_runtime_and_service_commands() {
             .command,
         Command::Status { json: false }
     ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "update"])
+            .unwrap()
+            .command,
+        Command::Update {
+            check: false,
+            json: false,
+            privileged: false,
+        }
+    ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "update", "--check", "--json"])
+            .unwrap()
+            .command,
+        Command::Update {
+            check: true,
+            json: true,
+            privileged: false,
+        }
+    ));
     #[cfg(target_os = "linux")]
     {
         assert!(matches!(

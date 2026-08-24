@@ -25,6 +25,29 @@ The checksum manifest contains one entry for each package. It is generated only 
 platform artifacts have been downloaded into the publishing job, then verified before release
 creation.
 
+## Desktop updates
+
+The Windows and Linux agents query only GitHub's public
+[`releases/latest`](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)
+endpoint for `pureportal/mimorii`. GitHub defines that endpoint as the latest published release
+that is neither a draft nor a prerelease. The updater does not accept a repository, release tag,
+asset URL, or version from configuration.
+
+Run `mimorii-agent-desktop update --check` to compare the installed semantic version with the
+latest release. Run `mimorii-agent-desktop update` to install a newer version. It never reinstalls
+the current version or downgrades to an older release.
+
+Before installation, the updater requires the exact platform asset and checksum-manifest URLs for
+the latest release, permits redirects only to GitHub's release asset host, enforces download size
+limits, and verifies the downloaded package against both the SHA-256 digest returned by GitHub's
+API and `mimorii-sha256-checksums.txt`. Windows hands the verified MSI to Windows Installer from a
+temporary bootstrap so the installed CLI and service can be replaced. Linux extracts exactly one
+agent executable, replaces the installed binary atomically, and restarts an installed user
+service.
+
+The Windows graphical controls check on launch and every 30 minutes. They show the latest version
+and an install action only when a newer release is available.
+
 ## Platform packages
 
 The Android agent and client are separate applications that can be installed together. The client
@@ -37,7 +60,8 @@ background scheduling, permissions, and platform limits.
 
 The Linux archive is a statically linked x64 agent build for Ubuntu and Debian. It contains one
 executable, `mimorii-agent-desktop`, with its executable mode preserved. Install its user service
-with `mimorii-agent-desktop service install`.
+with `mimorii-agent-desktop service install`. The installer enables systemd lingering, starts the
+unit, and keeps only the agent's local collection directory writable inside the service sandbox.
 
 The Windows MSI is a per-machine WiX installer. It installs the CLI and graphical controls in
 `Program Files`, adds the CLI directory to the machine `PATH`, and starts the `MimoriiAgent`
@@ -64,6 +88,10 @@ The containers are multi-platform images for `linux/amd64` and `linux/arm64` wit
 provenance.
 
 ## GitHub configuration
+
+Enable [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
+for the repository. GitHub then prevents published tags and assets from being changed and creates
+a release attestation.
 
 Configure these Actions secrets:
 

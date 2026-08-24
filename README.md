@@ -84,41 +84,80 @@ docker compose down
 
 PostgreSQL data stays in a Docker volume. Back it up regularly, and do not use `docker compose down -v` unless you intend to delete it.
 
-## Monitor a private server
+## Install an agent
 
-Create an agent in Mimorii and copy its enrollment key.
+### Windows
 
-On Windows, install the MSI and run these commands from an administrator PowerShell terminal:
+1. In Mimorii, create an agent and copy its enrollment key.
+2. Download the [Windows x64 installer](https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-windows-x64.msi).
+3. Open the downloaded MSI and finish the installation.
+4. Open **Mimorii Agent** from the Start menu.
+5. Enter your Mimorii server URL and enrollment key, then select **Activate**.
+
+### Linux
+
+These commands install the agent on Ubuntu or Debian x64. Open a terminal and run:
 
 ```bash
-mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <enrollment-key>
-mimorii-agent-desktop doctor
+sudo apt-get update
+sudo apt-get install --yes curl
+curl --fail --location https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-ubuntu-debian-x64.tar.gz --output mimorii-agent.tar.gz
+tar --extract --gzip --file mimorii-agent.tar.gz
+sudo install --mode 0755 mimorii-agent-desktop /usr/local/bin/mimorii-agent-desktop
+rm mimorii-agent.tar.gz mimorii-agent-desktop
 ```
 
-The installer starts the Windows service automatically. Enrollment is applied to the running
-service without a restart.
-
-The **Mimorii Agent** Start menu application provides status, enrollment, service controls, and
-diagnostics through that same CLI and service.
-
-On Linux, enroll and start the user service:
+In Mimorii, create an agent and copy its enrollment key. Replace the server URL and key below, then run:
 
 ```bash
-mimorii-agent-desktop enroll --server https://mimorii.example.com/api --key <enrollment-key>
+mimorii-agent-desktop enroll --server https://YOUR-MIMORII-SERVER/api --key YOUR_ENROLLMENT_KEY
 mimorii-agent-desktop service install
 mimorii-agent-desktop doctor
 ```
 
-The agent sends host health and runs typed HTTP, TCP, and DNS checks. It cannot execute remote commands.
+The service installer may request `sudo` once, then starts the agent and keeps its user service running across logouts and reboots. Run the installer without `sudo` so it uses the current user's enrollment.
 
-For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). It runs HTTP, TCP, DNS, ICMP, WAN, and database checks without reporting container or Docker VM telemetry as physical-host data. Use the native agent for host and Docker monitoring. Deployment requirements for ICMP, Docker, and database checks are in [Monitoring checks](docs/monitoring-checks.md); the resource and execution terminology is defined in [Monitoring model](docs/monitoring-model.md).
+Verify the service and inspect its logs with:
 
-## Monitor an Android device
+```bash
+systemctl --user is-enabled mimorii-agent-desktop.service
+systemctl --user is-active mimorii-agent-desktop.service
+loginctl show-user "$USER" --property=Linger --value
+journalctl --user --unit mimorii-agent-desktop.service --lines 50 --no-pager
+```
 
-Add an Android device agent in the Mimorii Client and copy its enrollment code. Open the
-separate Mimorii Agent application and paste the code to activate it. Android reports device status
-on a best-effort WorkManager schedule. It does not run active monitoring checks. See
-[Android applications](docs/android-apps.md) for permissions and platform limits.
+The first two commands should print `enabled` and `active`; the linger setting should be `yes`.
+
+### Update the desktop agent
+
+On Windows or Linux, check the latest stable GitHub release:
+
+```bash
+mimorii-agent-desktop update --check
+```
+
+Install it with:
+
+```bash
+mimorii-agent-desktop update
+```
+
+The Windows controls also show an install button when an update is available. On Linux, the
+updater requests `sudo` only when the installed executable needs elevated write access.
+
+### Android
+
+Android 7.0 or newer is required.
+
+1. Download and install the [Mimorii Client](https://github.com/pureportal/mimorii/releases/latest/download/mimorii-client-android.apk).
+2. If Android blocks the APK, allow your browser or file manager to install unknown apps, then try again.
+3. Open the Client and sign in to your Mimorii server.
+
+To monitor the Android device itself, also install the [Mimorii Agent](https://github.com/pureportal/mimorii/releases/latest/download/mimorii-agent-android.apk). Add an Android device agent in the Client, copy its enrollment code, and paste the code into the Agent.
+
+The desktop agent reports host health and runs HTTP, TCP, and DNS checks. It cannot execute remote commands. Android reports device status but does not run active monitoring checks. See [Android applications](docs/android-apps.md) for Android permissions and platform limits.
+
+For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). Deployment requirements are in [Monitoring checks](docs/monitoring-checks.md).
 
 ## Monitor a scheduled job
 
@@ -139,10 +178,6 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 - Review the privacy, email, analytics, and retention settings before opening a public deployment.
 
 For optional email, analytics, retention, and advanced monitoring settings, use the values documented in [`.env.example`](.env.example). Browser and Android delivery setup is documented in [Notifications](docs/notifications.md).
-
-## Native releases
-
-Mimorii ships agents for Android, Ubuntu/Debian x64, and Windows x64, plus the web client packaged as a separate Android application. Release assets use stable filenames documented in [Release distribution](docs/release-distribution.md).
 
 ## Help
 

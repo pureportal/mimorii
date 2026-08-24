@@ -12,6 +12,7 @@ mod snapshot_store;
 mod target_policy;
 #[cfg(test)]
 mod test_support;
+mod update;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -79,6 +80,14 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    Update {
+        #[arg(long)]
+        check: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, hide = true)]
+        privileged: bool,
+    },
     #[cfg(target_os = "linux")]
     Service {
         #[command(subcommand)]
@@ -92,6 +101,16 @@ enum Command {
     WindowsServiceControl {
         #[command(subcommand)]
         action: WindowsServiceControlAction,
+    },
+    #[cfg(windows)]
+    #[command(hide = true)]
+    ApplyUpdate {
+        #[arg(long)]
+        package: std::path::PathBuf,
+        #[arg(long)]
+        sha256: String,
+        #[arg(long)]
+        parent_pid: u32,
     },
 }
 
@@ -141,6 +160,11 @@ fn main() -> Result<()> {
         Command::Once => run_once().map(|_| ()),
         Command::Doctor => doctor(),
         Command::Status { json } => status(json),
+        Command::Update {
+            check,
+            json,
+            privileged,
+        } => update::run(check, json, privileged),
         #[cfg(target_os = "linux")]
         Command::Service { action } => match action {
             ServiceAction::Install => service::install(&std::env::current_exe()?),
@@ -153,6 +177,12 @@ fn main() -> Result<()> {
             WindowsServiceControlAction::Start => service::start(),
             WindowsServiceControlAction::Stop => service::stop(),
         },
+        #[cfg(windows)]
+        Command::ApplyUpdate {
+            package,
+            sha256,
+            parent_pid,
+        } => update::apply_windows(package, &sha256, parent_pid),
     }
 }
 

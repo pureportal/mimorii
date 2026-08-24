@@ -1,30 +1,70 @@
 #[cfg(any(target_os = "linux", test))]
-use std::process::Command;
+use std::path::{Path, PathBuf};
+#[cfg(any(target_os = "linux", test))]
+use std::process::{Command, Output};
 
 #[cfg(any(target_os = "linux", test))]
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 #[cfg(target_os = "linux")]
-pub fn install(executable: &std::path::Path) -> Result<()> {
-    use std::fs;
+const LINUX_SERVICE_NAME: &str = "mimorii-agent-desktop.service";
 
-    let directory = directories::BaseDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("could not determine the user home directory"))?
-        .config_dir()
-        .join("systemd/user");
-    fs::create_dir_all(&directory)?;
-    let unit = directory.join("mimorii-agent-desktop.service");
-    let content = format!(
-        "[Unit]\nDescription=Mimorii desktop monitoring agent\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart=\"{}\" run\nRestart=on-failure\nRestartSec=10\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=read-only\n\n[Install]\nWantedBy=default.target\n",
-        executable.display()
-    );
-    fs::write(&unit, content)?;
+#[cfg(any(target_os = "linux", test))]
+struct LinuxServicePaths {
+    home: PathBuf,
+    config_home: PathBuf,
+    data_home: PathBuf,
+    collection: PathBuf,
+}
+
+#[cfg(target_os = "linux")]
+impl LinuxServicePaths {
+    fn discover() -> Result<Self> {
+        let directories = directories::BaseDirs::new()
+            .ok_or_else(|| anyhow::anyhow!("could not determine the user home directory"))?;
+        Ok(Self {
+            home: directories.home_dir().to_path_buf(),
+            config_home: directories.config_dir().to_path_buf(),
+            data_home: directories.data_local_dir().to_path_buf(),
+            collection: crate::config::collection_path()?,
+        })
+    }
+
+    fn unit(&self) -> PathBuf {
+        self.config_home
+            .join("systemd/user")
+            .join(LINUX_SERVICE_NAME)
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn install(executable: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if std::env::var_os("SUDO_USER").is_some_and(|user| !user.is_empty()) {
+        bail!("Run service install without sudo so it uses the enrolled user's configuration");
+    }
+
+    let paths = LinuxServicePaths::discover()?;
+    let unit = paths.unit();
+    let directory = unit
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("could not determine the systemd user directory"))?;
+    std::fs::create_dir_all(directory)?;
+    std::fs::create_dir_all(&paths.collection)?;
+    std::fs::set_permissions(&paths.collection, std::fs::Permissions::from_mode(0o700))?;
+    write_unit(&unit, &systemd_user_unit_content(executable, &paths)?)?;
+    ensure_linger_enabled()?;
     command("systemctl", &["--user", "daemon-reload"])?;
+    command("systemctl", &["--user", "reset-failed", LINUX_SERVICE_NAME])?;
+    command("systemctl", &["--user", "enable", LINUX_SERVICE_NAME])?;
+    command("systemctl", &["--user", "restart", LINUX_SERVICE_NAME])?;
     command(
         "systemctl",
-        &["--user", "enable", "--now", "mimorii-agent-desktop.service"],
+        &["--user", "is-active", "--quiet", LINUX_SERVICE_NAME],
     )?;
     println!("installed {}", unit.display());
+    println!("service: running");
     Ok(())
 }
 
@@ -32,23 +72,141 @@ pub fn install(executable: &std::path::Path) -> Result<()> {
 pub fn uninstall() -> Result<()> {
     let _ = command(
         "systemctl",
-        &[
-            "--user",
-            "disable",
-            "--now",
-            "mimorii-agent-desktop.service",
-        ],
+        &["--user", "disable", "--now", LINUX_SERVICE_NAME],
     );
-    let directory = directories::BaseDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("could not determine the user home directory"))?
-        .config_dir()
-        .join("systemd/user");
-    let unit = directory.join("mimorii-agent-desktop.service");
+    let unit = systemd_user_unit()?;
     if unit.exists() {
         std::fs::remove_file(unit)?;
     }
     command("systemctl", &["--user", "daemon-reload"])?;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn restart_if_installed() -> Result<()> {
+    if systemd_user_unit()?.is_file() {
+        command("systemctl", &["--user", "reset-failed", LINUX_SERVICE_NAME])?;
+        command("systemctl", &["--user", "restart", LINUX_SERVICE_NAME])?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn systemd_user_unit() -> Result<PathBuf> {
+    Ok(LinuxServicePaths::discover()?.unit())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemd_user_unit_content(executable: &Path, paths: &LinuxServicePaths) -> Result<String> {
+    let executable = systemd_path(executable, true)?;
+    let home = systemd_environment_path("HOME", &paths.home)?;
+    let config_home = systemd_environment_path("XDG_CONFIG_HOME", &paths.config_home)?;
+    let data_home = systemd_environment_path("XDG_DATA_HOME", &paths.data_home)?;
+    let collection = systemd_path(&paths.collection, false)?;
+    Ok(format!(
+        "[Unit]\nDescription=Mimorii desktop monitoring agent\n\n[Service]\nType=exec\nExecStart={executable} run\nEnvironment={home}\nEnvironment={config_home}\nEnvironment={data_home}\nRestart=on-failure\nRestartSec=10s\nTimeoutStopSec=30s\nUMask=0077\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=read-only\nReadWritePaths={collection}\nStandardOutput=journal\nStandardError=journal\nSyslogIdentifier=mimorii-agent-desktop\n\n[Install]\nWantedBy=default.target\n"
+    ))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemd_environment_path(name: &str, path: &Path) -> Result<String> {
+    let path = absolute_utf8_path(path)?;
+    systemd_quote(&format!("{name}={path}"), false)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemd_path(path: &Path, escape_dollars: bool) -> Result<String> {
+    systemd_quote(absolute_utf8_path(path)?, escape_dollars)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn absolute_utf8_path(path: &Path) -> Result<&str> {
+    if !path.is_absolute() {
+        bail!("systemd service paths must be absolute: {}", path.display());
+    }
+    path.to_str()
+        .with_context(|| format!("systemd service path is not UTF-8: {}", path.display()))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemd_quote(value: &str, escape_dollars: bool) -> Result<String> {
+    if value.chars().any(char::is_control) {
+        bail!("systemd service values cannot contain control characters");
+    }
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    for character in value.chars() {
+        match character {
+            '\\' | '"' => {
+                escaped.push('\\');
+                escaped.push(character);
+            }
+            '%' => escaped.push_str("%%"),
+            '$' if escape_dollars => escaped.push_str("$$"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped.push('"');
+    Ok(escaped)
+}
+
+#[cfg(target_os = "linux")]
+fn write_unit(path: &Path, content: &str) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = path.parent().context("systemd unit path has no parent")?;
+    let mut staged = tempfile::Builder::new()
+        .prefix(".mimorii-agent-service-")
+        .tempfile_in(directory)
+        .context("could not stage the systemd user service")?;
+    staged.write_all(content.as_bytes())?;
+    staged.as_file_mut().sync_all()?;
+    staged
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o644))?;
+    staged
+        .persist(path)
+        .map_err(|error| error.error)
+        .with_context(|| {
+            format!(
+                "could not install systemd user service at {}",
+                path.display()
+            )
+        })?;
+    std::fs::File::open(directory)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn ensure_linger_enabled() -> Result<()> {
+    let user_id = command_output("id", &["--user"])?;
+    let user_id = user_id.trim();
+    if user_id.is_empty() || !user_id.chars().all(|character| character.is_ascii_digit()) {
+        bail!("could not determine the current numeric user ID");
+    }
+    if linger_enabled(user_id)? {
+        return Ok(());
+    }
+    if user_id == "0" {
+        command("loginctl", &["enable-linger", user_id])?;
+    } else {
+        command("sudo", &["--", "loginctl", "enable-linger", user_id])?;
+    }
+    if !linger_enabled(user_id)? {
+        bail!("systemd user lingering was not enabled for user ID {user_id}");
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn linger_enabled(user_id: &str) -> Result<bool> {
+    Ok(command_output(
+        "loginctl",
+        &["show-user", user_id, "--property=Linger", "--value"],
+    )?
+    .trim()
+    .eq_ignore_ascii_case("yes"))
 }
 
 #[cfg(windows)]
@@ -336,11 +494,29 @@ pub use windows::{print_status, run, start, status, stop};
 
 #[cfg(any(target_os = "linux", test))]
 fn command(program: &str, arguments: &[&str]) -> Result<()> {
-    let status = Command::new(program).args(arguments).status()?;
-    if !status.success() {
-        bail!("{program} failed with status {status}");
+    checked_output(program, arguments).map(|_| ())
+}
+
+#[cfg(target_os = "linux")]
+fn command_output(program: &str, arguments: &[&str]) -> Result<String> {
+    String::from_utf8(checked_output(program, arguments)?.stdout)
+        .with_context(|| format!("{program} returned non-UTF-8 output"))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn checked_output(program: &str, arguments: &[&str]) -> Result<Output> {
+    let output = Command::new(program)
+        .args(arguments)
+        .output()
+        .with_context(|| format!("could not run {program}"))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if detail.is_empty() {
+            bail!("{program} failed with status {}", output.status);
+        }
+        bail!("{program} failed with status {}: {detail}", output.status);
     }
-    Ok(())
+    Ok(output)
 }
 
 #[cfg(test)]
