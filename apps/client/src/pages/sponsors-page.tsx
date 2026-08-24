@@ -73,7 +73,7 @@ export function SponsorsPage() {
           <div className="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-coral/12 via-lavender/12 to-mint/12 blur-3xl" />
           <img
             src="/art/mimorii-sponsors.png"
-            alt="Three Mimorii sponsor mascots"
+            alt="Platinum, Gold, and Silver sponsor tiers connected to Mimorii infrastructure"
             className="relative aspect-[3/2] w-full rounded-[2.5rem] border border-line object-cover shadow-[0_30px_70px_-38px_rgba(0,0,0,.75)]"
           />
         </div>
@@ -95,7 +95,7 @@ export function SponsorsPage() {
               </button>
             ) : null}
           </div>
-          <div className="mt-10 grid gap-7">
+          <div className="sponsor-tier-stack mt-10 grid gap-7">
             {sponsorshipTierDetails.map((details) => {
               const tierSponsors =
                 sponsors.data?.find((collection) => collection.tier === details.tier)?.sponsors ??

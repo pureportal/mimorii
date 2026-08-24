@@ -413,6 +413,9 @@ a {
 }
 
 .sponsor-tier-card {
+  --tier-border-width: 1px;
+  --tier-edge: linear-gradient(135deg, var(--color-line), var(--color-line));
+  --tier-atmosphere: none;
   isolation: isolate;
   position: relative;
 }
@@ -422,40 +425,13 @@ a {
   z-index: 1;
 }
 
-.sponsor-tier-card--silver {
-  animation: silver-card-lustre 5.5s ease-in-out infinite;
-}
-
-.sponsor-tier-card--gold::after {
-  position: absolute;
-  z-index: 0;
-  top: -55%;
-  bottom: -55%;
-  left: -42%;
-  width: 28%;
-  transform: skewX(-18deg);
-  animation: gold-card-sweep 7s ease-in-out infinite;
-  background: linear-gradient(90deg, transparent, rgba(255, 220, 135, 0.2), transparent);
-  content: "";
-  pointer-events: none;
-}
-
-.sponsor-tier-card--platinum::before {
+.sponsor-tier-card::before {
   position: absolute;
   z-index: 2;
   inset: 0;
-  padding: 1px;
+  padding: var(--tier-border-width);
   border-radius: inherit;
-  animation: platinum-card-spectrum 8s linear infinite;
-  background: conic-gradient(
-    from 20deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(129, 224, 255, 0.72),
-    rgba(206, 165, 255, 0.65),
-    rgba(255, 177, 196, 0.55),
-    rgba(255, 255, 255, 0.08),
-    rgba(129, 224, 255, 0.72)
-  );
+  background: var(--tier-edge);
   content: "";
   mask:
     linear-gradient(#000 0 0) content-box,
@@ -464,21 +440,109 @@ a {
   pointer-events: none;
 }
 
-.sponsor-tier-card--platinum::after {
+.sponsor-tier-card::after {
   position: absolute;
   z-index: 0;
   inset: 0;
+  border-radius: inherit;
+  background: var(--tier-atmosphere);
+  content: "";
+  pointer-events: none;
+}
+
+.sponsor-tier-card--silver {
+  --tier-edge: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-silver-accent) 82%, white),
+    var(--color-silver-border) 54%,
+    color-mix(in srgb, var(--color-silver-accent) 66%, transparent)
+  );
+  --tier-atmosphere: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-silver-accent) 10%, transparent),
+    transparent 48%
+  );
+  box-shadow: 0 12px 32px -27px rgba(52, 49, 78, 0.45);
+}
+
+.sponsor-tier-card--gold {
+  --tier-edge: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-gold-accent) 42%, white),
+    var(--color-gold-accent) 38%,
+    var(--color-gold-border) 72%,
+    color-mix(in srgb, var(--color-gold-accent) 62%, white)
+  );
+  --tier-atmosphere:
+    radial-gradient(
+      circle at 14% 18%,
+      color-mix(in srgb, var(--color-gold-accent) 16%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(130deg, transparent 55%, rgba(255, 239, 190, 0.08));
+  box-shadow: 0 18px 44px -29px rgba(145, 88, 9, 0.58);
+}
+
+.sponsor-tier-card--platinum {
+  --tier-border-width: 2px;
+  --tier-edge: conic-gradient(
+    from 24deg,
+    rgba(255, 255, 255, 0.72),
+    rgba(129, 224, 255, 0.78),
+    rgba(206, 165, 255, 0.76),
+    rgba(255, 177, 196, 0.64),
+    rgba(255, 244, 186, 0.68),
+    rgba(129, 224, 255, 0.78),
+    rgba(255, 255, 255, 0.72)
+  );
+  --tier-atmosphere:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.26) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 78% 26%, rgba(180, 226, 255, 0.22) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 65% 78%, rgba(235, 190, 255, 0.2) 0 1px, transparent 1.5px),
+    radial-gradient(
+      circle at 16% 20%,
+      color-mix(in srgb, var(--color-platinum-accent) 24%, transparent),
+      transparent 38%
+    );
+  box-shadow: 0 25px 62px -34px rgba(103, 82, 191, 0.62);
+}
+
+.sponsor-tier-card--platinum::after {
   animation: platinum-card-stars 5s ease-in-out infinite alternate;
-  background-image:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 78% 26%, rgba(180, 226, 255, 0.25) 0 1.5px, transparent 2px),
-    radial-gradient(circle at 65% 78%, rgba(235, 190, 255, 0.22) 0 1px, transparent 1.5px);
   background-size:
     92px 92px,
     137px 137px,
-    113px 113px;
-  content: "";
-  pointer-events: none;
+    113px 113px,
+    auto;
+}
+
+.sponsor-tier-card--platinum::before {
+  animation: platinum-card-spectrum 8s linear infinite;
+}
+
+.sponsor-tier-stack .sponsor-tier-card--platinum::before,
+.sponsor-tier-stack .sponsor-tier-card--platinum::after {
+  animation: none;
+}
+
+.sponsor-tier-stack .sponsor-tier-card--gold .tier-artwork {
+  max-width: 18rem;
+}
+
+.sponsor-tier-stack .sponsor-tier-card--silver .tier-artwork {
+  max-width: 16rem;
+}
+
+@media (min-width: 640px) {
+  .sponsor-tier-stack .sponsor-tier-card--gold {
+    width: calc(100% - 1.5rem);
+    margin-inline: auto;
+  }
+
+  .sponsor-tier-stack .sponsor-tier-card--silver {
+    width: calc(100% - 3rem);
+    margin-inline: auto;
+  }
 }
 
 .tier-artwork {
@@ -529,19 +593,17 @@ a {
 }
 
 .tier-artwork--silver .tier-artwork__frame {
-  animation: silver-frame-lustre 5s ease-in-out infinite;
   background: linear-gradient(145deg, #fff, #a9abc8 42%, #ece8ff 68%, #8f91b4);
   box-shadow: 0 24px 52px -32px rgba(77, 72, 123, 0.72);
 }
 
 .tier-artwork--silver .tier-artwork__halo {
-  animation: silver-moon-breathe 4.5s ease-in-out infinite;
   background: radial-gradient(circle, rgba(201, 195, 241, 0.68), rgba(177, 183, 211, 0.08) 68%);
   filter: blur(20px);
+  opacity: 0.72;
 }
 
 .tier-artwork--silver .tier-artwork__foil {
-  animation: silver-motes 7s ease-in-out infinite alternate;
   background-image:
     radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.7) 0 1px, transparent 2px),
     radial-gradient(circle at 72% 38%, rgba(230, 225, 255, 0.75) 0 1.5px, transparent 2.5px),
@@ -551,6 +613,7 @@ a {
     96px 96px,
     112px 112px;
   mix-blend-mode: screen;
+  opacity: 0.6;
 }
 
 .tier-artwork--gold .tier-artwork__frame,
@@ -566,7 +629,6 @@ a {
 }
 
 .tier-artwork--gold .tier-artwork__halo {
-  animation: gold-halo-pulse 4s ease-in-out infinite;
   background: conic-gradient(
     from 0deg,
     rgba(255, 215, 105, 0.12),
@@ -576,23 +638,18 @@ a {
     rgba(255, 215, 105, 0.12)
   );
   filter: blur(18px);
+  opacity: 0.74;
 }
 
 .tier-artwork--gold .tier-artwork__foil {
-  left: -95%;
-  width: 62%;
-  animation: gold-foil-sweep 5.8s ease-in-out infinite;
-  background: linear-gradient(
-    105deg,
-    transparent 12%,
-    rgba(255, 244, 190, 0.54) 50%,
-    transparent 88%
-  );
+  background:
+    linear-gradient(112deg, transparent 18%, rgba(255, 244, 190, 0.34) 42%, transparent 61%),
+    radial-gradient(circle at 72% 24%, rgba(255, 236, 164, 0.22), transparent 26%);
   mix-blend-mode: screen;
+  opacity: 0.72;
 }
 
 .tier-artwork--gold .tier-artwork__particles {
-  animation: gold-particles-rise 6s ease-in-out infinite alternate;
   background-image:
     radial-gradient(circle at 18% 65%, rgba(255, 227, 141, 0.7) 0 1.5px, transparent 2.5px),
     radial-gradient(circle at 72% 26%, rgba(255, 249, 211, 0.8) 0 1px, transparent 2px);
@@ -600,6 +657,7 @@ a {
     78px 96px,
     115px 129px;
   mix-blend-mode: screen;
+  opacity: 0.7;
 }
 
 .tier-artwork--platinum .tier-artwork__frame,
@@ -638,6 +696,7 @@ a {
     rgba(129, 224, 255, 0.16)
   );
   filter: blur(19px);
+  opacity: 0.82;
 }
 
 .tier-artwork--platinum .tier-artwork__foil {
@@ -646,10 +705,11 @@ a {
     linear-gradient(115deg, transparent 12%, rgba(145, 235, 255, 0.32) 32%, transparent 49%),
     linear-gradient(245deg, transparent 25%, rgba(255, 184, 225, 0.3) 47%, transparent 68%);
   background-position:
-    0% 50%,
-    100% 50%;
+    42% 50%,
+    58% 50%;
   background-size: 220% 220%;
   mix-blend-mode: screen;
+  opacity: 0.78;
 }
 
 .tier-artwork--platinum .tier-artwork__particles {
@@ -665,114 +725,13 @@ a {
     127px 109px,
     149px 137px;
   mix-blend-mode: screen;
+  opacity: 0.84;
 }
 
-@keyframes silver-card-lustre {
-  0%,
-  100% {
-    box-shadow: 0 12px 35px -24px rgba(30, 25, 62, 0.35);
-  }
-  50% {
-    box-shadow: 0 18px 42px -24px rgba(109, 104, 154, 0.52);
-  }
-}
-
-@keyframes silver-frame-lustre {
-  0%,
-  100% {
-    filter: saturate(0.96) brightness(1);
-  }
-  50% {
-    filter: saturate(1.06) brightness(1.045);
-  }
-}
-
-@keyframes silver-moon-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(0.94);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.04);
-  }
-}
-
-@keyframes silver-motes {
-  from {
-    background-position:
-      0 0,
-      0 0,
-      0 0;
-    opacity: 0.45;
-  }
-  to {
-    background-position:
-      8px -12px,
-      -10px -18px,
-      6px -9px;
-    opacity: 0.8;
-  }
-}
-
-@keyframes gold-card-sweep {
-  0%,
-  54% {
-    left: -42%;
-    opacity: 0;
-  }
-  66% {
-    opacity: 0.8;
-  }
-  82%,
-  100% {
-    left: 118%;
-    opacity: 0;
-  }
-}
-
-@keyframes gold-halo-pulse {
-  0%,
-  100% {
-    opacity: 0.58;
-    transform: scale(0.96);
-  }
-  50% {
-    opacity: 0.94;
-    transform: scale(1.05);
-  }
-}
-
-@keyframes gold-foil-sweep {
-  0%,
-  48% {
-    left: -95%;
-    opacity: 0;
-  }
-  62% {
-    opacity: 0.95;
-  }
-  82%,
-  100% {
-    left: 132%;
-    opacity: 0;
-  }
-}
-
-@keyframes gold-particles-rise {
-  from {
-    background-position:
-      0 10px,
-      0 18px;
-    opacity: 0.42;
-  }
-  to {
-    background-position:
-      4px -14px,
-      -7px -21px;
-    opacity: 0.9;
-  }
+.sponsor-tier-stack .tier-artwork--platinum .tier-artwork__halo,
+.sponsor-tier-stack .tier-artwork--platinum .tier-artwork__foil,
+.sponsor-tier-stack .tier-artwork--platinum .tier-artwork__particles {
+  animation: none;
 }
 
 @keyframes platinum-card-spectrum {
@@ -789,6 +748,7 @@ a {
     background-position:
       0 0,
       0 0,
+      0 0,
       0 0;
     opacity: 0.45;
   }
@@ -796,7 +756,8 @@ a {
     background-position:
       8px -12px,
       -12px -8px,
-      6px -14px;
+      6px -14px,
+      0 0;
     opacity: 0.92;
   }
 }
@@ -852,14 +813,11 @@ a {
   }
 
   .landing-status-dot::after,
-  .sponsor-tier-card--silver,
-  .sponsor-tier-card--gold::after,
   .sponsor-tier-card--platinum::before,
   .sponsor-tier-card--platinum::after,
-  .tier-artwork__frame,
-  .tier-artwork__halo,
-  .tier-artwork__foil,
-  .tier-artwork__particles {
+  .tier-artwork--platinum .tier-artwork__halo,
+  .tier-artwork--platinum .tier-artwork__foil,
+  .tier-artwork--platinum .tier-artwork__particles {
     animation: none !important;
   }
 }
