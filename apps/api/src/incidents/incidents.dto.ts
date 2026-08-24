@@ -15,6 +15,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  MaxLength,
 } from "class-validator";
 
 export class CreateIncidentDto {
@@ -57,8 +58,8 @@ export class AddIncidentUpdateDto {
   @IsIn(incidentStatuses)
   status!: IncidentStatus;
 
-  @ApiProperty({ minLength: 1, maxLength: 2_000 })
+  @ApiProperty({ maxLength: 2_000 })
   @IsString()
-  @Length(1, 2_000)
+  @MaxLength(2_000)
   message!: string;
 }

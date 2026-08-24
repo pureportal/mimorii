@@ -527,7 +527,7 @@ function IncidentUpdateDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="incident-update-message">Update</FieldLabel>
-            <Textarea id="incident-update-message" name="message" required maxLength={2_000} />
+            <Textarea id="incident-update-message" name="message" maxLength={2_000} />
           </Field>
           <Button type="submit" disabled={saving}>
             <Send /> Publish update
