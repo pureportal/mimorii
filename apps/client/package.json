@@ -1,6 +1,6 @@
 {
   "name": "@mimorii/client",
-  "version": "8.2.0",
+  "version": "9.0.0",
   "private": true,
   "type": "module",
   "scripts": {

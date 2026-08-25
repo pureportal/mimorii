@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Mimorii",
   "mainBinaryName": "Mimorii",
-  "version": "8.2.0",
+  "version": "9.0.0",
   "identifier": "app.mimorii.monitor",
   "build": {
     "beforeDevCommand": "pnpm dev",
