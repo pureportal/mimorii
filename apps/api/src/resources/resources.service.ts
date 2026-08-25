@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type {
   AgentKind,
   AgentStatus,
-  CheckHealthStatus,
+  MonitorStatus,
   ResourceKind,
   ResourceSummary,
 } from "@mimorii/contracts";
@@ -28,7 +28,7 @@ interface ResourceRow {
   agent_version: string | null;
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
-  checks_up: number;
+  checks_passing: number;
   checks_total: number;
   last_checked_at: string | null;
   image_updated_at: string | null;
@@ -182,7 +182,7 @@ export class ResourcesService {
         a.version AS agent_version,
         a.last_seen_at AS agent_last_seen_at,
         a.collection_interval_seconds AS agent_collection_interval_seconds,
-        SUM(CASE WHEN c.current_status = 'up' THEN 1 ELSE 0 END) AS checks_up,
+        SUM(CASE WHEN c.current_status = 'up' THEN 1 ELSE 0 END) AS checks_passing,
         COUNT(c.id) AS checks_total,
         MAX(c.last_checked_at) AS last_checked_at,
         (SELECT ri.updated_at FROM resource_images ri WHERE ri.resource_id = r.id) AS image_updated_at
@@ -194,7 +194,7 @@ export class ResourcesService {
       ORDER BY LOWER(r.name)`;
   }
 
-  private async map(row: ResourceRow, status: CheckHealthStatus): Promise<ResourceSummary> {
+  private async map(row: ResourceRow, status: MonitorStatus): Promise<ResourceSummary> {
     return {
       id: row.id,
       teamId: row.team_id,
@@ -213,7 +213,7 @@ export class ResourcesService {
           }
         : null,
       status,
-      checksUp: row.checks_up,
+      checksPassing: row.checks_passing,
       checksTotal: row.checks_total,
       lastCheckedAt: row.last_checked_at,
       inMaintenance: await this.maintenance.isResourceActive(row.id),

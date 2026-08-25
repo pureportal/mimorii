@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { api } from "../lib/api";
 import {
+  checkPassingLabel,
   checkMetricLabel,
   createCheckHistorySeries,
   formatCheckMetric,
@@ -67,12 +68,14 @@ export function CheckDetailsDialog({
               <Detail label="State">
                 <StatusBadge status={check.status} />
               </Detail>
-              <Detail label="Uptime · 24h">{formatPercent(check.uptime24h)}</Detail>
+              <Detail label={`${checkPassingLabel(check.type)} · 24h`}>
+                {formatPercent(check.passing24h)}
+              </Detail>
               <Detail label="Last run">{formatRelative(check.lastCheckedAt)}</Detail>
             </div>
 
             <section>
-              <h3 className="mb-3 text-sm font-semibold">Current health</h3>
+              <h3 className="mb-3 text-sm font-semibold">Current metrics</h3>
               <div className="rounded-2xl border border-line p-4">
                 <CheckHealthSummary check={currentCheck!} className="max-w-xl" />
               </div>

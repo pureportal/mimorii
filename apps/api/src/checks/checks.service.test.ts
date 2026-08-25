@@ -38,8 +38,8 @@ describe("check summaries", () => {
           agent_id: "agent-1",
           encrypted_secret: null,
           latest_metrics_json: JSON.stringify({ cpuPercent: 35, memoryPercent: 62 }),
-          uptime_24h: 100,
-          uptime_30d: 99.9,
+          passing_24h: 100,
+          passing_30d: 99.9,
         },
       ]),
     };
@@ -92,8 +92,8 @@ describe("check summaries", () => {
       encrypted_secret: null,
       favicon_request_id: null,
       latest_metrics_json: null,
-      uptime_24h: null,
-      uptime_30d: null,
+      passing_24h: null,
+      passing_30d: null,
     };
     const database = {
       get: vi
@@ -169,6 +169,25 @@ describe("check summaries", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("keeps a reachable HTTP check availability-oriented", async () => {
+    const database = {
+      all: vi.fn().mockResolvedValue([
+        summaryRow({
+          type: "http",
+          current_status: "up",
+          agent_id: null,
+          agent_kind: null,
+          agent_last_seen_at: null,
+          latest_metrics_json: JSON.stringify({ responseBytes: 128 }),
+        }),
+      ]),
+    };
+
+    await expect(checkService(database).list("user-1", "team-1")).resolves.toMatchObject([
+      { type: "http", status: "up" },
+    ]);
   });
 
   it("reports down only after the assigned reporter passes the stale threshold", async () => {
@@ -264,8 +283,8 @@ function summaryRow(overrides: Record<string, unknown> = {}) {
     agent_last_seen_at: "2026-08-25T11:59:40.000Z",
     agent_collection_interval_seconds: 30,
     latest_metrics_json: JSON.stringify({ cpuPercent: 35, memoryPercent: 62 }),
-    uptime_24h: 100,
-    uptime_30d: 100,
+    passing_24h: 100,
+    passing_30d: 100,
     ...overrides,
   };
 }

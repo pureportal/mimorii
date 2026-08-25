@@ -6,6 +6,7 @@ const resourceRow = {
   resource_id: "resource-1",
   source: "resource",
   status: null,
+  check_type: null,
   agent_kind: "desktop",
   agent_last_seen_at: "2026-08-25T11:59:30.000Z",
   agent_collection_interval_seconds: 30,
@@ -16,6 +17,7 @@ const checkRow = {
   resource_id: "resource-1",
   source: "check",
   status: "down",
+  check_type: "disk",
   agent_kind: "desktop",
   agent_last_seen_at: "2026-08-25T11:59:30.000Z",
   agent_collection_interval_seconds: 30,
@@ -31,6 +33,15 @@ describe("ResourceHealthService", () => {
 
     await expect(health.forResources("team-1", ["resource-1"])).resolves.toEqual(
       new Map([["resource-1", "critical"]])
+    );
+  });
+
+  it("returns down for an unavailable connectivity check", async () => {
+    setNow();
+    const health = service([resourceRow, { ...checkRow, check_type: "http" }]);
+
+    await expect(health.forResources("team-1", ["resource-1"])).resolves.toEqual(
+      new Map([["resource-1", "down"]])
     );
   });
 
@@ -78,6 +89,7 @@ describe("ResourceHealthService", () => {
       {
         ...checkRow,
         source: "heartbeat",
+        check_type: null,
         agent_kind: null,
         agent_last_seen_at: null,
         agent_collection_interval_seconds: null,

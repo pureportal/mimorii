@@ -17,6 +17,7 @@ import { Input, Select } from "../components/ui/input";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
+import { isHealthCheckType } from "../lib/check-health";
 import { formatCount, formatDuration, formatLatency, formatPercent } from "../lib/format";
 
 export function AnalyticsPage() {
@@ -48,7 +49,7 @@ export function AnalyticsPage() {
     },
   });
   const availableChecks = checks.data?.filter(
-    (check) => !resourceId || check.resourceId === resourceId
+    (check) => !isHealthCheckType(check.type) && (!resourceId || check.resourceId === resourceId)
   );
 
   if (resources.isLoading || checks.isLoading || report.isLoading) return <LoadingState />;

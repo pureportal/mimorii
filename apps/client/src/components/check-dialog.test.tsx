@@ -12,7 +12,7 @@ const resource: ResourceSummary = {
   tags: [],
   agent: null,
   status: "okay",
-  checksUp: 1,
+  checksPassing: 1,
   checksTotal: 1,
   lastCheckedAt: null,
   inMaintenance: false,

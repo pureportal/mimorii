@@ -515,7 +515,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/analytics/overview`)
       .set("authorization", authorization)
       .expect(200);
-    expect(overview.body).toMatchObject({ resources: 1, checks: 1, up: 1, uptime24h: 100 });
+    expect(overview.body).toMatchObject({ resources: 1, checks: 1, passing: 1, uptime24h: 100 });
 
     process.env.MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS = "false";
     const unsafeResource = await request(app.getHttpServer())
@@ -1492,7 +1492,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expect(body.items[0]).not.toHaveProperty("resourceId");
         expect(body.items[0].id).not.toBe(publicItems[0]!.id);
         expect(body.items[1].dailyUptime).toHaveLength(7);
-        expect(body.items[2]).toMatchObject({ type: "status", status: "okay" });
+        expect(body.items[2]).toMatchObject({ type: "status", status: "up" });
       });
 
     const privateSlug = `dashboard-private-${Date.now()}`;
@@ -1935,9 +1935,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/analytics/overview`)
       .set("authorization", authorization)
       .expect(200)
-      .expect(({ body }) =>
-        expect(body).toMatchObject({ heartbeats: 1, heartbeatsUp: 1, heartbeatsDown: 0 })
-      );
+      .expect(({ body }) => expect(body).toMatchObject({ heartbeats: 1, passing: 1, down: 0 }));
 
     const rotated = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/heartbeats/${created.body.heartbeat.id}/rotate-token`)

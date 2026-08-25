@@ -19,6 +19,7 @@ import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
+import { isHealthCheckType } from "../lib/check-health";
 import { formatCount, formatLatency, formatPercent } from "../lib/format";
 
 export function ObjectivesPage() {
@@ -215,7 +216,9 @@ function ObjectiveDialog({
   const [resourceId, setResourceId] = useState(objective?.resourceId ?? resources[0]?.id ?? "");
   const [checkId, setCheckId] = useState(objective?.checkId ?? "");
   const [saving, setSaving] = useState(false);
-  const availableChecks = checks.filter((check) => check.resourceId === resourceId);
+  const availableChecks = checks.filter(
+    (check) => check.resourceId === resourceId && !isHealthCheckType(check.type)
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

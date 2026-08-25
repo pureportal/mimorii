@@ -246,7 +246,10 @@ export class StatusPagesService {
     const state = publicComponents.some((component) => component.status === "down")
       ? "outage"
       : publicComponents.some(
-            (component) => component.status === "critical" || component.status === "warning"
+            (component) =>
+              component.status === "critical" ||
+              component.status === "warning" ||
+              component.status === "degraded"
           )
         ? "degraded"
         : publicComponents.some((component) => component.status === "maintenance")
@@ -442,7 +445,8 @@ export class StatusPagesService {
       `${MONITOR_OBSERVATIONS_CTE} SELECT r.id, r.name,
        AVG(CASE WHEN o.status IS NULL THEN NULL WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS uptime_30d
        FROM status_page_resources spr JOIN resources r ON r.id = spr.resource_id
-       LEFT JOIN observations o ON o.resource_id = r.id AND o.observed_at >= ?
+       LEFT JOIN observations o ON o.resource_id = r.id AND o.category = 'availability'
+       AND o.observed_at >= ?
        WHERE spr.status_page_id = ? GROUP BY r.id, spr.display_order ORDER BY spr.display_order`,
       new Date(Date.now() - 30 * 86_400_000).toISOString(),
       pageId
@@ -469,7 +473,7 @@ export class StatusPagesService {
     const rows = await this.database.all<{ date: string; uptime: number }>(
       `${MONITOR_OBSERVATIONS_CTE} SELECT TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
        AVG(CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END) AS uptime
-       FROM observations WHERE resource_id = ? AND observed_at >= ?
+       FROM observations WHERE resource_id = ? AND category = 'availability' AND observed_at >= ?
        GROUP BY TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       resourceId,
       from.toISOString()

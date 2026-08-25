@@ -45,6 +45,7 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import {
+  checkPassingLabel,
   createCheckHistorySeries as createTypedCheckHistorySeries,
   formatCheckMetric as formatTypedCheckMetric,
 } from "../lib/check-health";
@@ -367,7 +368,7 @@ export function ResourceDetailPage() {
                       <p className="truncate text-sm font-semibold">{check.name}</p>
                       <p className="text-xs text-muted">
                         {checkExecutionLabel(check.execution, agents.data ?? [])} ·{" "}
-                        {formatPercent(check.uptime24h)}
+                        {checkPassingLabel(check.type)} {formatPercent(check.passing24h)}
                       </p>
                     </div>
                     <StatusBadge status={check.status} />

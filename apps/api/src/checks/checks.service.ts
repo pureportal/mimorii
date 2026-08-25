@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
 import { resolveAgentStatus } from "../common/agent-status.js";
 import { encryptConfiguration } from "../common/crypto.js";
-import { resolveCheckHealthStatus } from "../common/health-status.js";
+import { resolveMonitorStatus } from "../common/health-status.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckConfigService } from "./check-config.service.js";
@@ -25,8 +25,8 @@ interface CheckSummaryRow extends CheckRow {
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
   latest_metrics_json: string | null;
-  uptime_24h: number | null;
-  uptime_30d: number | null;
+  passing_24h: number | null;
+  passing_30d: number | null;
 }
 
 interface ResourceRow {
@@ -239,9 +239,9 @@ export class ChecksService {
           WHERE latest.check_id = c.id
           ORDER BY latest.checked_at DESC, latest.id DESC LIMIT 1) AS latest_metrics_json,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
-          THEN CASE WHEN cr.status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_24h,
+          THEN CASE WHEN cr.status = 'up' THEN 100.0 ELSE 0.0 END END) AS passing_24h,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '30 days'
-          THEN CASE WHEN cr.status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_30d
+          THEN CASE WHEN cr.status = 'up' THEN 100.0 ELSE 0.0 END END) AS passing_30d
       FROM checks c
       LEFT JOIN agents a ON a.id = c.agent_id
       LEFT JOIN check_results cr ON cr.check_id = c.id
@@ -267,7 +267,8 @@ export class ChecksService {
       teamId: row.team_id,
       name: row.name,
       type: row.type,
-      status: resolveCheckHealthStatus(
+      status: resolveMonitorStatus(
+        row.type,
         row.current_status,
         reporterOffline || latestMetrics.agentTimeout === true
       ),
@@ -284,8 +285,8 @@ export class ChecksService {
       nextCheckAt: row.next_check_at,
       lastLatencyMs: row.last_latency_ms,
       latestMetrics,
-      uptime24h: row.uptime_24h,
-      uptime30d: row.uptime_30d,
+      passing24h: row.passing_24h,
+      passing30d: row.passing_30d,
       createdAt: row.created_at,
     };
   }

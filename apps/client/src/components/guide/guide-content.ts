@@ -252,7 +252,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "List actions",
         items: [
           "Filter by resource or state, run a check now, edit it, pause it, or delete it.",
-          "The list shows one-day uptime, current health, and last run.",
+          "The list shows the 24-hour result rate, current state, and last run.",
         ],
       },
     ],
@@ -276,7 +276,7 @@ export const guideTopics: readonly GuideTopic[] = [
         target: '[data-guide-page="checks-list"]',
         title: "Results and controls",
         content:
-          "Read uptime and response time here, or use the row controls to run, edit, pause, or delete a check.",
+          "Read the result rate and metrics here, or use the row controls to run, edit, pause, or delete a check.",
       },
     ],
   },

@@ -40,7 +40,8 @@ export function OverviewPage() {
   if (overview.isError || !overview.data)
     return <ErrorState retry={() => void overview.refetch()} />;
   const data = overview.data;
-  const allGood = data.down === 0 && data.degraded === 0 && data.heartbeatsDown === 0;
+  const attentionNeeded = data.warning + data.critical + data.down;
+  const allGood = attentionNeeded === 0 && data.pending === 0;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -56,7 +57,11 @@ export function OverviewPage() {
             <h2 className="font-display text-xl font-black tracking-tight sm:text-3xl">
               {allGood
                 ? "All systems operational"
-                : `${data.openIncidents} active incident${data.openIncidents === 1 ? "" : "s"}`}
+                : data.openIncidents
+                  ? `${data.openIncidents} active incident${data.openIncidents === 1 ? "" : "s"}`
+                  : attentionNeeded
+                    ? `${attentionNeeded} monitor${attentionNeeded === 1 ? " needs" : "s need"} attention`
+                    : `${data.pending} monitor${data.pending === 1 ? " is" : "s are"} awaiting results`}
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted">{activeTeam?.name}</p>
@@ -83,8 +88,8 @@ export function OverviewPage() {
         />
         <Metric
           icon={Activity}
-          label="Monitors up"
-          value={`${data.up + data.heartbeatsUp} / ${data.checks + data.heartbeats}`}
+          label="Passing monitors"
+          value={`${data.passing} / ${data.checks + data.heartbeats}`}
           tone="coral"
         />
         <Metric

@@ -28,6 +28,7 @@ import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
+import { checkPassingLabel } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
 
 export function ChecksPage() {
@@ -162,6 +163,8 @@ export function ChecksPage() {
             className="w-32"
           >
             <option value="all">All states</option>
+            <option value="up">Up</option>
+            <option value="degraded">Degraded</option>
             <option value="okay">Okay</option>
             <option value="warning">Warning</option>
             <option value="critical">Critical</option>
@@ -205,7 +208,10 @@ export function ChecksPage() {
                   </div>
                 </div>
                 <CheckHealthSummary check={check} />
-                <CheckStat label="Uptime · 24h" value={formatPercent(check.uptime24h)} />
+                <CheckStat
+                  label={`${checkPassingLabel(check.type)} · 24h`}
+                  value={formatPercent(check.passing24h)}
+                />
                 <CheckStat label="Last run" value={formatRelative(check.lastCheckedAt)} />
                 <CheckActions
                   check={check}

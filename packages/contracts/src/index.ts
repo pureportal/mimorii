@@ -52,22 +52,26 @@ export const checkTypes = [
 ] as const;
 export type CheckType = (typeof checkTypes)[number];
 
+export const healthCheckTypes = ["host", "disk", "docker"] as const satisfies readonly CheckType[];
+
 export const httpMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
 export type HttpMethod = (typeof httpMethods)[number];
 
 export const checkStatuses = ["pending", "up", "degraded", "down", "paused"] as const;
 export type CheckStatus = (typeof checkStatuses)[number];
 
-export const checkHealthStatuses = [
+export const monitorStatuses = [
   "pending",
+  "up",
+  "degraded",
   "okay",
   "warning",
   "critical",
   "down",
   "paused",
 ] as const;
-export type CheckHealthStatus = (typeof checkHealthStatuses)[number];
-export type ResourceHealthStatus = CheckHealthStatus;
+export type MonitorStatus = (typeof monitorStatuses)[number];
+export type ResourceStatus = MonitorStatus;
 
 export const dashboardAccessModes = ["public", "private", "protected"] as const;
 export type DashboardAccessMode = (typeof dashboardAccessModes)[number];
@@ -333,8 +337,8 @@ export interface ResourceSummary {
   description: string | null;
   tags: string[];
   agent: ResourceAgentSummary | null;
-  status: ResourceHealthStatus;
-  checksUp: number;
+  status: ResourceStatus;
+  checksPassing: number;
   checksTotal: number;
   lastCheckedAt: string | null;
   inMaintenance: boolean;
@@ -499,7 +503,7 @@ export interface CheckSummary {
   teamId: string;
   name: string;
   type: CheckType;
-  status: CheckHealthStatus;
+  status: MonitorStatus;
   enabled: boolean;
   intervalSeconds: number;
   timeoutMs: number;
@@ -513,8 +517,8 @@ export interface CheckSummary {
   nextCheckAt: string | null;
   lastLatencyMs: number | null;
   latestMetrics: Record<string, number | string | boolean | null>;
-  uptime24h: number | null;
-  uptime30d: number | null;
+  passing24h: number | null;
+  passing30d: number | null;
   createdAt: string;
 }
 
@@ -656,7 +660,7 @@ export interface StatusPageSubscriberSummary {
 export interface StatusPageComponent {
   id: string;
   name: string;
-  status: ResourceHealthStatus | "maintenance";
+  status: ResourceStatus | "maintenance";
   uptime30d: number | null;
   dailyUptime: Array<{ date: string; uptime: number | null }>;
 }
@@ -785,7 +789,7 @@ export interface DashboardUptimeViewItem extends DashboardViewItemBase {
 export interface DashboardStatusViewItem extends DashboardViewItemBase {
   type: "status";
   resourceName: string;
-  status: ResourceHealthStatus;
+  status: ResourceStatus;
 }
 
 export interface DashboardIncidentsViewItem extends DashboardViewItemBase {
@@ -1209,11 +1213,11 @@ export interface OverviewAnalytics {
   resources: number;
   checks: number;
   heartbeats: number;
-  heartbeatsUp: number;
-  heartbeatsDown: number;
-  up: number;
-  degraded: number;
+  passing: number;
+  warning: number;
+  critical: number;
   down: number;
+  pending: number;
   paused: number;
   uptime24h: number | null;
   uptime30d: number | null;

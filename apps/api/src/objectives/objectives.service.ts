@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { appRoutes, type ServiceLevelObjectiveSummary } from "@mimorii/contracts";
+import { appRoutes, type CheckType, type ServiceLevelObjectiveSummary } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
+import { isHealthCheckType } from "../common/health-status.js";
 import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
 import { DatabaseService } from "../database/database.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
@@ -184,12 +185,15 @@ export class ObjectivesService {
   private async validateScope(teamId: string, resourceId: string | null, checkId: string | null) {
     if (!resourceId && !checkId) throw new BadRequestException("Select a resource or check");
     if (checkId) {
-      const check = await this.database.get<{ resource_id: string }>(
-        "SELECT resource_id FROM checks WHERE id = ? AND team_id = ?",
+      const check = await this.database.get<{ resource_id: string; type: CheckType }>(
+        "SELECT resource_id, type FROM checks WHERE id = ? AND team_id = ?",
         checkId,
         teamId
       );
       if (!check) throw new BadRequestException("Check is unavailable");
+      if (isHealthCheckType(check.type)) {
+        throw new BadRequestException("Availability goals require an availability check");
+      }
       if (resourceId && resourceId !== check.resource_id) {
         throw new BadRequestException("Check does not belong to the selected resource");
       }
@@ -244,7 +248,7 @@ export class ObjectivesService {
       `${MONITOR_OBSERVATIONS_CTE} SELECT COUNT(*) AS total,
        AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS availability,
        SUM(CASE WHEN o.status = 'down' THEN 1 ELSE 0 END) AS down
-       FROM observations o WHERE ${scope} AND o.observed_at >= ?`,
+       FROM observations o WHERE ${scope} AND o.category = 'availability' AND o.observed_at >= ?`,
       scopeId,
       from
     ))!;
@@ -255,7 +259,8 @@ export class ObjectivesService {
           ROW_NUMBER() OVER (ORDER BY o.latency_ms) AS position,
           COUNT(*) OVER () AS total
          FROM observations o
-         WHERE ${scope} AND o.observed_at >= ? AND o.latency_ms IS NOT NULL AND o.status != 'down'
+         WHERE ${scope} AND o.category = 'availability'
+         AND o.observed_at >= ? AND o.latency_ms IS NOT NULL AND o.status != 'down'
        ) SELECT latency FROM ordered WHERE position >= total * 0.95 ORDER BY position LIMIT 1`,
         scopeId,
         from

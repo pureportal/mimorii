@@ -25,8 +25,8 @@ const resource: ResourceSummary = {
   description: null,
   tags: [],
   agent: null,
-  status: "okay",
-  checksUp: 1,
+  status: "up",
+  checksPassing: 1,
   checksTotal: 2,
   lastCheckedAt: "2026-08-24T08:00:00.000Z",
   inMaintenance: false,
@@ -162,10 +162,12 @@ describe("ChecksPage actions", () => {
     expect(healthRow).not.toBeNull();
     expect(within(availabilityRow!).getByText("Latency")).toBeInTheDocument();
     expect(within(availabilityRow!).getByText("42 ms")).toBeInTheDocument();
+    expect(within(availabilityRow!).getByText("Availability · 24h")).toBeInTheDocument();
     expect(within(healthRow!).getByText("CPU")).toBeInTheDocument();
     expect(within(healthRow!).getByText("35%")).toBeInTheDocument();
     expect(within(healthRow!).getByText("Memory")).toBeInTheDocument();
     expect(within(healthRow!).getByText("62%")).toBeInTheDocument();
+    expect(within(healthRow!).getByText("Healthy · 24h")).toBeInTheDocument();
     expect(within(healthRow!).getByRole("progressbar", { name: "CPU" })).toHaveAttribute(
       "aria-valuenow",
       "35"
@@ -179,7 +181,7 @@ describe("ChecksPage actions", () => {
     const criticalRow = screen.getByText("Disk usage").closest("article");
     const downRow = screen.getByText("Offline host").closest("article");
 
-    expect(within(okayRow!).getByText("okay")).toBeInTheDocument();
+    expect(within(okayRow!).getByText("up")).toBeInTheDocument();
     expect(within(criticalRow!).getByText("critical")).toBeInTheDocument();
     expect(within(criticalRow!).queryByText("down")).not.toBeInTheDocument();
     expect(within(downRow!).getByText("down")).toBeInTheDocument();
@@ -238,7 +240,7 @@ function createCheck(id: string, name: string, enabled: boolean): CheckSummary {
     teamId: resource.teamId,
     name,
     type: "http",
-    status: enabled ? "okay" : "paused",
+    status: enabled ? "up" : "paused",
     enabled,
     intervalSeconds: 60,
     timeoutMs: 5_000,
@@ -257,8 +259,8 @@ function createCheck(id: string, name: string, enabled: boolean): CheckSummary {
     nextCheckAt: enabled ? "2026-08-24T08:01:00.000Z" : null,
     lastLatencyMs: 42,
     latestMetrics: { responseBytes: 128 },
-    uptime24h: 100,
-    uptime30d: 99.9,
+    passing24h: 100,
+    passing30d: 99.9,
     createdAt: "2026-08-20T08:00:00.000Z",
   };
 }

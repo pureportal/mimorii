@@ -38,7 +38,7 @@ const row = {
   agent_version: null,
   agent_last_seen_at: null,
   agent_collection_interval_seconds: null,
-  checks_up: 0,
+  checks_passing: 0,
   checks_total: 0,
   last_checked_at: null,
   image_updated_at: null,
@@ -46,7 +46,7 @@ const row = {
 } as const;
 
 describe("ResourcesService", () => {
-  it("reports a reachable host without configured monitors as okay", async () => {
+  it("reports a reachable host without configured monitors as up", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
     try {
@@ -65,9 +65,9 @@ describe("ResourcesService", () => {
       };
 
       await expect(
-        service(database, "okay").get("user-1", "team-1", "resource-1")
+        service(database, "up").get("user-1", "team-1", "resource-1")
       ).resolves.toMatchObject({
-        status: "okay",
+        status: "up",
         checksTotal: 0,
         agent: { status: "online" },
       });

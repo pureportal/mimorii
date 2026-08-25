@@ -1,5 +1,18 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { AnalyticsReport, OverviewAnalytics } from "@mimorii/contracts";
+import type {
+  AgentKind,
+  AnalyticsReport,
+  CheckStatus,
+  CheckType,
+  OverviewAnalytics,
+} from "@mimorii/contracts";
+import { resolveAgentStatus } from "../common/agent-status.js";
+import {
+  isHealthCheckType,
+  resolveHeartbeatStatus,
+  resolveMonitorStatus,
+  summarizeMonitorStatuses,
+} from "../common/health-status.js";
 import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
 import { DatabaseService } from "../database/database.service.js";
 import { IncidentsService } from "../incidents/incidents.service.js";
@@ -7,12 +20,14 @@ import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import { ObjectivesService } from "../objectives/objectives.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 
-interface StatusCounts {
-  checks: number;
-  up: number;
-  degraded: number;
-  down: number;
-  paused: number;
+interface MonitorStatusRow {
+  source: "check" | "heartbeat";
+  type: CheckType | null;
+  status: CheckStatus;
+  agent_kind: AgentKind | null;
+  agent_last_seen_at: string | null;
+  agent_collection_interval_seconds: number | null;
+  latest_metrics_json: string | null;
 }
 
 @Injectable()
@@ -34,15 +49,44 @@ export class AnalyticsService {
       "SELECT COUNT(*) AS count FROM resources WHERE team_id = ?",
       teamId
     ))!.count;
-    const counts = (await this.database.get<StatusCounts>(
-      `SELECT COUNT(*) AS checks,
-       SUM(CASE WHEN current_status = 'up' THEN 1 ELSE 0 END) AS up,
-       SUM(CASE WHEN current_status = 'degraded' THEN 1 ELSE 0 END) AS degraded,
-       SUM(CASE WHEN current_status = 'down' THEN 1 ELSE 0 END) AS down,
-       SUM(CASE WHEN current_status = 'paused' THEN 1 ELSE 0 END) AS paused
-       FROM checks WHERE team_id = ?`,
+    const monitorRows = await this.database.all<MonitorStatusRow>(
+      `SELECT 'check' AS source, c.type, c.current_status AS status,
+       a.kind AS agent_kind, a.last_seen_at AS agent_last_seen_at,
+       a.collection_interval_seconds AS agent_collection_interval_seconds,
+       (SELECT cr.metrics_json FROM check_results cr WHERE cr.check_id = c.id
+        ORDER BY cr.checked_at DESC, cr.id DESC LIMIT 1) AS latest_metrics_json
+       FROM checks c LEFT JOIN agents a ON a.id = c.agent_id WHERE c.team_id = ?
+       UNION ALL
+       SELECT 'heartbeat', NULL::text, hm.current_status,
+       NULL::text, NULL::timestamptz, NULL::integer, NULL::text
+       FROM heartbeat_monitors hm WHERE hm.team_id = ?`,
+      teamId,
       teamId
-    ))!;
+    );
+    const monitorCounts = summarizeMonitorStatuses(
+      monitorRows.map((row) => {
+        if (row.source === "heartbeat") return resolveHeartbeatStatus(row.status);
+        if (!row.type) throw new Error("Overview check type is missing");
+        const reporterOffline =
+          row.agent_kind !== null &&
+          resolveAgentStatus({
+            kind: row.agent_kind,
+            collectionIntervalSeconds: row.agent_collection_interval_seconds ?? 30,
+            lastSeenAt: row.agent_last_seen_at,
+          }) === "offline";
+        const latestMetrics: unknown = row.latest_metrics_json
+          ? JSON.parse(row.latest_metrics_json)
+          : null;
+        const agentTimedOut =
+          typeof latestMetrics === "object" &&
+          latestMetrics !== null &&
+          "agentTimeout" in latestMetrics &&
+          latestMetrics.agentTimeout === true;
+        return resolveMonitorStatus(row.type, row.status, reporterOffline || agentTimedOut);
+      })
+    );
+    const checks = monitorRows.filter((row) => row.source === "check").length;
+    const heartbeats = monitorRows.length - checks;
     const availability = (await this.database.get<{
       uptime_24h: number | null;
       uptime_30d: number | null;
@@ -52,7 +96,7 @@ export class AnalyticsService {
        AVG(CASE WHEN observed_at >= ? THEN CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_24h,
        AVG(CASE WHEN observed_at >= ? THEN CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_30d,
        AVG(CASE WHEN observed_at >= ? AND status != 'down' THEN latency_ms END) AS latency
-       FROM observations WHERE team_id = ?`,
+       FROM observations WHERE team_id = ? AND category = 'availability'`,
       from24h,
       from30d,
       from24h,
@@ -68,33 +112,24 @@ export class AnalyticsService {
        SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up,
        SUM(CASE WHEN status = 'degraded' THEN 1 ELSE 0 END) AS degraded,
        SUM(CASE WHEN status = 'down' THEN 1 ELSE 0 END) AS down
-       FROM observations WHERE team_id = ? AND observed_at >= ?
+       FROM observations WHERE team_id = ? AND category = 'availability' AND observed_at >= ?
        GROUP BY TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"')
        ORDER BY bucket`,
       teamId,
       from24h
     );
     const latencyTimeline = await this.database.all<{ bucket: string; latencyMs: number }>(
-      `SELECT TO_CHAR(cr.checked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"') AS bucket,
-       ROUND(AVG(cr.latency_ms)::numeric, 1)::double precision AS "latencyMs"
-       FROM check_results cr JOIN checks c ON c.id = cr.check_id
-       WHERE c.team_id = ? AND cr.checked_at >= ? AND cr.latency_ms IS NOT NULL AND cr.status != 'down'
-       GROUP BY TO_CHAR(cr.checked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"') ORDER BY bucket`,
+      `${MONITOR_OBSERVATIONS_CTE} SELECT
+       TO_CHAR(o.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"') AS bucket,
+       ROUND(AVG(o.latency_ms)::numeric, 1)::double precision AS "latencyMs"
+       FROM observations o WHERE o.team_id = ? AND o.category = 'availability'
+       AND o.observed_at >= ? AND o.latency_ms IS NOT NULL AND o.status != 'down'
+       GROUP BY TO_CHAR(o.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"')
+       ORDER BY bucket`,
       teamId,
       from24h
     );
     const incidents = await this.incidents.list(userId, teamId, { limit: 20 });
-    const heartbeats = (await this.database.get<{
-      count: number;
-      up: number;
-      down: number;
-    }>(
-      `SELECT COUNT(*) AS count,
-       SUM(CASE WHEN current_status = 'up' THEN 1 ELSE 0 END) AS up,
-       SUM(CASE WHEN current_status = 'down' THEN 1 ELSE 0 END) AS down
-       FROM heartbeat_monitors WHERE team_id = ?`,
-      teamId
-    ))!;
     const openIncidents = (await this.database.get<{ count: number }>(
       "SELECT COUNT(*) AS count FROM incidents WHERE team_id = ? AND status != 'resolved'",
       teamId
@@ -108,14 +143,9 @@ export class AnalyticsService {
 
     return {
       resources,
-      checks: counts.checks,
-      heartbeats: heartbeats.count,
-      heartbeatsUp: heartbeats.up ?? 0,
-      heartbeatsDown: heartbeats.down ?? 0,
-      up: counts.up ?? 0,
-      degraded: counts.degraded ?? 0,
-      down: counts.down ?? 0,
-      paused: counts.paused ?? 0,
+      checks,
+      heartbeats,
+      ...monitorCounts,
       uptime24h: availability.uptime_24h,
       uptime30d: availability.uptime_30d,
       averageLatencyMs: availability.latency,
@@ -153,7 +183,8 @@ export class AnalyticsService {
        AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS availability,
        AVG(CASE WHEN o.status = 'degraded' THEN 100.0 ELSE 0.0 END) AS degraded
        FROM observations o
-       WHERE o.team_id = ? AND o.observed_at >= ? AND o.observed_at <= ? ${scope.sql}`,
+       WHERE o.team_id = ? AND o.category = 'availability'
+       AND o.observed_at >= ? AND o.observed_at <= ? ${scope.sql}`,
       ...parameters
     ))!;
     const daily = await this.database.all<AnalyticsReport["daily"][number]>(
@@ -164,7 +195,8 @@ export class AnalyticsService {
        AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS availabilityPercent,
        AVG(CASE WHEN o.status != 'down' THEN o.latency_ms END) AS averageLatencyMs
        FROM observations o
-       WHERE o.team_id = ? AND o.observed_at >= ? AND o.observed_at <= ? ${scope.sql}
+       WHERE o.team_id = ? AND o.category = 'availability'
+       AND o.observed_at >= ? AND o.observed_at <= ? ${scope.sql}
        GROUP BY TO_CHAR(o.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') ORDER BY date`,
       ...parameters
     );
@@ -217,14 +249,14 @@ export class AnalyticsService {
 
   private async reportScope(teamId: string, resourceId?: string, checkId?: string) {
     if (checkId) {
-      if (
-        !(await this.database.get(
-          "SELECT id FROM checks WHERE id = ? AND team_id = ?",
-          checkId,
-          teamId
-        ))
-      ) {
-        throw new BadRequestException("Check is unavailable");
+      const check = await this.database.get<{ type: CheckType }>(
+        "SELECT type FROM checks WHERE id = ? AND team_id = ?",
+        checkId,
+        teamId
+      );
+      if (!check) throw new BadRequestException("Check is unavailable");
+      if (isHealthCheckType(check.type)) {
+        throw new BadRequestException("Availability reports require an availability check");
       }
       return { sql: "AND o.check_id = ?", parameters: [checkId] };
     }
@@ -256,7 +288,8 @@ export class AnalyticsService {
             ROW_NUMBER() OVER (ORDER BY o.latency_ms) AS position,
             COUNT(*) OVER () AS total
            FROM observations o
-           WHERE o.team_id = ? AND o.observed_at >= ? AND o.observed_at <= ?
+           WHERE o.team_id = ? AND o.category = 'availability'
+           AND o.observed_at >= ? AND o.observed_at <= ?
            AND o.latency_ms IS NOT NULL AND o.status != 'down' ${scopeSql}
          ) SELECT latency FROM ordered WHERE position >= total * ? ORDER BY position LIMIT 1`,
           ...parameters,

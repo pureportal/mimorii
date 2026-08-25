@@ -22,7 +22,7 @@ const resource: ResourceSummary = {
   tags: [],
   agent: null,
   status: "critical",
-  checksUp: 0,
+  checksPassing: 0,
   checksTotal: 1,
   lastCheckedAt: "2026-08-25T12:00:00.000Z",
   inMaintenance: false,
@@ -34,11 +34,11 @@ const analytics: OverviewAnalytics = {
   resources: 1,
   checks: 1,
   heartbeats: 0,
-  heartbeatsUp: 0,
-  heartbeatsDown: 0,
-  up: 0,
-  degraded: 0,
-  down: 1,
+  passing: 0,
+  warning: 0,
+  critical: 1,
+  down: 0,
+  pending: 0,
   paused: 0,
   uptime24h: 97,
   uptime30d: 99,
@@ -70,6 +70,9 @@ describe("OverviewPage", () => {
     const row = (await screen.findByText("Disk host")).closest("a");
     expect(row).toHaveTextContent("critical");
     expect(row).not.toHaveTextContent("down");
+    expect(screen.getByText("Passing monitors")).toBeInTheDocument();
+    expect(screen.getByText("0 / 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1 monitor needs attention" })).toBeInTheDocument();
   });
 });
 

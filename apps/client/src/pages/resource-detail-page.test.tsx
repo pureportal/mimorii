@@ -25,7 +25,7 @@ const resource: ResourceSummary = {
   tags: [],
   agent: null,
   status: "critical",
-  checksUp: 0,
+  checksPassing: 0,
   checksTotal: 1,
   lastCheckedAt: "2026-08-25T12:00:00.000Z",
   inMaintenance: false,

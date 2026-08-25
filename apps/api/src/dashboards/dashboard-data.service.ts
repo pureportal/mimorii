@@ -158,7 +158,8 @@ export class DashboardDataService {
           ? "CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END"
           : "CASE WHEN o.status != 'down' THEN o.latency_ms END"
       }) AS value
-       FROM observations o WHERE o.team_id = ? AND o.observed_at >= ? ${resourceScope}`,
+       FROM observations o WHERE o.team_id = ? AND o.category = 'availability'
+       AND o.observed_at >= ? ${resourceScope}`,
       teamId,
       from,
       ...(item.resourceId ? [item.resourceId] : [])
@@ -169,7 +170,8 @@ export class DashboardDataService {
           ? "CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END"
           : "o.latency_ms"
       } AS value
-       FROM observations o WHERE o.team_id = ? AND o.observed_at >= ? ${resourceScope}
+       FROM observations o WHERE o.team_id = ? AND o.category = 'availability'
+       AND o.observed_at >= ? ${resourceScope}
        AND ${item.metric === "uptime" ? "TRUE" : "o.latency_ms IS NOT NULL"}
        ORDER BY o.observed_at`,
       teamId,
@@ -196,7 +198,8 @@ export class DashboardDataService {
     const aggregate = await this.database.get<{ uptime: number | null }>(
       `${MONITOR_OBSERVATIONS_CTE} SELECT
        AVG(CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END) AS uptime
-       FROM observations WHERE team_id = ? AND resource_id = ? AND observed_at >= ?`,
+       FROM observations WHERE team_id = ? AND resource_id = ?
+       AND category = 'availability' AND observed_at >= ?`,
       teamId,
       item.resourceId,
       from.toISOString()
@@ -205,7 +208,8 @@ export class DashboardDataService {
       `${MONITOR_OBSERVATIONS_CTE} SELECT
        TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
        AVG(CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END) AS uptime
-       FROM observations WHERE team_id = ? AND resource_id = ? AND observed_at >= ?
+       FROM observations WHERE team_id = ? AND resource_id = ?
+       AND category = 'availability' AND observed_at >= ?
        GROUP BY TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       teamId,
       item.resourceId,

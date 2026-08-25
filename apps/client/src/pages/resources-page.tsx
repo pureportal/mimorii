@@ -128,9 +128,9 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
         </div>
         <div className="mt-7 grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
           <div>
-            <p className="text-xs text-muted">Checks</p>
+            <p className="text-xs text-muted">Passing checks</p>
             <p className="mt-1 font-semibold">
-              {resource.checksUp} / {resource.checksTotal}
+              {resource.checksPassing} / {resource.checksTotal}
             </p>
           </div>
           <div>

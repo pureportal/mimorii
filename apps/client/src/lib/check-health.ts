@@ -1,4 +1,9 @@
-import type { CheckResult, CheckSummary, CheckType } from "@mimorii/contracts";
+import {
+  healthCheckTypes,
+  type CheckResult,
+  type CheckSummary,
+  type CheckType,
+} from "@mimorii/contracts";
 import { formatBytes } from "./format";
 
 type CheckMetricValue = number | string | boolean | null;
@@ -88,6 +93,16 @@ const historyMetricOrder: Record<CheckType, string[]> = {
     "databaseSizeBytes",
   ],
 };
+
+const healthCheckTypeSet = new Set<CheckType>(healthCheckTypes);
+
+export function isHealthCheckType(type: CheckType): boolean {
+  return healthCheckTypeSet.has(type);
+}
+
+export function checkPassingLabel(type: CheckType): "Availability" | "Healthy" {
+  return isHealthCheckType(type) ? "Healthy" : "Availability";
+}
 
 export function getCheckHealthItems(
   check: Pick<CheckSummary, "type" | "lastLatencyMs" | "latestMetrics">
