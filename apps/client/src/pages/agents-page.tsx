@@ -299,6 +299,15 @@ function EditAgentDialog({
   );
 }
 
+async function copyEnrollmentValue(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
+  } catch {
+    toast.error(`${label} could not be copied`);
+  }
+}
+
 function CreateAgentDialog({
   open,
   onOpenChange,
@@ -359,14 +368,15 @@ function CreateAgentDialog({
     }
     onOpenChange(value);
   }
+  const serverUrl = getServerUrl();
   const command =
     created?.kind === "desktop"
-      ? `mimorii-agent-desktop enroll --server ${getServerUrl()} --key ${created.enrollmentKey}`
+      ? `mimorii-agent-desktop enroll --server ${serverUrl} --key ${created.enrollmentKey}`
       : "";
   const enrollmentCode =
     created?.kind === "mobile"
       ? createAgentEnrollmentCode({
-          serverUrl: getServerUrl(),
+          serverUrl,
           enrollmentKey: created.enrollmentKey,
         })
       : "";
@@ -384,15 +394,27 @@ function CreateAgentDialog({
                 <div className="rounded-2xl border border-line bg-night p-4 font-mono text-xs leading-6 text-white break-all">
                   {command}
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(command);
-                    toast.success("Command copied");
-                  }}
-                >
-                  <Copy /> Copy command
-                </Button>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    variant="outline"
+                    className="sm:col-span-2"
+                    onClick={() => void copyEnrollmentValue(command, "Command")}
+                  >
+                    <Copy /> Copy command
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void copyEnrollmentValue(serverUrl, "Server URL")}
+                  >
+                    <Copy /> Copy server URL
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void copyEnrollmentValue(created.enrollmentKey, "Key")}
+                  >
+                    <Copy /> Copy key
+                  </Button>
+                </div>
               </>
             ) : (
               <>
@@ -410,12 +432,7 @@ function CreateAgentDialog({
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    void navigator.clipboard
-                      .writeText(enrollmentCode)
-                      .then(() => toast.success("Enrollment code copied"))
-                      .catch(() => toast.error("Enrollment code could not be copied"));
-                  }}
+                  onClick={() => void copyEnrollmentValue(enrollmentCode, "Enrollment code")}
                 >
                   <Copy /> Copy enrollment code
                 </Button>

@@ -228,6 +228,36 @@ describe("AgentsPage confirmations", () => {
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith(enrollmentCode));
   });
 
+  it("copies the desktop enrollment command, server URL, and key separately", async () => {
+    const enrollmentKey = `mim_agent_${"d".repeat(32)}`;
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/agents" && options?.method === "POST") {
+        return Promise.resolve({ ...warehouseRelay, enrollmentKey });
+      }
+      if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByText("No agents yet");
+    fireEvent.click(screen.getAllByRole("button", { name: "Add agent" })[0]!);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Warehouse relay" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+
+    await screen.findByText("Connect agent");
+    fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy server URL" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy key" }));
+
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledTimes(3));
+    expect(writeTextMock).toHaveBeenNthCalledWith(
+      1,
+      `mimorii-agent-desktop enroll --server https://monitor.example --key ${enrollmentKey}`
+    );
+    expect(writeTextMock).toHaveBeenNthCalledWith(2, "https://monitor.example");
+    expect(writeTextMock).toHaveBeenNthCalledWith(3, enrollmentKey);
+  });
+
   it("submits the selected desktop platform", async () => {
     apiMock.mockImplementation((path: string, options?: RequestInit) => {
       if (path === "/teams/team-1/agents" && options?.method === "POST") {
