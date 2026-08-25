@@ -166,7 +166,7 @@ try {
             while ($true) {
                 $context = $listener.GetContext()
                 Write-Output "$($context.Request.HttpMethod) $($context.Request.RawUrl) $($context.Request.Headers['Authorization'])"
-                $payload = [Text.Encoding]::UTF8.GetBytes('{"collectionIntervalSeconds":30,"tasks":[]}')
+                $payload = [Text.Encoding]::UTF8.GetBytes('{"collectionIntervalSeconds":30,"collectHostTelemetry":false,"tasks":[]}')
                 $context.Response.StatusCode = 200
                 $context.Response.ContentType = "application/json"
                 $context.Response.ContentLength64 = $payload.Length
