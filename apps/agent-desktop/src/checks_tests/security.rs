@@ -48,9 +48,13 @@ fn http_redirects_are_revalidated_before_the_next_request() {
 }
 
 #[test]
-fn http_rejects_mixed_answers_before_connecting() {
+fn http_rejects_mixed_answers_when_ip_addresses_are_restricted() {
     let task = http_task("http://mixed.example.test/", false);
-    let error = super::super::http_with_resolver(&task, &TargetPolicy::default(), |_, port| {
+    let policy = TargetPolicy {
+        allowed_cidrs: vec!["93.184.216.34/32".parse().unwrap()],
+        ..TargetPolicy::default()
+    };
+    let error = super::super::http_with_resolver(&task, &policy, |_, port| {
         Ok(vec![
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34)), port),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),

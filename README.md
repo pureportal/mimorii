@@ -111,11 +111,16 @@ In Mimorii, create an agent and copy its enrollment key. Replace the server URL 
 
 ```bash
 mimorii-agent-desktop enroll --server https://YOUR-MIMORII-SERVER/api --key YOUR_ENROLLMENT_KEY
-mimorii-agent-desktop service install
 mimorii-agent-desktop doctor
 ```
 
-The service installer may request `sudo` once, then starts the agent and keeps its user service running across logouts and reboots. Run the installer without `sudo` so it uses the current user's enrollment.
+Enrollment installs, enables, and immediately starts the agent's user service. It may request `sudo` once to keep the service running across logouts and reboots. When enrollment runs as root or via `sudo`, it uses root's configuration and user service. No Mimorii server restart is required.
+
+The agent allows all network targets by default. On Windows, use **Network access** in the Mimorii Agent application to add optional IP, hostname, protocol, or port restrictions. On Linux, open the keyboard-driven configuration menu:
+
+```bash
+mimorii-agent-desktop config
+```
 
 Verify the service and inspect its logs with:
 
@@ -126,7 +131,7 @@ loginctl show-user "$USER" --property=Linger --value
 journalctl --user --unit mimorii-agent-desktop.service --lines 50 --no-pager
 ```
 
-The first two commands should print `enabled` and `active`; the linger setting should be `yes`.
+The first two commands should print `enabled` and `active`; the linger setting should be `yes`. If enrollment completed but service setup failed, fix the reported issue and run `mimorii-agent-desktop service install`.
 
 ### Update the desktop agent
 

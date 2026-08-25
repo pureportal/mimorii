@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use super::{LinuxServicePaths, command, systemd_quote, systemd_user_unit_content};
+use super::{
+    LinuxServicePaths, command, linger_requires_sudo, service_installation_warning, systemd_quote,
+    systemd_user_unit_content,
+};
 
 #[test]
 fn command_accepts_successful_processes() {
@@ -20,6 +23,21 @@ fn command_reports_unsuccessful_statuses() {
     #[cfg(not(windows))]
     let error = command("sh", &["-c", "exit 7"]).unwrap_err();
     assert!(error.to_string().contains("failed with status"));
+}
+
+#[test]
+fn root_service_installation_is_allowed_with_a_configuration_notice() {
+    assert_eq!(
+        service_installation_warning(true),
+        Some("Warning: Installing the service as root; it will use root's enrolled configuration")
+    );
+    assert_eq!(service_installation_warning(false), None);
+}
+
+#[test]
+fn root_service_setup_enables_lingering_without_sudo() {
+    assert!(!linger_requires_sudo("0"));
+    assert!(linger_requires_sudo("1000"));
 }
 
 #[test]

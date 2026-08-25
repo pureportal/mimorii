@@ -9,9 +9,10 @@ use serde_json::{Value, json};
 #[cfg(target_os = "linux")]
 use super::ServiceAction;
 #[cfg(windows)]
-use super::WindowsServiceControlAction;
+use super::{AgentControlStatus, WindowsServiceControlAction};
 use super::{
-    Cli, CollectionWorker, Command, check_runner_cycle, cycle, run_configured_cycle, time_now,
+    Cli, CollectionWorker, Command, ConfigOptions, apply_config_options, check_runner_cycle, cycle,
+    run_configured_cycle, time_now,
 };
 use crate::config::AgentConfig;
 use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
@@ -89,35 +90,80 @@ fn triggered_poll(interval_seconds: u64) -> String {
 }
 
 #[test]
-fn parses_enrollment_and_configuration_options() {
-    for command_name in ["enroll", "configure"] {
-        let cli = Cli::try_parse_from([
-            "mimorii-agent-desktop",
-            command_name,
-            "--server",
-            "http://localhost:4310",
-            "--key",
-            &valid_key(),
-            "--allow-insecure-http",
-        ])
-        .unwrap();
-        let (server, key, allow_insecure_http) = match cli.command {
-            Command::Enroll {
-                server,
-                key,
-                allow_insecure_http,
-            }
-            | Command::Configure {
-                server,
-                key,
-                allow_insecure_http,
-            } => (server, key, allow_insecure_http),
-            _ => panic!("unexpected command"),
-        };
-        assert_eq!(server, "http://localhost:4310");
-        assert_eq!(key, valid_key());
-        assert!(allow_insecure_http);
-    }
+fn parses_enrollment_options() {
+    let cli = Cli::try_parse_from([
+        "mimorii-agent-desktop",
+        "enroll",
+        "--server",
+        "http://localhost:4310",
+        "--key",
+        &valid_key(),
+        "--allow-insecure-http",
+    ])
+    .unwrap();
+    let Command::Enroll {
+        server,
+        key,
+        allow_insecure_http,
+    } = cli.command
+    else {
+        panic!("unexpected command");
+    };
+    assert_eq!(server, "http://localhost:4310");
+    assert_eq!(key, valid_key());
+    assert!(allow_insecure_http);
+}
+
+#[test]
+fn parses_interactive_and_non_interactive_config_options() {
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "config"])
+            .unwrap()
+            .command,
+        Command::Config { options } if !options.has_updates()
+    ));
+    let cli = Cli::try_parse_from([
+        "mimorii-agent-desktop",
+        "config",
+        "--allowed-cidrs",
+        "10.0.0.0/8,192.168.1.10/32",
+        "--allowed-hostnames",
+        "*.internal.example",
+        "--allowed-protocols",
+        "https,tcp",
+        "--allowed-ports",
+        "443,5432",
+    ])
+    .unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Config { options }
+            if options.allowed_cidrs.as_deref() == Some("10.0.0.0/8,192.168.1.10/32")
+                && options.allowed_hostnames.as_deref() == Some("*.internal.example")
+                && options.allowed_protocols.as_deref() == Some("https,tcp")
+                && options.allowed_ports.as_deref() == Some("443,5432")
+    ));
+}
+
+#[test]
+fn config_options_update_only_supplied_restrictions() {
+    let mut policy = TargetPolicy {
+        allowed_hostnames: vec!["existing.example".to_owned()],
+        ..TargetPolicy::default()
+    };
+    apply_config_options(
+        &mut policy,
+        &ConfigOptions {
+            allowed_cidrs: Some("10.0.0.0/8".to_owned()),
+            allowed_ports: Some("443,8443".to_owned()),
+            ..ConfigOptions::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(policy.allowed_cidrs[0].to_string(), "10.0.0.0/8");
+    assert_eq!(policy.allowed_hostnames, vec!["existing.example"]);
+    assert_eq!(policy.allowed_ports, vec![443, 8443]);
 }
 
 #[test]
@@ -232,6 +278,25 @@ fn parses_all_runtime_and_service_commands() {
             }
         ));
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn control_status_exposes_the_target_policy_without_the_agent_key() {
+    let value = serde_json::to_value(AgentControlStatus {
+        service: "running",
+        enrolled: true,
+        server_url: Some("https://observe.example.com/api".to_owned()),
+        target_policy: Some(TargetPolicy::default()),
+        configuration_error: None,
+    })
+    .unwrap();
+
+    assert_eq!(value["targetPolicy"]["allowedCidrs"], json!([]));
+    assert_eq!(value["targetPolicy"]["allowedHostnames"], json!([]));
+    assert_eq!(value["targetPolicy"]["allowedProtocols"], json!([]));
+    assert_eq!(value["targetPolicy"]["allowedPorts"], json!([]));
+    assert!(value.get("agentKey").is_none());
 }
 
 #[test]

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 
@@ -14,29 +15,40 @@ pub enum TargetProtocol {
     Icmp,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+impl TargetProtocol {
+    pub const ALL: [Self; 4] = [Self::Http, Self::Https, Self::Tcp, Self::Icmp];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Http => "HTTP",
+            Self::Https => "HTTPS",
+            Self::Tcp => "TCP",
+            Self::Icmp => "ICMP",
+        }
+    }
+}
+
+impl FromStr for TargetProtocol {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "http" => Ok(Self::Http),
+            "https" => Ok(Self::Https),
+            "tcp" => Ok(Self::Tcp),
+            "icmp" => Ok(Self::Icmp),
+            _ => bail!("allowed protocol is invalid: {value}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TargetPolicy {
     pub allowed_cidrs: Vec<IpNet>,
     pub allowed_hostnames: Vec<String>,
     pub allowed_protocols: Vec<TargetProtocol>,
     pub allowed_ports: Vec<u16>,
-}
-
-impl Default for TargetPolicy {
-    fn default() -> Self {
-        Self {
-            allowed_cidrs: Vec::new(),
-            allowed_hostnames: vec!["*".to_owned()],
-            allowed_protocols: vec![
-                TargetProtocol::Http,
-                TargetProtocol::Https,
-                TargetProtocol::Tcp,
-                TargetProtocol::Icmp,
-            ],
-            allowed_ports: Vec::new(),
-        }
-    }
 }
 
 impl TargetPolicy {
@@ -66,7 +78,7 @@ impl TargetPolicy {
         hostname: &str,
         port: u16,
     ) -> Result<()> {
-        if !self.allowed_protocols.contains(&protocol)
+        if (!self.allowed_protocols.is_empty() && !self.allowed_protocols.contains(&protocol))
             || (!self.allowed_ports.is_empty() && !self.allowed_ports.contains(&port))
             || !self.hostname_allowed(hostname)
         {
@@ -76,7 +88,9 @@ impl TargetPolicy {
     }
 
     pub fn authorize_host(&self, protocol: TargetProtocol, hostname: &str) -> Result<()> {
-        if !self.allowed_protocols.contains(&protocol) || !self.hostname_allowed(hostname) {
+        if (!self.allowed_protocols.is_empty() && !self.allowed_protocols.contains(&protocol))
+            || !self.hostname_allowed(hostname)
+        {
             bail!("Target is not allowed by agent policy");
         }
         Ok(())
@@ -101,6 +115,9 @@ impl TargetPolicy {
     }
 
     fn hostname_allowed(&self, hostname: &str) -> bool {
+        if self.allowed_hostnames.is_empty() {
+            return true;
+        }
         let hostname = hostname.trim_end_matches('.').to_ascii_lowercase();
         self.allowed_hostnames.iter().any(|pattern| {
             let pattern = pattern.trim_end_matches('.').to_ascii_lowercase();
@@ -117,58 +134,53 @@ impl TargetPolicy {
     }
 
     fn allows_ip(&self, address: IpAddr) -> bool {
-        self.allowed_cidrs
-            .iter()
-            .any(|network| network.contains(&address))
-            || !is_non_public(address)
+        self.allowed_cidrs.is_empty()
+            || self
+                .allowed_cidrs
+                .iter()
+                .any(|network| network.contains(&address))
+    }
+
+    pub fn set_allowed_cidrs(&mut self, value: &str) -> Result<()> {
+        self.allowed_cidrs = csv_values(value)
+            .map(|value| {
+                value
+                    .parse::<IpNet>()
+                    .with_context(|| format!("allowed CIDR is invalid: {value}"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(())
+    }
+
+    pub fn set_allowed_hostnames(&mut self, value: &str) -> Result<()> {
+        self.allowed_hostnames = csv_values(value).map(str::to_owned).collect();
+        self.validate()
+    }
+
+    pub fn set_allowed_protocols(&mut self, value: &str) -> Result<()> {
+        self.allowed_protocols = csv_values(value)
+            .map(str::parse)
+            .collect::<Result<Vec<_>>>()?;
+        Ok(())
+    }
+
+    pub fn set_allowed_ports(&mut self, value: &str) -> Result<()> {
+        self.allowed_ports = csv_values(value)
+            .map(|value| {
+                value
+                    .parse::<u16>()
+                    .with_context(|| format!("allowed port is invalid: {value}"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.validate()
     }
 }
 
-fn is_non_public(address: IpAddr) -> bool {
-    match address {
-        IpAddr::V4(address) => is_non_public_v4(address),
-        IpAddr::V6(address) => address
-            .to_ipv4_mapped()
-            .map(is_non_public_v4)
-            .unwrap_or_else(|| is_non_public_v6(address)),
-    }
-}
-
-fn is_non_public_v4(address: Ipv4Addr) -> bool {
-    let value = u32::from(address);
-    in_v4_network(value, [0, 0, 0, 0], 8)
-        || in_v4_network(value, [10, 0, 0, 0], 8)
-        || in_v4_network(value, [100, 64, 0, 0], 10)
-        || in_v4_network(value, [127, 0, 0, 0], 8)
-        || in_v4_network(value, [169, 254, 0, 0], 16)
-        || in_v4_network(value, [172, 16, 0, 0], 12)
-        || in_v4_network(value, [192, 0, 0, 0], 24)
-        || in_v4_network(value, [192, 0, 2, 0], 24)
-        || in_v4_network(value, [192, 168, 0, 0], 16)
-        || in_v4_network(value, [198, 18, 0, 0], 15)
-        || in_v4_network(value, [198, 51, 100, 0], 24)
-        || in_v4_network(value, [203, 0, 113, 0], 24)
-        || in_v4_network(value, [224, 0, 0, 0], 4)
-        || in_v4_network(value, [240, 0, 0, 0], 4)
-}
-
-fn in_v4_network(value: u32, network: [u8; 4], prefix: u32) -> bool {
-    let mask = u32::MAX.checked_shl(32 - prefix).unwrap_or(0);
-    value & mask == u32::from(Ipv4Addr::from(network)) & mask
-}
-
-fn is_non_public_v6(address: Ipv6Addr) -> bool {
-    let segments = address.segments();
-    address.is_unspecified()
-        || address.is_loopback()
-        || segments[..6] == [0, 0, 0, 0, 0, 0]
-        || segments[..6] == [0x0064, 0xff9b, 0, 0, 0, 0]
-        || (segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2] == 1)
-        || segments[0] & 0xfe00 == 0xfc00
-        || segments[0] & 0xffc0 == 0xfe80
-        || segments[0] & 0xffc0 == 0xfec0
-        || segments[0] & 0xff00 == 0xff00
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+fn csv_values(value: &str) -> impl Iterator<Item = &str> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 #[cfg(test)]

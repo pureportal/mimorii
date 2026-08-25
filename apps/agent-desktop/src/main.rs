@@ -2,10 +2,13 @@ mod api;
 mod checks;
 mod collector;
 mod config;
+mod config_command;
 mod containers;
 mod database;
 mod favicon;
 mod icmp;
+#[cfg(target_os = "linux")]
+mod linux;
 mod models;
 mod runtime;
 mod service;
@@ -24,7 +27,11 @@ use time::format_description::well_known::Rfc3339;
 
 use api::ApiClient;
 use config::AgentConfig;
+#[cfg(test)]
+use config_command::apply_config_options;
+use config_command::{ConfigOptions, configure};
 use runtime::{run_check_runner_loop, run_check_runner_once, run_loop, run_once};
+use target_policy::TargetPolicy;
 
 #[cfg(test)]
 use runtime::{CollectionWorker, check_runner_cycle, cycle, run_configured_cycle};
@@ -50,13 +57,9 @@ enum Command {
         #[arg(long)]
         allow_insecure_http: bool,
     },
-    Configure {
-        #[arg(long)]
-        server: String,
-        #[arg(long, env = "MIMORII_AGENT_KEY", hide_env_values = true)]
-        key: String,
-        #[arg(long)]
-        allow_insecure_http: bool,
+    Config {
+        #[command(flatten)]
+        options: ConfigOptions,
     },
     CheckRunner {
         #[arg(long, env = "MIMORII_AGENT_SERVER")]
@@ -137,11 +140,7 @@ fn main() -> Result<()> {
             key,
             allow_insecure_http,
         } => enroll(&server, &key, allow_insecure_http),
-        Command::Configure {
-            server,
-            key,
-            allow_insecure_http,
-        } => configure(&server, &key, allow_insecure_http),
+        Command::Config { options } => configure(options),
         Command::CheckRunner {
             server,
             key,
@@ -188,23 +187,22 @@ fn main() -> Result<()> {
 }
 
 fn enroll(server: &str, key: &str, allow_insecure_http: bool) -> Result<()> {
-    let config = AgentConfig::new(server, key, allow_insecure_http)?;
+    let mut config = AgentConfig::new(server, key, allow_insecure_http)?;
+    if let Ok(existing) = AgentConfig::load() {
+        config.target_policy = existing.target_policy;
+    }
     ApiClient::new(config.clone())?.verify()?;
     let path = save_config(&config)?;
     println!("enrolled with {}", config.server_url);
     println!("configuration: {}", path.display());
+    #[cfg(target_os = "linux")]
+    service::install(&std::env::current_exe()?).context(
+        "enrollment succeeded, but the Linux agent service could not be installed or started; fix the reported issue, then run `mimorii-agent-desktop service install`",
+    )?;
     Ok(())
 }
 
-fn configure(server: &str, key: &str, allow_insecure_http: bool) -> Result<()> {
-    let config = AgentConfig::new(server, key, allow_insecure_http)?;
-    let path = save_config(&config)?;
-    println!("configured with {}", config.server_url);
-    println!("configuration: {}", path.display());
-    Ok(())
-}
-
-fn save_config(config: &AgentConfig) -> Result<std::path::PathBuf> {
+pub(crate) fn save_config(config: &AgentConfig) -> Result<std::path::PathBuf> {
     #[cfg(windows)]
     return config.save().context(
         "could not update the machine configuration; run this command from an administrator terminal",
@@ -251,6 +249,7 @@ struct AgentControlStatus {
     service: &'static str,
     enrolled: bool,
     server_url: Option<String>,
+    target_policy: Option<TargetPolicy>,
     configuration_error: Option<String>,
 }
 
@@ -263,6 +262,7 @@ fn control_status() -> Result<AgentControlStatus> {
             service,
             enrolled: false,
             server_url: None,
+            target_policy: None,
             configuration_error: None,
         });
     }
@@ -271,12 +271,14 @@ fn control_status() -> Result<AgentControlStatus> {
             service,
             enrolled: true,
             server_url: Some(config.server_url),
+            target_policy: Some(config.target_policy),
             configuration_error: None,
         }),
         Err(error) => Ok(AgentControlStatus {
             service,
             enrolled: false,
             server_url: None,
+            target_policy: None,
             configuration_error: Some(format!("{error:#}")),
         }),
     }

@@ -59,9 +59,10 @@ See [Android applications](android-apps.md) for startup separation, native capab
 background scheduling, permissions, and platform limits.
 
 The Linux archive is a statically linked x64 agent build for Ubuntu and Debian. It contains one
-executable, `mimorii-agent-desktop`, with its executable mode preserved. Install its user service
-with `mimorii-agent-desktop service install`. The installer enables systemd lingering, starts the
-unit, and keeps only the agent's local collection directory writable inside the service sandbox.
+executable, `mimorii-agent-desktop`, with its executable mode preserved. Enrollment installs,
+enables, and starts its user service automatically. The service setup enables systemd lingering
+and keeps only the agent's local collection directory writable inside the service sandbox. Root
+enrollment uses root's configuration and systemd user service.
 
 The Windows MSI is a per-machine WiX installer. It installs the CLI and graphical controls in
 `Program Files`, adds the CLI directory to the machine `PATH`, and starts the `MimoriiAgent`

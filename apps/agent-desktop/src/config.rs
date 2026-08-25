@@ -6,7 +6,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::{Context, Result, bail};
 #[cfg(not(windows))]
 use directories::ProjectDirs;
-use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -38,16 +37,7 @@ impl AgentConfig {
         allowed_cidrs: &str,
     ) -> Result<Self> {
         let mut config = Self::new(server, key, allow_insecure_http)?;
-        config.target_policy.allowed_cidrs = allowed_cidrs
-            .split(',')
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(|value| {
-                value
-                    .parse::<IpNet>()
-                    .with_context(|| format!("allowed CIDR is invalid: {value}"))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        config.target_policy.set_allowed_cidrs(allowed_cidrs)?;
         Ok(config)
     }
 

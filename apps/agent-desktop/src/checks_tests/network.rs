@@ -13,7 +13,7 @@ use serde_json::json;
 
 use super::{assert_result, snapshot, task};
 use crate::models::{CheckState, CheckType};
-use crate::target_policy::TargetPolicy;
+use crate::target_policy::{TargetPolicy, TargetProtocol};
 use crate::test_support::tcp_listener;
 
 static DNS_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -235,7 +235,7 @@ fn result_helpers_preserve_fields_and_measure_elapsed_time() {
 #[test]
 fn icmp_wan_and_database_checks_enforce_the_agent_target_policy() {
     let policy = TargetPolicy {
-        allowed_protocols: Vec::new(),
+        allowed_protocols: vec![TargetProtocol::Http],
         ..TargetPolicy::default()
     };
     let definitions = [

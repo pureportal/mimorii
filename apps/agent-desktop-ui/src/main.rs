@@ -100,7 +100,107 @@ mod windows {
         service: String,
         enrolled: bool,
         server_url: Option<String>,
+        target_policy: Option<TargetPolicy>,
         configuration_error: Option<String>,
+    }
+
+    #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TargetPolicy {
+        allowed_cidrs: Vec<String>,
+        allowed_hostnames: Vec<String>,
+        allowed_protocols: Vec<String>,
+        allowed_ports: Vec<u16>,
+    }
+
+    #[derive(Clone, Debug, Default, Eq, PartialEq)]
+    struct TargetPolicyForm {
+        limit_ip_addresses: bool,
+        allowed_cidrs: String,
+        limit_hostnames: bool,
+        allowed_hostnames: String,
+        limit_protocols: bool,
+        http: bool,
+        https: bool,
+        tcp: bool,
+        icmp: bool,
+        limit_ports: bool,
+        allowed_ports: String,
+    }
+
+    impl TargetPolicyForm {
+        fn from_policy(policy: &TargetPolicy) -> Self {
+            let restricted_protocols = !policy.allowed_protocols.is_empty();
+            Self {
+                limit_ip_addresses: !policy.allowed_cidrs.is_empty(),
+                allowed_cidrs: join_values(&policy.allowed_cidrs),
+                limit_hostnames: !policy.allowed_hostnames.is_empty(),
+                allowed_hostnames: join_values(&policy.allowed_hostnames),
+                limit_protocols: restricted_protocols,
+                http: !restricted_protocols
+                    || policy.allowed_protocols.iter().any(|value| value == "http"),
+                https: !restricted_protocols
+                    || policy
+                        .allowed_protocols
+                        .iter()
+                        .any(|value| value == "https"),
+                tcp: !restricted_protocols
+                    || policy.allowed_protocols.iter().any(|value| value == "tcp"),
+                icmp: !restricted_protocols
+                    || policy.allowed_protocols.iter().any(|value| value == "icmp"),
+                limit_ports: !policy.allowed_ports.is_empty(),
+                allowed_ports: join_values(&policy.allowed_ports),
+            }
+        }
+
+        fn is_valid(&self) -> bool {
+            (!self.limit_ip_addresses || !self.allowed_cidrs.trim().is_empty())
+                && (!self.limit_hostnames || !self.allowed_hostnames.trim().is_empty())
+                && (!self.limit_protocols || self.http || self.https || self.tcp || self.icmp)
+                && (!self.limit_ports || !self.allowed_ports.trim().is_empty())
+        }
+
+        fn input(&self) -> TargetPolicyInput {
+            let allowed_protocols = if self.limit_protocols {
+                [
+                    (self.http, "http"),
+                    (self.https, "https"),
+                    (self.tcp, "tcp"),
+                    (self.icmp, "icmp"),
+                ]
+                .into_iter()
+                .filter_map(|(selected, protocol)| selected.then_some(protocol))
+                .collect::<Vec<_>>()
+                .join(",")
+            } else {
+                String::new()
+            };
+            TargetPolicyInput {
+                allowed_cidrs: if self.limit_ip_addresses {
+                    self.allowed_cidrs.trim().to_owned()
+                } else {
+                    String::new()
+                },
+                allowed_hostnames: if self.limit_hostnames {
+                    self.allowed_hostnames.trim().to_owned()
+                } else {
+                    String::new()
+                },
+                allowed_protocols,
+                allowed_ports: if self.limit_ports {
+                    self.allowed_ports.trim().to_owned()
+                } else {
+                    String::new()
+                },
+            }
+        }
+    }
+
+    struct TargetPolicyInput {
+        allowed_cidrs: String,
+        allowed_hostnames: String,
+        allowed_protocols: String,
+        allowed_ports: String,
     }
 
     #[derive(Clone, Debug, Deserialize)]
@@ -113,6 +213,7 @@ mod windows {
     enum AgentOperation {
         Refresh { check_for_update: bool },
         Activate { server_url: String, key: String },
+        Configure { input: TargetPolicyInput },
         Start,
         Stop,
         Diagnose,
@@ -124,6 +225,7 @@ mod windows {
             match self {
                 Self::Refresh { .. } => "Refreshing status…",
                 Self::Activate { .. } => "Activating agent…",
+                Self::Configure { .. } => "Saving network access…",
                 Self::Start => "Starting service…",
                 Self::Stop => "Stopping service…",
                 Self::Diagnose => "Running diagnostics…",
@@ -139,6 +241,7 @@ mod windows {
         clear_key: bool,
         update: Option<UpdateStatus>,
         update_checked: bool,
+        policy_saved: bool,
     }
 
     struct AgentApp {
@@ -147,6 +250,8 @@ mod windows {
         update: Option<UpdateStatus>,
         server_url: String,
         key: String,
+        target_policy: TargetPolicyForm,
+        policy_dirty: bool,
         result_message: Option<String>,
         result_error: Option<String>,
         operation: Option<Receiver<OperationResult>>,
@@ -166,6 +271,8 @@ mod windows {
                 update: None,
                 server_url: DEFAULT_SERVER_URL.to_owned(),
                 key: String::new(),
+                target_policy: TargetPolicyForm::default(),
+                policy_dirty: false,
                 result_message: None,
                 result_error: None,
                 operation: None,
@@ -216,6 +323,12 @@ mod windows {
                         self.server_url.clone_from(server_url);
                     }
                     self.received_initial_status = true;
+                }
+                if (!self.policy_dirty || result.policy_saved)
+                    && let Some(policy) = status.target_policy.as_ref()
+                {
+                    self.target_policy = TargetPolicyForm::from_policy(policy);
+                    self.policy_dirty = false;
                 }
                 self.status = Some(status);
             }
@@ -401,6 +514,86 @@ mod windows {
             });
         }
 
+        fn network_access(&mut self, ui: &mut egui::Ui) {
+            let palette = ThemePalette::for_ui(ui);
+            ui.label(
+                RichText::new("Network access")
+                    .strong()
+                    .size(16.0)
+                    .color(palette.text),
+            );
+            ui.add_space(12.0);
+            let previous = self.target_policy.clone();
+            ui.checkbox(
+                &mut self.target_policy.limit_ip_addresses,
+                "Limit IP addresses",
+            );
+            if self.target_policy.limit_ip_addresses {
+                policy_text_field(
+                    ui,
+                    "Allowed CIDRs",
+                    "192.168.1.0/24, 10.0.0.12/32",
+                    &mut self.target_policy.allowed_cidrs,
+                    palette,
+                );
+            }
+            ui.add_space(6.0);
+            ui.checkbox(&mut self.target_policy.limit_hostnames, "Limit hostnames");
+            if self.target_policy.limit_hostnames {
+                policy_text_field(
+                    ui,
+                    "Allowed hostnames",
+                    "*.internal.example, status.example.com",
+                    &mut self.target_policy.allowed_hostnames,
+                    palette,
+                );
+            }
+            ui.add_space(6.0);
+            ui.checkbox(&mut self.target_policy.limit_protocols, "Limit protocols");
+            if self.target_policy.limit_protocols {
+                ui.indent("allowed-protocols", |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.checkbox(&mut self.target_policy.http, "HTTP");
+                        ui.checkbox(&mut self.target_policy.https, "HTTPS");
+                        ui.checkbox(&mut self.target_policy.tcp, "TCP");
+                        ui.checkbox(&mut self.target_policy.icmp, "ICMP");
+                    });
+                });
+            }
+            ui.add_space(6.0);
+            ui.checkbox(&mut self.target_policy.limit_ports, "Limit ports");
+            if self.target_policy.limit_ports {
+                policy_text_field(
+                    ui,
+                    "Allowed ports",
+                    "80, 443, 5432",
+                    &mut self.target_policy.allowed_ports,
+                    palette,
+                );
+            }
+            if self.target_policy != previous {
+                self.policy_dirty = true;
+            }
+            ui.add_space(14.0);
+            let enabled =
+                self.operation.is_none() && self.policy_dirty && self.target_policy.is_valid();
+            if ui
+                .add_enabled(
+                    enabled,
+                    primary_button("Save network access", enabled, palette)
+                        .min_size(Vec2::new(ui.available_width(), 42.0)),
+                )
+                .clicked()
+            {
+                self.begin(
+                    AgentOperation::Configure {
+                        input: self.target_policy.input(),
+                    },
+                    ui.ctx(),
+                );
+            }
+        }
+
         fn software_update(&mut self, ui: &mut egui::Ui) {
             let palette = ThemePalette::for_ui(ui);
             let Some(update) = self
@@ -530,6 +723,13 @@ mod windows {
                                 ui.set_min_width(ui.available_width());
                                 self.enrollment(ui);
                             });
+                            if self.status.as_ref().is_some_and(|status| status.enrolled) {
+                                ui.add_space(14.0);
+                                panel_frame(palette).show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    self.network_access(ui);
+                                });
+                            }
                             ui.add_space(14.0);
                             panel_frame(palette).show(ui, |ui| {
                                 ui.set_min_width(ui.available_width());
@@ -582,6 +782,33 @@ mod windows {
                 .fill(palette.surface_muted)
                 .stroke(Stroke::new(1.0, palette.line))
         }
+    }
+
+    fn policy_text_field(
+        ui: &mut egui::Ui,
+        label: &str,
+        hint: &str,
+        value: &mut String,
+        palette: ThemePalette,
+    ) {
+        ui.indent(label, |ui| {
+            ui.label(RichText::new(label).strong().size(13.0).color(palette.text));
+            ui.add(
+                TextEdit::singleline(value)
+                    .hint_text(hint)
+                    .margin(egui::Margin::symmetric(12, 9))
+                    .background_color(palette.input_background)
+                    .desired_width(f32::INFINITY),
+            );
+        });
+    }
+
+    fn join_values<T: ToString>(values: &[T]) -> String {
+        values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn configure_style(context: &egui::Context) {
@@ -649,6 +876,7 @@ mod windows {
                 check_for_update: true
             }
         );
+        let configuring_policy = matches!(&operation, AgentOperation::Configure { .. });
         let outcome = match operation {
             AgentOperation::Refresh { check_for_update } => {
                 read_status(executable).and_then(|status| {
@@ -670,6 +898,22 @@ mod windows {
                         read_status(executable)
                     })
                     .map(|status| (status, Some("Agent activated".to_owned()), None))
+            }
+            AgentOperation::Configure { input } => {
+                let arguments = vec![
+                    "config".to_owned(),
+                    "--allowed-cidrs".to_owned(),
+                    input.allowed_cidrs,
+                    "--allowed-hostnames".to_owned(),
+                    input.allowed_hostnames,
+                    "--allowed-protocols".to_owned(),
+                    input.allowed_protocols,
+                    "--allowed-ports".to_owned(),
+                    input.allowed_ports,
+                ];
+                run_agent(executable, arguments, None)
+                    .and_then(|_| read_status(executable))
+                    .map(|status| (status, Some("Network access saved".to_owned()), None))
             }
             AgentOperation::Start => {
                 run_agent(executable, ["windows-service-control", "start"], None)
@@ -697,6 +941,7 @@ mod windows {
                 clear_key,
                 update,
                 update_checked,
+                policy_saved: configuring_policy,
             },
             Err(error) => OperationResult {
                 status: read_status(executable).ok(),
@@ -705,6 +950,7 @@ mod windows {
                 clear_key: false,
                 update: None,
                 update_checked,
+                policy_saved: false,
             },
         }
     }
@@ -733,11 +979,15 @@ mod windows {
             .map_err(|_| "Agent returned invalid update status".to_owned())
     }
 
-    fn run_agent<const N: usize>(
+    fn run_agent<I, S>(
         executable: &PathBuf,
-        arguments: [&str; N],
+        arguments: I,
         key: Option<&str>,
-    ) -> Result<String, String> {
+    ) -> Result<String, String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
         if !executable.is_file() {
             return Err(format!("Agent CLI is missing at {}", executable.display()));
         }
@@ -791,6 +1041,47 @@ mod windows {
         #[test]
         fn server_url_uses_the_mimorii_api_by_default() {
             assert_eq!(DEFAULT_SERVER_URL, "https://mimorii.app/api");
+        }
+
+        #[test]
+        fn unrestricted_policy_form_saves_empty_restrictions() {
+            let form = TargetPolicyForm::from_policy(&TargetPolicy::default());
+            assert!(!form.limit_ip_addresses);
+            assert!(!form.limit_hostnames);
+            assert!(!form.limit_protocols);
+            assert!(!form.limit_ports);
+            assert!(form.is_valid());
+
+            let input = form.input();
+            assert!(input.allowed_cidrs.is_empty());
+            assert!(input.allowed_hostnames.is_empty());
+            assert!(input.allowed_protocols.is_empty());
+            assert!(input.allowed_ports.is_empty());
+        }
+
+        #[test]
+        fn restricted_policy_form_preserves_configured_values() {
+            let policy = TargetPolicy {
+                allowed_cidrs: vec!["10.0.0.0/8".to_owned()],
+                allowed_hostnames: vec!["*.internal.example".to_owned()],
+                allowed_protocols: vec!["https".to_owned(), "tcp".to_owned()],
+                allowed_ports: vec![443, 5432],
+            };
+            let form = TargetPolicyForm::from_policy(&policy);
+            assert!(form.limit_ip_addresses);
+            assert!(form.limit_hostnames);
+            assert!(form.limit_protocols);
+            assert!(!form.http);
+            assert!(form.https);
+            assert!(form.tcp);
+            assert!(!form.icmp);
+            assert!(form.limit_ports);
+
+            let input = form.input();
+            assert_eq!(input.allowed_cidrs, "10.0.0.0/8");
+            assert_eq!(input.allowed_hostnames, "*.internal.example");
+            assert_eq!(input.allowed_protocols, "https,tcp");
+            assert_eq!(input.allowed_ports, "443, 5432");
         }
 
         #[test]

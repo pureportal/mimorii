@@ -14,11 +14,10 @@ use super::github::DownloadedPackage;
 const BINARY_NAME: &str = "mimorii-agent-desktop";
 const MAX_BINARY_BYTES: u64 = 128 * 1024 * 1024;
 
-pub fn validate_invocation(privileged: bool) -> Result<()> {
-    if !privileged && std::env::var_os("SUDO_USER").is_some() {
-        bail!("Run the update without sudo; Mimorii requests elevation only when it is needed");
+pub fn warn_if_elevated(privileged: bool) {
+    if !privileged && crate::linux::running_as_root() {
+        eprintln!("Warning: Running the update as root");
     }
-    Ok(())
 }
 
 pub fn delegate_if_needed(json: bool, privileged: bool) -> Result<bool> {

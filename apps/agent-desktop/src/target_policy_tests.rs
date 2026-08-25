@@ -21,7 +21,7 @@ fn authorize(
 }
 
 #[test]
-fn default_policy_rejects_non_public_and_metadata_addresses() {
+fn default_policy_allows_all_ip_addresses() {
     let policy = TargetPolicy::default();
     for value in [
         "0.0.0.0",
@@ -47,14 +47,14 @@ fn default_policy_rejects_non_public_and_metadata_addresses() {
                 443,
                 vec![address(value)]
             )
-            .is_err(),
-            "{value} should be rejected"
+            .is_ok(),
+            "{value} should be allowed"
         );
     }
 }
 
 #[test]
-fn explicit_cidr_exemptions_allow_private_targets() {
+fn explicit_cidrs_restrict_targets() {
     let policy = TargetPolicy {
         allowed_cidrs: vec![IpNet::from_str("10.20.0.0/16").unwrap()],
         ..TargetPolicy::default()
@@ -76,6 +76,16 @@ fn explicit_cidr_exemptions_allow_private_targets() {
             "database.internal",
             5432,
             vec![address("10.21.4.8")]
+        )
+        .is_err()
+    );
+    assert!(
+        authorize(
+            &policy,
+            TargetProtocol::Https,
+            "public.example.com",
+            443,
+            vec![address("93.184.216.34")]
         )
         .is_err()
     );
@@ -111,7 +121,51 @@ fn policy_restricts_hostnames_protocols_and_ports() {
 }
 
 #[test]
-fn mixed_dns_answers_are_rejected_as_a_set() {
+fn empty_optional_restrictions_allow_every_target_dimension() {
+    let policy = TargetPolicy::default();
+    assert!(policy.allowed_cidrs.is_empty());
+    assert!(policy.allowed_hostnames.is_empty());
+    assert!(policy.allowed_protocols.is_empty());
+    assert!(policy.allowed_ports.is_empty());
+    assert!(
+        authorize(
+            &policy,
+            TargetProtocol::Tcp,
+            "database.internal",
+            5432,
+            vec![address("192.168.1.20")]
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn text_settings_parse_and_validate_restrictions() {
+    let mut policy = TargetPolicy::default();
+    policy
+        .set_allowed_cidrs("10.0.0.0/8, 2001:db8::/32")
+        .unwrap();
+    policy
+        .set_allowed_hostnames("*.internal.example, status.example.com")
+        .unwrap();
+    policy.set_allowed_protocols("https, tcp").unwrap();
+    policy.set_allowed_ports("443, 5432").unwrap();
+
+    assert_eq!(policy.allowed_cidrs.len(), 2);
+    assert_eq!(policy.allowed_hostnames.len(), 2);
+    assert_eq!(
+        policy.allowed_protocols,
+        vec![TargetProtocol::Https, TargetProtocol::Tcp]
+    );
+    assert_eq!(policy.allowed_ports, vec![443, 5432]);
+    assert!(policy.set_allowed_cidrs("private").is_err());
+    assert!(policy.set_allowed_hostnames("status.*.test").is_err());
+    assert!(policy.set_allowed_protocols("udp").is_err());
+    assert!(policy.set_allowed_ports("0").is_err());
+}
+
+#[test]
+fn mixed_dns_answers_are_allowed_by_the_default_policy() {
     let policy = TargetPolicy::default();
     assert!(
         authorize(
@@ -121,7 +175,7 @@ fn mixed_dns_answers_are_rejected_as_a_set() {
             443,
             vec![address("93.184.216.34"), address("127.0.0.1")]
         )
-        .is_err()
+        .is_ok()
     );
 }
 

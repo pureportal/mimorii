@@ -41,8 +41,8 @@ impl LinuxServicePaths {
 pub fn install(executable: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    if std::env::var_os("SUDO_USER").is_some_and(|user| !user.is_empty()) {
-        bail!("Run service install without sudo so it uses the enrolled user's configuration");
+    if let Some(warning) = service_installation_warning(crate::linux::running_as_root()) {
+        eprintln!("{warning}");
     }
 
     let paths = LinuxServicePaths::discover()?;
@@ -66,6 +66,18 @@ pub fn install(executable: &Path) -> Result<()> {
     println!("installed {}", unit.display());
     println!("service: running");
     Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn service_installation_warning(running_as_root: bool) -> Option<&'static str> {
+    running_as_root.then_some(
+        "Warning: Installing the service as root; it will use root's enrolled configuration",
+    )
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn linger_requires_sudo(user_id: &str) -> bool {
+    user_id != "0"
 }
 
 #[cfg(target_os = "linux")]
@@ -188,10 +200,10 @@ fn ensure_linger_enabled() -> Result<()> {
     if linger_enabled(user_id)? {
         return Ok(());
     }
-    if user_id == "0" {
-        command("loginctl", &["enable-linger", user_id])?;
-    } else {
+    if linger_requires_sudo(user_id) {
         command("sudo", &["--", "loginctl", "enable-linger", user_id])?;
+    } else {
+        command("loginctl", &["enable-linger", user_id])?;
     }
     if !linger_enabled(user_id)? {
         bail!("systemd user lingering was not enabled for user ID {user_id}");

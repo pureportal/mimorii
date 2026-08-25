@@ -37,7 +37,7 @@ enum InstallOutcome {
 
 pub fn run(check_only: bool, json: bool, _privileged: bool) -> Result<()> {
     #[cfg(target_os = "linux")]
-    linux::validate_invocation(_privileged)?;
+    linux::warn_if_elevated(_privileged);
     let current = Version::parse(env!("CARGO_PKG_VERSION"))?;
     let client = GitHubReleaseClient::new()?;
     let release = client.latest()?;
