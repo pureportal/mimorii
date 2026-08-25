@@ -1492,7 +1492,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expect(body.items[0]).not.toHaveProperty("resourceId");
         expect(body.items[0].id).not.toBe(publicItems[0]!.id);
         expect(body.items[1].dailyUptime).toHaveLength(7);
-        expect(body.items[2]).toMatchObject({ type: "status", status: "up" });
+        expect(body.items[2]).toMatchObject({ type: "status", status: "okay" });
       });
 
     const privateSlug = `dashboard-private-${Date.now()}`;
