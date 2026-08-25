@@ -48,7 +48,6 @@ const healthCheck: CheckSummary = {
     loadCritical: 8,
     swapWarningPercent: 80,
     swapCriticalPercent: 95,
-    storage: [{ mount: "/", warningPercent: 85, criticalPercent: 95 }],
   },
   execution: { kind: "agent", agentId: "agent-1" },
   lastLatencyMs: null,
@@ -81,33 +80,52 @@ describe("ChecksPage actions", () => {
 
   afterEach(cleanup);
 
-  it("uses direct icons for running, editing, pausing, enabling, and deleting checks", async () => {
+  it("groups check actions in an accessible menu", async () => {
     renderPage();
 
-    const run = await screen.findByRole("button", { name: "Run Availability now" });
-    const edit = screen.getByRole("button", { name: "Edit Availability" });
-    const pause = screen.getByRole("button", { name: "Pause Availability" });
-    const enable = screen.getByRole("button", { name: "Enable Certificate" });
-    const remove = screen.getByRole("button", { name: "Delete Availability" });
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "Actions for Availability" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    const menu = await screen.findByRole("menu");
+    const run = within(menu).getByRole("menuitem", { name: "Run now" });
+    const edit = within(menu).getByRole("menuitem", { name: "Edit" });
+    const pause = within(menu).getByRole("menuitem", { name: "Pause" });
+    const remove = within(menu).getByRole("menuitem", { name: "Delete" });
 
     expect(run.querySelector(".lucide-refresh-cw")).toBeInTheDocument();
     expect(edit.querySelector(".lucide-pencil")).toBeInTheDocument();
     expect(pause.querySelector(".lucide-pause")).toBeInTheDocument();
-    expect(enable.querySelector(".lucide-play")).toBeInTheDocument();
     expect(remove.querySelector(".lucide-trash-2")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Actions for Certificate" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    const enable = await screen.findByRole("menuitem", { name: "Enable" });
+    expect(enable.querySelector(".lucide-play")).toBeInTheDocument();
   });
 
   it("keeps the run and pause actions connected to their existing endpoints", async () => {
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Run Availability now" }));
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "Actions for Availability" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Run now" }));
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith("/teams/team-1/checks/check-enabled/run", {
         method: "POST",
       })
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Pause Availability" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Actions for Availability" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Pause" }));
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith("/teams/team-1/checks/check-enabled", {
         method: "PATCH",
@@ -119,8 +137,8 @@ describe("ChecksPage actions", () => {
   it("shows useful health data for HTTP and multi-metric host checks", async () => {
     renderPage();
 
-    const availabilityRow = (await screen.findByText("Availability")).closest("tr");
-    const healthRow = screen.getByText("Health", { selector: "p" }).closest("tr");
+    const availabilityRow = (await screen.findByText("Availability")).closest("article");
+    const healthRow = screen.getByText("Health", { selector: "p" }).closest("article");
 
     expect(availabilityRow).not.toBeNull();
     expect(healthRow).not.toBeNull();
@@ -139,7 +157,11 @@ describe("ChecksPage actions", () => {
   it("opens check details with CPU and memory history", async () => {
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Show details for Health" }));
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "Actions for Health" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View details" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByRole("heading", { name: "History" })).toBeInTheDocument();

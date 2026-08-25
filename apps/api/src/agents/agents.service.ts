@@ -16,6 +16,7 @@ import {
   type AgentCapability,
   type AgentKind,
   type DesktopAgentPlatform,
+  type DiskCheckConfig,
   type HostCheckConfig,
   type HostSnapshot,
   type MobileDeviceStatus,
@@ -105,6 +106,7 @@ export class AgentsService {
     }
     const id = randomUUID();
     const hostCheckId = input.kind === "desktop" ? randomUUID() : null;
+    const diskCheckId = input.kind === "desktop" ? randomUUID() : null;
     const enrollmentKey = createSecret("mim_agent");
     const now = new Date().toISOString();
     const collectionIntervalSeconds = this.collectionInterval(
@@ -140,7 +142,7 @@ export class AgentsService {
         now,
         now
       );
-      if (hostCheckId && input.platform) {
+      if (hostCheckId && diskCheckId && input.platform) {
         await this.database.run(
           `INSERT INTO checks
            (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
@@ -152,6 +154,26 @@ export class AgentsService {
           id,
           "Host health",
           JSON.stringify(this.defaultHostCheckConfig(input.platform)),
+          id,
+          60,
+          5_000,
+          2,
+          1,
+          now,
+          now,
+          now
+        );
+        await this.database.run(
+          `INSERT INTO checks
+           (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
+            interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
+            current_status, next_check_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'disk', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
+          diskCheckId,
+          teamId,
+          id,
+          "Disk usage",
+          JSON.stringify(this.defaultDiskCheckConfig(input.platform)),
           id,
           60,
           5_000,
@@ -261,7 +283,7 @@ export class AgentsService {
       throw new BadRequestException("Mobile agents do not submit host snapshots");
     }
     const capabilities = JSON.parse(agent.capabilities_json) as AgentCapability[];
-    if (!capabilities.includes("host") && !capabilities.includes("docker")) return [];
+    if (!capabilities.includes("host")) return [];
     const rows = await this.database.all<{ snapshot_json: string }>(
       `SELECT snapshot_json FROM host_snapshots WHERE agent_id = ?
        ORDER BY observed_at DESC LIMIT ?`,
@@ -337,7 +359,7 @@ export class AgentsService {
     const telemetry = await this.database.get<{ enabled: boolean }>(
       `SELECT EXISTS(
          SELECT 1 FROM checks
-         WHERE agent_id = ? AND enabled = 1 AND type IN ('host', 'docker')
+         WHERE agent_id = ? AND enabled = 1 AND type = 'host'
        ) AS enabled`,
       agent.id
     );
@@ -364,7 +386,7 @@ export class AgentsService {
       throw new BadRequestException("Desktop agent capabilities are invalid");
     }
     const reportsHostTelemetry = input.snapshots.length > 0;
-    const supportsHostTelemetry = capabilities.includes("host") || capabilities.includes("docker");
+    const supportsHostTelemetry = capabilities.includes("host");
     if (reportsHostTelemetry && !supportsHostTelemetry) {
       throw new BadRequestException("Agent telemetry does not match its capabilities");
     }
@@ -633,13 +655,14 @@ export class AgentsService {
       ...(platform === "linux" ? { loadWarning: 4, loadCritical: 8 } : {}),
       swapWarningPercent: 90,
       swapCriticalPercent: 98,
-      storage: [
-        {
-          mount: platform === "windows" ? "C:" : "/",
-          warningPercent: 85,
-          criticalPercent: 95,
-        },
-      ],
+    };
+  }
+
+  private defaultDiskCheckConfig(platform: DesktopAgentPlatform): DiskCheckConfig {
+    return {
+      mount: platform === "windows" ? "C:" : "/",
+      warningPercent: 85,
+      criticalPercent: 95,
     };
   }
 }

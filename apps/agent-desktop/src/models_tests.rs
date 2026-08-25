@@ -47,6 +47,7 @@ fn deserializes_every_supported_task_type() {
         ("icmp", CheckType::Icmp),
         ("wan", CheckType::Wan),
         ("host", CheckType::Host),
+        ("disk", CheckType::Disk),
         ("docker", CheckType::Docker),
         ("database", CheckType::Database),
     ] {

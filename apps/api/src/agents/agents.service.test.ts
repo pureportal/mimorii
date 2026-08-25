@@ -18,7 +18,7 @@ const agent: AuthenticatedAgent = {
   resourceId: "agent-1",
   resourceName: "Relay",
   kind: "desktop",
-  capabilities: ["http", "tcp", "dns", "host"],
+  capabilities: ["http", "tcp", "dns", "host", "disk"],
   collectionIntervalSeconds: 45,
 };
 
@@ -66,58 +66,66 @@ describe("AgentsService", () => {
   it.each([
     ["linux", "/", true],
     ["windows", "C:", false],
-  ] as const)("creates a default %s Host health check", async (platform, mount, monitorsLoad) => {
-    const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
-    const service = new AgentsService(
-      {
-        run,
-        get: vi.fn(async () => ({
-          id: "agent-1",
-          team_id: "team-1",
-          resource_id: "agent-1",
-          resource_name: "Server",
-          kind: "desktop",
-          collection_interval_seconds: 30,
-          platform,
-          version: null,
-          capabilities_json: JSON.stringify([
-            "http",
-            "tcp",
-            "dns",
-            "icmp",
-            "wan",
-            "host",
-            "docker",
-            "database",
-          ]),
-          last_seen_at: null,
-          revoked_at: null,
-          created_at: new Date().toISOString(),
-        })),
-        transaction: async <T>(action: () => Promise<T>) => action(),
-      } as unknown as DatabaseService,
-      { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
-      { record: vi.fn(async () => undefined) } as unknown as AuditService,
-      {} as ResultsService,
-      {} as TechnologiesService,
-      mobileDeviceStatuses,
-      telemetry,
-      alerts,
-      images
-    );
+  ] as const)(
+    "creates default %s Host health and Disk usage checks",
+    async (platform, mount, monitorsLoad) => {
+      const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
+      const service = new AgentsService(
+        {
+          run,
+          get: vi.fn(async () => ({
+            id: "agent-1",
+            team_id: "team-1",
+            resource_id: "agent-1",
+            resource_name: "Server",
+            kind: "desktop",
+            collection_interval_seconds: 30,
+            platform,
+            version: null,
+            capabilities_json: JSON.stringify([
+              "http",
+              "tcp",
+              "dns",
+              "icmp",
+              "wan",
+              "host",
+              "disk",
+              "docker",
+              "database",
+            ]),
+            last_seen_at: null,
+            revoked_at: null,
+            created_at: new Date().toISOString(),
+          })),
+          transaction: async <T>(action: () => Promise<T>) => action(),
+        } as unknown as DatabaseService,
+        { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+        { record: vi.fn(async () => undefined) } as unknown as AuditService,
+        {} as ResultsService,
+        {} as TechnologiesService,
+        mobileDeviceStatuses,
+        telemetry,
+        alerts,
+        images
+      );
 
-    await service.create("user-1", "team-1", {
-      name: "Server",
-      kind: "desktop",
-      platform,
-    });
+      await service.create("user-1", "team-1", {
+        name: "Server",
+        kind: "desktop",
+        platform,
+      });
 
-    const checkInsert = run.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO checks"));
-    expect(checkInsert).toBeDefined();
-    const config = JSON.parse(String(checkInsert![5]));
-    expect(config.storage).toEqual([{ mount, warningPercent: 85, criticalPercent: 95 }]);
-    expect(Object.hasOwn(config, "loadWarning")).toBe(monitorsLoad);
-  });
+      const checkInserts = run.mock.calls.filter(([sql]) =>
+        String(sql).includes("INSERT INTO checks")
+      );
+      expect(checkInserts).toHaveLength(2);
+      const hostConfig = JSON.parse(String(checkInserts[0]![5]));
+      const diskConfig = JSON.parse(String(checkInserts[1]![5]));
+      expect(Object.hasOwn(hostConfig, "loadWarning")).toBe(monitorsLoad);
+      expect(hostConfig).not.toHaveProperty("storage");
+      expect(diskConfig).toEqual({ mount, warningPercent: 85, criticalPercent: 95 });
+    }
+  );
 
   it("does not create a Host health check for a mobile agent", async () => {
     const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));

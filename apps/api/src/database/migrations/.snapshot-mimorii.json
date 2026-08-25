@@ -1065,7 +1065,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["http", "tcp", "dns", "icmp", "wan", "host", "docker", "database"],
+          "enumItems": ["http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database"],
           "mappedType": "enum"
         },
         "config_json": {

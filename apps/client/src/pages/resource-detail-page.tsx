@@ -4,13 +4,10 @@ import type {
   CheckResult,
   CheckSummary,
   HeartbeatMonitorSummary,
-  HostSnapshot,
   ResourceAlertMetric,
   ResourceAlertOperator,
   ResourceAlertRuleSummary,
-  ResourceMetricSeries,
   ResourceSummary,
-  TechnologyObservation,
 } from "@mimorii/contracts";
 import { resourceAlertOperators } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,17 +16,14 @@ import {
   ArrowLeft,
   Battery,
   Bell,
-  Cpu,
   Database,
   Eye,
-  Gauge,
   ImageIcon,
   MemoryStick,
   Network,
   Pencil,
   Radio,
   Trash2,
-  Container,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -54,7 +48,7 @@ import {
   createCheckHistorySeries as createTypedCheckHistorySeries,
   formatCheckMetric as formatTypedCheckMetric,
 } from "../lib/check-health";
-import { formatBytes, formatCount, formatPercent, formatRelative } from "../lib/format";
+import { formatPercent, formatRelative } from "../lib/format";
 import {
   CartesianGrid,
   Line,
@@ -105,37 +99,12 @@ export function ResourceDetailPage() {
     enabled: Boolean(activeCheckId),
     refetchInterval: 30_000,
   });
-  const snapshots = useQuery({
-    queryKey: ["snapshots", teamId, resource.data?.agent?.id],
-    queryFn: () =>
-      api<HostSnapshot[]>(
-        `/teams/${teamId}/agents/${resource.data!.agent!.id}/snapshots?limit=200`
-      ),
-    enabled: resource.data?.agent?.kind === "desktop",
-    refetchInterval: 30_000,
-  });
-  const metrics = useQuery({
-    queryKey: ["resource-metrics", teamId, id],
-    queryFn: () => {
-      const from = new Date(Date.now() - 7 * 86_400_000).toISOString();
-      return api<ResourceMetricSeries[]>(
-        `/teams/${teamId}/resources/${id}/metrics?from=${encodeURIComponent(from)}`
-      );
-    },
-    refetchInterval: 30_000,
-  });
   const alerts = useQuery({
     queryKey: ["resource-alerts", teamId, id],
     queryFn: () => api<ResourceAlertRuleSummary[]>(`/teams/${teamId}/resources/${id}/alerts`),
     enabled: Boolean(resource.data?.agent),
     refetchInterval: 30_000,
   });
-  const technologies = useQuery({
-    queryKey: ["technologies", teamId, id],
-    queryFn: () => api<TechnologyObservation[]>(`/teams/${teamId}/resources/${id}/technologies`),
-    refetchInterval: 60_000,
-  });
-
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["resource", teamId, id] }),
@@ -158,12 +127,6 @@ export function ResourceDetailPage() {
         }}
       />
     );
-  const currentSnapshot = snapshots.data?.[0];
-  const primaryStorage = currentSnapshot?.disks
-    .filter((disk) => disk.totalBytes > 0 && disk.usedBytes <= disk.totalBytes)
-    .toSorted(
-      (left, right) => right.usedBytes / right.totalBytes - left.usedBytes / left.totalBytes
-    )[0];
   const currentAgent = agents.data?.find((agent) => agent.id === resource.data.agent?.id);
   const deviceStatus = currentAgent?.deviceStatus;
   const chartData = (history.data ?? []).toReversed();
@@ -180,7 +143,6 @@ export function ResourceDetailPage() {
       ])
     ),
   }));
-  const checkMetricSeries = createCheckMetricSeries(chartData);
 
   async function removeResource() {
     setDeleting(true);
@@ -259,43 +221,6 @@ export function ResourceDetailPage() {
         </div>
       </div>
 
-      {currentSnapshot ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <HostMetric icon={Cpu} label="CPU" value={`${currentSnapshot.cpuPercent.toFixed(1)}%`} />
-          <HostMetric
-            icon={MemoryStick}
-            label="Memory"
-            value={`${percentage(currentSnapshot.memoryUsedBytes, currentSnapshot.memoryTotalBytes)}%`}
-            detail={`${formatBytes(currentSnapshot.memoryUsedBytes)} / ${formatBytes(currentSnapshot.memoryTotalBytes)}`}
-          />
-          <HostMetric icon={Activity} label="Load" value={currentSnapshot.loadAverage.toFixed(2)} />
-          <HostMetric
-            icon={Database}
-            label="Disk"
-            value={
-              primaryStorage
-                ? `${((primaryStorage.usedBytes / primaryStorage.totalBytes) * 100).toFixed(1)}%`
-                : "—"
-            }
-            detail={primaryStorage?.mount}
-          />
-          <HostMetric
-            icon={Gauge}
-            label="Swap"
-            value={`${percentage(currentSnapshot.swapUsedBytes, currentSnapshot.swapTotalBytes)}%`}
-            detail={`${formatBytes(currentSnapshot.swapUsedBytes)} / ${formatBytes(currentSnapshot.swapTotalBytes)}`}
-          />
-          <HostMetric
-            icon={Network}
-            label="Network"
-            value={formatBytes(
-              currentSnapshot.networkReceivedBytes + currentSnapshot.networkTransmittedBytes
-            )}
-            detail={formatCount(currentSnapshot.processCount, "process", "processes")}
-          />
-        </section>
-      ) : null}
-
       {deviceStatus ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <HostMetric
@@ -322,16 +247,6 @@ export function ResourceDetailPage() {
             label="Internet"
             value={deviceStatus.connectivity.internetValidated ? "Available" : "Unavailable"}
           />
-        </section>
-      ) : null}
-
-      {metrics.data?.some((series) => series.points.length) ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {metrics.data
-            .filter((series) => series.points.length)
-            .map((series) => (
-              <MetricHistory key={series.metric} series={series} />
-            ))}
         </section>
       ) : null}
 
@@ -579,147 +494,6 @@ export function ResourceDetailPage() {
         </div>
       </section>
 
-      {checkMetricSeries.length ? (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {checkMetricSeries.map((series) => (
-            <CheckMetricHistory key={series.metric} series={series} />
-          ))}
-        </section>
-      ) : null}
-
-      {currentSnapshot?.disks.length ? (
-        <Card>
-          <CardHeader>
-            <h3 className="font-display font-bold">Volumes</h3>
-            <span className="text-xs text-muted">{formatRelative(currentSnapshot.observedAt)}</span>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {currentSnapshot.disks.map((disk) => {
-              const percent =
-                disk.totalBytes > 0 && disk.usedBytes <= disk.totalBytes
-                  ? (disk.usedBytes / disk.totalBytes) * 100
-                  : null;
-              return (
-                <div key={disk.mount} className="rounded-xl border border-line p-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-semibold">{disk.mount}</span>
-                    <span className="text-muted">
-                      {percent === null ? "—" : `${percent.toFixed(1)}%`}
-                    </span>
-                  </div>
-                  {percent === null ? null : (
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink/6">
-                      <div
-                        className={`h-full rounded-full ${percent >= 90 ? "bg-danger" : percent >= 80 ? "bg-warning" : "bg-success"}`}
-                        style={{ width: `${Math.min(percent, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                  <p className="mt-2 text-xs text-muted">
-                    {formatBytes(disk.usedBytes)} / {formatBytes(disk.totalBytes)}
-                  </p>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {currentSnapshot?.containerRuntime?.containers.length ? (
-        <Card>
-          <CardHeader>
-            <h3 className="font-display font-bold">Containers</h3>
-            <span className="text-xs text-muted">
-              Docker {currentSnapshot.containerRuntime.engineVersion}
-            </span>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {currentSnapshot.containerRuntime.containers.map((container) => (
-              <div key={container.id} className="rounded-xl border border-line p-4">
-                <div className="flex items-center gap-3">
-                  <Container className="size-4 text-violet-strong" />
-                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">{container.name}</p>
-                  <StatusBadge
-                    status={
-                      container.state === "running" && container.health !== "unhealthy"
-                        ? "up"
-                        : "down"
-                    }
-                  />
-                </div>
-                <p className="mt-2 truncate text-xs text-muted">{container.image}</p>
-                {container.composeProject || container.composeService ? (
-                  <p className="mt-1 truncate text-xs text-muted">
-                    {[container.composeProject, container.composeService]
-                      .filter(Boolean)
-                      .join(" / ")}
-                  </p>
-                ) : null}
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <ContainerMetric label="CPU" value={container.cpuPercent.toFixed(1) + "%"} />
-                  <ContainerMetric
-                    label="Memory"
-                    value={
-                      container.memoryLimitBytes
-                        ? percentage(container.memoryUsedBytes, container.memoryLimitBytes) + "%"
-                        : formatBytes(container.memoryUsedBytes)
-                    }
-                  />
-                  <ContainerMetric
-                    label="Network"
-                    value={[
-                      formatBytes(container.networkReceivedBytes),
-                      formatBytes(container.networkTransmittedBytes),
-                    ].join(" / ")}
-                  />
-                  <ContainerMetric
-                    label="Disk I/O"
-                    value={[
-                      formatBytes(container.blockReadBytes),
-                      formatBytes(container.blockWrittenBytes),
-                    ].join(" / ")}
-                  />
-                  <ContainerMetric
-                    label="Restarts"
-                    value={container.restartCount.toLocaleString()}
-                  />
-                  <ContainerMetric label="Health" value={container.health} />
-                </dl>
-                {container.ports.length ? (
-                  <p className="mt-3 break-words font-mono text-[11px] text-muted">
-                    {container.ports.join(", ")}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {technologies.data?.length ? (
-        <Card>
-          <CardHeader>
-            <h3 className="font-display font-bold">Technology stack</h3>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {technologies.data.map((technology) => (
-              <div
-                key={technology.id}
-                className="flex items-center justify-between rounded-xl border border-line p-4"
-              >
-                <div>
-                  <p className="text-sm font-semibold">{technology.name}</p>
-                  <p className="mt-1 text-xs capitalize text-muted">{technology.category}</p>
-                </div>
-                {technology.version ? (
-                  <span className="font-mono text-xs text-muted">{technology.version}</span>
-                ) : null}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
       <EditResourceDialog
         open={editOpen}
         onOpenChange={setEditOpen}
@@ -778,12 +552,10 @@ function HostMetric({
   icon: Icon,
   label,
   value,
-  detail,
 }: {
-  icon: typeof Cpu;
+  icon: typeof Battery;
   label: string;
   value: string;
-  detail?: string;
 }) {
   return (
     <Card className="p-5">
@@ -794,145 +566,7 @@ function HostMetric({
         {label}
       </div>
       <p className="mt-4 font-display text-2xl font-black">{value}</p>
-      {detail ? <p className="mt-1 truncate text-xs text-muted">{detail}</p> : null}
     </Card>
-  );
-}
-
-function MetricHistory({ series }: { series: ResourceMetricSeries }) {
-  return (
-    <Card className="h-64 p-5">
-      <h3 className="font-display font-bold">{metricLabel(series.metric)}</h3>
-      <ResponsiveContainer width="100%" height="85%">
-        <LineChart data={series.points} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
-          <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
-          <XAxis
-            dataKey="observedAt"
-            tickFormatter={(value) => new Date(value).toLocaleDateString()}
-            tick={{ fill: chartColors.muted, fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            minTickGap={35}
-          />
-          <YAxis
-            tick={{ fill: chartColors.muted, fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            labelFormatter={(value) =>
-              typeof value === "string" || typeof value === "number"
-                ? new Date(value).toLocaleString()
-                : ""
-            }
-            contentStyle={chartTooltipStyle}
-          />
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={chartColors.lavender}
-            strokeWidth={2.5}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </Card>
-  );
-}
-
-interface CheckMetricSeries {
-  metric: string;
-  points: Array<{
-    observedAt: string;
-    value: number | string | boolean | null;
-  }>;
-}
-
-export function createCheckMetricSeries(results: CheckResult[]): CheckMetricSeries[] {
-  const metrics = [...new Set(results.flatMap((result) => Object.keys(result.metrics)))].toSorted();
-  return metrics.map((metric) => ({
-    metric,
-    points: results.flatMap((result) =>
-      Object.hasOwn(result.metrics, metric)
-        ? [{ observedAt: result.checkedAt, value: result.metrics[metric] ?? null }]
-        : []
-    ),
-  }));
-}
-
-function CheckMetricHistory({ series }: { series: CheckMetricSeries }) {
-  const numericPoints = series.points.filter(
-    (point): point is { observedAt: string; value: number } => typeof point.value === "number"
-  );
-  const latest = series.points.at(-1)?.value ?? null;
-  return (
-    <Card className="min-h-36 p-5">
-      <h3 className="text-sm font-semibold text-muted">{checkMetricLabel(series.metric)}</h3>
-      <p className="mt-3 font-display text-2xl font-black">
-        {formatCheckMetric(series.metric, latest)}
-      </p>
-      {numericPoints.length > 1 ? (
-        <div className="mt-3 h-14">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={numericPoints}>
-              <Tooltip
-                labelFormatter={(value) =>
-                  typeof value === "string" || typeof value === "number"
-                    ? new Date(value).toLocaleString()
-                    : ""
-                }
-                formatter={(value) => [
-                  typeof value === "number"
-                    ? formatCheckMetric(series.metric, value)
-                    : String(value),
-                  checkMetricLabel(series.metric),
-                ]}
-                contentStyle={chartTooltipStyle}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={chartColors.lavender}
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      ) : null}
-    </Card>
-  );
-}
-
-function checkMetricLabel(metric: string): string {
-  const label = metric
-    .replace(/[._]+/g, " ")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/\bms\b/gi, "ms")
-    .replace(/\bio\b/gi, "I/O");
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function formatCheckMetric(metric: string, value: number | string | boolean | null): string {
-  if (value === null) return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") return value;
-  const normalized = metric.toLowerCase();
-  if (normalized.includes("bytes")) return formatBytes(value);
-  if (normalized.includes("percent")) return value.toFixed(1) + "%";
-  if (normalized.endsWith("ms")) return value.toLocaleString() + " ms";
-  if (normalized.includes("seconds")) return value.toLocaleString() + " s";
-  return value.toLocaleString();
-}
-
-function ContainerMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-muted">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium capitalize" title={value}>
-        {value}
-      </dd>
-    </div>
   );
 }
 

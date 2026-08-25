@@ -7,6 +7,7 @@ import {
   type CheckType,
   type DatabaseCheckConfig,
   type DatabaseEngine,
+  type DiskCheckConfig,
   type DnsCheckConfig,
   type DockerCheckConfig,
   type HostCheckConfig,
@@ -39,6 +40,8 @@ export class CheckConfigService {
         return this.wan(value);
       case "host":
         return this.host(value);
+      case "disk":
+        return this.disk(value);
       case "docker":
         return this.docker(value);
       case "database":
@@ -242,34 +245,6 @@ export class CheckConfigService {
         ? undefined
         : this.number(value.loadWarning, 0.1, 10_000, "Load warning");
     const swapWarningPercent = this.percentage(value.swapWarningPercent ?? 90, "Swap warning");
-    if (!Array.isArray(value.storage) || value.storage.length < 1 || value.storage.length > 20) {
-      this.invalid("Monitored storage is invalid");
-    }
-    const storage = value.storage.map((item) => {
-      const storageConfig = this.object(item, "Monitored storage");
-      if (
-        typeof storageConfig.mount !== "string" ||
-        !storageConfig.mount.trim() ||
-        storageConfig.mount.length > 260
-      ) {
-        this.invalid("Storage mount is invalid");
-      }
-      const warningPercent = this.percentage(storageConfig.warningPercent ?? 85, "Storage warning");
-      return {
-        mount: storageConfig.mount.trim(),
-        warningPercent,
-        criticalPercent: this.criticalPercentage(
-          storageConfig.criticalPercent ?? Math.max(95, warningPercent),
-          warningPercent,
-          "Storage critical"
-        ),
-      };
-    });
-    if (
-      new Set(storage.map((item) => this.storageMountIdentity(item.mount))).size !== storage.length
-    ) {
-      this.invalid("Storage mounts must be unique");
-    }
     return {
       cpuWarningPercent,
       cpuCriticalPercent: this.criticalPercentage(
@@ -300,7 +275,22 @@ export class CheckConfigService {
         swapWarningPercent,
         "Swap critical"
       ),
-      storage,
+    };
+  }
+
+  private disk(value: Record<string, unknown>): DiskCheckConfig {
+    if (typeof value.mount !== "string" || !value.mount.trim() || value.mount.length > 260) {
+      this.invalid("Disk mount is invalid");
+    }
+    const warningPercent = this.percentage(value.warningPercent ?? 85, "Disk warning");
+    return {
+      mount: value.mount.trim(),
+      warningPercent,
+      criticalPercent: this.criticalPercentage(
+        value.criticalPercent ?? Math.max(95, warningPercent),
+        warningPercent,
+        "Disk critical"
+      ),
     };
   }
 
@@ -552,12 +542,6 @@ export class CheckConfigService {
     const critical = this.number(value, warning, maximum, label);
     if (critical < warning) this.invalid(`${label} must be at least the warning threshold`);
     return critical;
-  }
-
-  private storageMountIdentity(mount: string): string {
-    const normalized = mount.trim().replaceAll("\\", "/").replace(/\/+$/, "") || "/";
-    const windowsMount = /^[a-z]:($|\/)/i.test(normalized) || normalized.startsWith("//");
-    return windowsMount ? normalized.toLowerCase() : normalized;
   }
 
   private number(value: unknown, minimum: number, maximum: number, label: string): number {

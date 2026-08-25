@@ -159,12 +159,11 @@ struct HostConfig {
     load_critical: Option<f64>,
     swap_warning_percent: f64,
     swap_critical_percent: f64,
-    storage: Vec<StorageConfig>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct StorageConfig {
+struct DiskConfig {
     mount: String,
     warning_percent: f64,
     critical_percent: f64,
@@ -214,6 +213,7 @@ pub fn execute(
         CheckType::Icmp => icmp_check(task, target_policy),
         CheckType::Wan => wan(task, target_policy),
         CheckType::Host => host(task, snapshot),
+        CheckType::Disk => disk(task, snapshot),
         CheckType::Docker => docker(task, snapshot),
         CheckType::Database => database_check(task, target_policy),
     };
@@ -228,7 +228,7 @@ pub fn execute_network(task: &AgentTask, target_policy: &TargetPolicy) -> Result
         CheckType::Icmp => icmp_check(task, target_policy),
         CheckType::Wan => wan(task, target_policy),
         CheckType::Database => database_check(task, target_policy),
-        CheckType::Host | CheckType::Docker => {
+        CheckType::Host | CheckType::Disk | CheckType::Docker => {
             bail!("check runner received an unsupported host telemetry task")
         }
     };
@@ -879,8 +879,7 @@ fn database_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<Task
 fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
     let config: HostConfig =
         serde_json::from_value(task.config.clone()).context("host configuration is invalid")?;
-    if config.storage.is_empty() || config.load_warning.is_some() != config.load_critical.is_some()
-    {
+    if config.load_warning.is_some() != config.load_critical.is_some() {
         bail!("host configuration is invalid");
     }
     let memory_percent = if snapshot.memory_total_bytes == 0 {
@@ -893,13 +892,13 @@ fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
     } else {
         snapshot.swap_used_bytes as f64 / snapshot.swap_total_bytes as f64 * 100.0
     };
-    let resource_critical = snapshot.cpu_percent >= config.cpu_critical_percent
+    let critical = snapshot.cpu_percent >= config.cpu_critical_percent
         || memory_percent >= config.memory_critical_percent
         || config
             .load_critical
             .is_some_and(|threshold| snapshot.load_average >= threshold)
         || swap_percent >= config.swap_critical_percent;
-    let resource_degraded = snapshot.cpu_percent >= config.cpu_warning_percent
+    let degraded = snapshot.cpu_percent >= config.cpu_warning_percent
         || memory_percent >= config.memory_warning_percent
         || config
             .load_warning
@@ -913,43 +912,6 @@ fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
     }
     metrics.insert("swapPercent".to_owned(), json!(swap_percent));
     metrics.insert("processCount".to_owned(), json!(snapshot.process_count));
-    metrics.insert("storageCount".to_owned(), json!(config.storage.len()));
-
-    let mut unavailable = Vec::new();
-    let mut storage_critical = false;
-    let mut storage_degraded = false;
-    let mut highest_storage_percent: Option<f64> = None;
-    for (index, monitored) in config.storage.iter().enumerate() {
-        metrics.insert(format!("storage{index}Mount"), json!(monitored.mount));
-        let disk = snapshot
-            .disks
-            .iter()
-            .find(|disk| mount_identity(&disk.mount) == mount_identity(&monitored.mount));
-        let Some(disk) = disk else {
-            unavailable.push(monitored.mount.clone());
-            continue;
-        };
-        if disk.total_bytes == 0 || disk.used_bytes > disk.total_bytes {
-            unavailable.push(monitored.mount.clone());
-            continue;
-        }
-        let used_percent = disk.used_bytes as f64 / disk.total_bytes as f64 * 100.0;
-        highest_storage_percent =
-            Some(highest_storage_percent.map_or(used_percent, |current| current.max(used_percent)));
-        storage_critical |= used_percent >= monitored.critical_percent;
-        storage_degraded |= used_percent >= monitored.warning_percent;
-        metrics.insert(format!("storage{index}UsedPercent"), json!(used_percent));
-        metrics.insert(format!("storage{index}UsedBytes"), json!(disk.used_bytes));
-        metrics.insert(format!("storage{index}TotalBytes"), json!(disk.total_bytes));
-    }
-    metrics.insert("storagePercent".to_owned(), json!(highest_storage_percent));
-    metrics.insert(
-        "unavailableStorageCount".to_owned(),
-        json!(unavailable.len()),
-    );
-
-    let critical = !unavailable.is_empty() || resource_critical || storage_critical;
-    let degraded = resource_degraded || storage_degraded;
     Ok(TaskResult {
         task_id: task.id.clone(),
         status: if critical {
@@ -961,19 +923,50 @@ fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
         },
         latency_ms: None,
         status_code: None,
-        message: (!unavailable.is_empty())
-            .then(|| {
-                format!(
-                    "Monitored storage is unavailable: {}",
-                    unavailable.join(", ")
-                )
-            })
-            .or_else(|| {
-                critical.then(|| "A host resource critical threshold was reached".to_owned())
-            })
+        message: critical
+            .then(|| "A host resource critical threshold was reached".to_owned())
             .or_else(|| {
                 degraded.then(|| "A host resource warning threshold was reached".to_owned())
             }),
+        metrics,
+        checked_at: time_now(),
+        favicon: None,
+    })
+}
+
+fn disk(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
+    let config: DiskConfig =
+        serde_json::from_value(task.config.clone()).context("disk configuration is invalid")?;
+    let disk = snapshot
+        .disks
+        .iter()
+        .find(|disk| mount_identity(&disk.mount) == mount_identity(&config.mount))
+        .context("configured disk mount was not found")?;
+    if disk.total_bytes == 0 || disk.used_bytes > disk.total_bytes {
+        bail!("configured disk is unavailable");
+    }
+    let used_percent = disk.used_bytes as f64 / disk.total_bytes as f64 * 100.0;
+    let degraded = used_percent >= config.warning_percent;
+    let critical = used_percent >= config.critical_percent;
+    let mut metrics = BTreeMap::new();
+    metrics.insert("mount".to_owned(), json!(config.mount));
+    metrics.insert("usedPercent".to_owned(), json!(used_percent));
+    metrics.insert("usedBytes".to_owned(), json!(disk.used_bytes));
+    metrics.insert("totalBytes".to_owned(), json!(disk.total_bytes));
+    Ok(TaskResult {
+        task_id: task.id.clone(),
+        status: if critical {
+            CheckState::Down
+        } else if degraded {
+            CheckState::Degraded
+        } else {
+            CheckState::Up
+        },
+        latency_ms: None,
+        status_code: None,
+        message: critical
+            .then(|| "Disk usage critical threshold was reached".to_owned())
+            .or_else(|| degraded.then(|| "Disk usage warning threshold was reached".to_owned())),
         metrics,
         checked_at: time_now(),
         favicon: None,
@@ -1129,6 +1122,8 @@ fn safe_error(error: &anyhow::Error) -> String {
         .to_lowercase();
     if details.contains("configuration") || details.contains("not allowed") {
         message
+    } else if details.contains("configured disk") {
+        "Configured disk is unavailable".to_owned()
     } else if details.contains("timed out") || details.contains("timeout") {
         "Check timed out".to_owned()
     } else if details.contains("dns") || details.contains("resolve") || details.contains("lookup") {

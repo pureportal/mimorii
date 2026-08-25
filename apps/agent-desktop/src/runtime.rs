@@ -18,7 +18,7 @@ const TRIGGER_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const CONFIGURATION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const NATIVE_CAPABILITIES: &[&str] = &[
-    "http", "tcp", "dns", "icmp", "wan", "host", "docker", "database",
+    "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database",
 ];
 const CHECK_RUNNER_CAPABILITIES: &[&str] = &["http", "tcp", "dns", "icmp", "wan", "database"];
 
@@ -211,11 +211,12 @@ pub(crate) fn cycle(
                 heartbeat: Ok(None),
             });
         }
+        let snapshot = crate::collector::collect();
         let results = poll
             .tasks
             .iter()
-            .map(|task| crate::checks::execute_network(task, &config.target_policy))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|task| crate::checks::execute(task, &snapshot, &config.target_policy))
+            .collect();
         let heartbeat = client
             .heartbeat(&HeartbeatRequest {
                 agent_version: AGENT_VERSION,

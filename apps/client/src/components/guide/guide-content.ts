@@ -188,12 +188,11 @@ export const guideTopics: readonly GuideTopic[] = [
     id: "resource-details",
     title: "Resource details",
     group: "monitoring",
-    summary:
-      "One resource's current health, history, checks, heartbeats, server metrics, and detected technology.",
+    summary: "One resource's status, check history, heartbeats, and alert rules.",
     to: appRoutes.resources,
     exactPaths: [],
     pathPrefix: `${appRoutes.resources}/`,
-    keywords: ["resource", "history", "cpu", "memory", "disk", "technology", "edit"],
+    keywords: ["resource", "history", "check", "heartbeat", "alert", "edit"],
     navigationId: "resources",
     menu: false,
     sections: [
@@ -201,8 +200,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "What you see",
         items: [
           "The resource identity, tags, status, and maintenance state at the top.",
-          "Latency history for any attached check, plus compact check and heartbeat lists.",
-          "CPU, memory, load, volumes, network, and technology details when an agent supplies them.",
+          "Metric history for any attached check, plus compact check and heartbeat lists.",
         ],
       },
       {
@@ -222,7 +220,7 @@ export const guideTopics: readonly GuideTopic[] = [
       {
         target: '[data-guide-page="resource-history"]',
         title: "Check history",
-        content: "Choose a check to see how its response time has changed.",
+        content: "Choose a check to see how its recent metrics have changed.",
       },
       {
         target: '[data-guide-page="resource-monitors"]',
@@ -239,14 +237,14 @@ export const guideTopics: readonly GuideTopic[] = [
     summary: "Tests that Mimorii runs on a schedule to decide whether a resource is healthy.",
     to: appRoutes.checks,
     exactPaths: [appRoutes.checks],
-    keywords: ["http", "tcp", "dns", "host", "storage", "run", "pause", "threshold"],
+    keywords: ["http", "tcp", "dns", "host", "disk", "run", "pause", "threshold"],
     navigationId: "checks",
     sections: [
       {
         title: "Available checks",
         items: [
           "HTTP for pages and APIs, TCP for open ports, and DNS for records.",
-          "Server health and storage usage when an agent supplies machine data.",
+          "Host health and disk usage from a desktop agent.",
           "Timing, timeout, failure, and recovery settings under Advanced.",
         ],
       },
@@ -254,7 +252,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "List actions",
         items: [
           "Filter by resource or state, run a check now, edit it, pause it, or delete it.",
-          "The table shows one-day uptime, latest response time, and last run.",
+          "The list shows one-day uptime, current health, and last run.",
         ],
       },
     ],
@@ -989,7 +987,7 @@ export const guideWorkflows: readonly GuideWorkflow[] = [
       },
       {
         title: "Review machine health",
-        text: "Open the agent's resource to see CPU, memory, load, disk, containers, network, and detected technology as data arrives.",
+        text: "Open the agent's resource to review Host Health and Disk Usage history.",
         to: appRoutes.resources,
         action: "Open resources",
       },

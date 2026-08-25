@@ -16,6 +16,7 @@ import {
 import {
   DockerCheckFields,
   DatabaseCheckFields,
+  DiskCheckFields,
   DnsCheckFields,
   HostCheckFields,
   HttpCheckFields,
@@ -58,23 +59,17 @@ const checkTypeNames: Record<CheckType, string> = {
   icmp: "ICMP ping",
   wan: "WAN reachability",
   host: "Host health",
+  disk: "Disk usage",
   docker: "Docker",
   database: "Database",
 };
 
-function hostFieldsForResource(fields: CheckFields, resource: ResourceSummary): CheckFields {
+function localFieldsForResource(fields: CheckFields, resource: ResourceSummary): CheckFields {
   const windows = resource.agent?.platform?.toLowerCase().includes("windows") === true;
   return {
     ...fields,
     monitorLoad: !windows,
-    storage: [
-      {
-        id: "storage-0",
-        mount: windows ? "C:" : "/",
-        warningPercent: "85",
-        criticalPercent: "95",
-      },
-    ],
+    mount: windows ? "C:" : "/",
   };
 }
 
@@ -168,11 +163,11 @@ export function CheckDialog({
                 value={resourceId}
                 onChange={(event) => {
                   setResourceId(event.target.value);
-                  if (["host", "docker"].includes(type)) {
+                  if (["host", "disk", "docker"].includes(type)) {
                     const resource = resources.find((item) => item.id === event.target.value);
                     if (resource?.agent) setAgentId(resource.agent.id);
-                    if (type === "host" && resource) {
-                      setFields((current) => hostFieldsForResource(current, resource));
+                    if ((type === "host" || type === "disk") && resource) {
+                      setFields((current) => localFieldsForResource(current, resource));
                     }
                   }
                 }}
@@ -181,7 +176,8 @@ export function CheckDialog({
                 {resources
                   .filter(
                     (resource) =>
-                      !["host", "docker"].includes(type) || resource.agent?.kind === "desktop"
+                      !["host", "disk", "docker"].includes(type) ||
+                      resource.agent?.kind === "desktop"
                   )
                   .map((resource) => (
                     <option key={resource.id} value={resource.id}>
@@ -209,7 +205,7 @@ export function CheckDialog({
                 const next = checkTypes.find((value) => value === event.target.value);
                 if (next) {
                   setType(next);
-                  if (["host", "docker"].includes(next)) {
+                  if (["host", "disk", "docker"].includes(next)) {
                     const resource =
                       resources.find(
                         (item) => item.id === resourceId && item.agent?.kind === "desktop"
@@ -218,8 +214,8 @@ export function CheckDialog({
                       setResourceId(resource.id);
                       setExecutionKind("agent");
                       setAgentId(resource.agent.id);
-                      if (next === "host") {
-                        setFields((current) => hostFieldsForResource(current, resource));
+                      if (next === "host" || next === "disk") {
+                        setFields((current) => localFieldsForResource(current, resource));
                       }
                     }
                   }
@@ -240,6 +236,7 @@ export function CheckDialog({
           {type === "icmp" ? <IcmpCheckFields fields={fields} update={update} /> : null}
           {type === "wan" ? <WanCheckFields fields={fields} update={update} /> : null}
           {type === "host" ? <HostCheckFields fields={fields} update={update} /> : null}
+          {type === "disk" ? <DiskCheckFields fields={fields} update={update} /> : null}
           {type === "docker" ? <DockerCheckFields fields={fields} update={update} /> : null}
           {type === "database" ? <DatabaseCheckFields fields={fields} update={update} /> : null}
 
@@ -249,7 +246,7 @@ export function CheckDialog({
               <Select
                 id="check-execution"
                 value={executionKind}
-                disabled={["host", "docker"].includes(type)}
+                disabled={["host", "disk", "docker"].includes(type)}
                 onChange={(event) => {
                   const kind = event.target.value === "agent" ? "agent" : "direct";
                   setExecutionKind(kind);

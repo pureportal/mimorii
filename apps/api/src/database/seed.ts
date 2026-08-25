@@ -7,7 +7,9 @@ import { DatabaseInitService } from "./database-init.service.js";
 import { DatabaseService } from "./database.service.js";
 import { developmentSeedConfiguration, seedAccount } from "./seed/account.js";
 import { seedDevelopmentData } from "./seed/index.js";
-const agentManifest = resolve(fileURLToPath(new URL("../../../agent/Cargo.toml", import.meta.url)));
+const agentManifest = resolve(
+  fileURLToPath(new URL("../../../agent-desktop/Cargo.toml", import.meta.url))
+);
 
 async function main(): Promise<void> {
   const configuration = developmentSeedConfiguration();

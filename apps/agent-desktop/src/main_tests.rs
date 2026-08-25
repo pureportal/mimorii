@@ -79,8 +79,7 @@ fn triggered_poll(interval_seconds: u64) -> String {
                 "loadWarning": 4,
                 "loadCritical": 8,
                 "swapWarningPercent": 80,
-                "swapCriticalPercent": 90,
-                "storage": [{ "mount": "/", "warningPercent": 80, "criticalPercent": 90 }]
+                "swapCriticalPercent": 90
             },
             "secret": null,
             "issuedAt": "2026-08-13T10:00:30Z"
@@ -357,6 +356,63 @@ fn disabled_host_collection_clears_pending_telemetry_without_uploading_it() {
 }
 
 #[test]
+fn disk_tasks_collect_locally_without_uploading_host_telemetry() {
+    let mount = if cfg!(windows) { "C:" } else { "/" };
+    let poll = json!({
+        "collectionIntervalSeconds": 45,
+        "collectHostTelemetry": false,
+        "tasks": [{
+            "id": "task-disk",
+            "checkId": "check-disk",
+            "type": "disk",
+            "timeoutMs": 5_000,
+            "config": { "mount": mount, "warningPercent": 99, "criticalPercent": 100 },
+            "secret": null,
+            "issuedAt": "2026-08-13T10:00:30Z"
+        }]
+    })
+    .to_string();
+    let server = http_server(vec![
+        MockResponse::new(200, poll),
+        MockResponse::new(
+            200,
+            r#"{"acceptedAt":"2026-08-13T10:00:31Z","acceptedSnapshots":0,"acceptedResults":1}"#,
+        ),
+    ]);
+    let directory = temporary_path("disk-local-only");
+    fs::create_dir_all(&directory).unwrap();
+    let store = SnapshotStore::new(directory.clone());
+
+    let outcome = cycle(
+        &config(&server.url, valid_key()),
+        &store,
+        |seconds, enabled| {
+            assert_eq!(seconds, 45);
+            assert!(!enabled);
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    assert_eq!(outcome.heartbeat.unwrap().unwrap().accepted_snapshots, 0);
+    let _poll_request = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    let heartbeat = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    let payload: Value = serde_json::from_str(heartbeat.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(payload["snapshots"], json!([]));
+    assert_eq!(payload["results"][0]["taskId"], "task-disk");
+    assert_eq!(payload["results"][0]["metrics"]["mount"], mount);
+    assert!(store.load().unwrap().is_empty());
+
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     let server = http_server(vec![
         MockResponse::new(200, triggered_poll(45)),
@@ -396,7 +452,7 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
     assert_eq!(
         payload["capabilities"],
         json!([
-            "http", "tcp", "dns", "icmp", "wan", "host", "docker", "database"
+            "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database"
         ])
     );
 

@@ -78,7 +78,7 @@ describe("CheckDialog", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ name: "Public endpoint" }));
   });
 
-  it("edits Windows Host health storage and thresholds", async () => {
+  it("uses Windows defaults for local checks", async () => {
     const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
     render(
       <CheckDialog open onOpenChange={vi.fn()} resources={[windowsResource]} onSubmit={onSubmit} />
@@ -88,28 +88,22 @@ describe("CheckDialog", () => {
       target: { value: "host" },
     });
     expect(screen.getByRole("checkbox", { name: "Load average" })).not.toBeChecked();
+    expect(screen.queryByRole("textbox", { name: "Mount" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Type" }), {
+      target: { value: "disk" },
+    });
     expect(screen.getByRole("textbox", { name: "Mount" })).toHaveValue("C:");
-
-    fireEvent.change(screen.getByRole("spinbutton", { name: "CPU warning · %" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Warning · %" }), {
       target: { value: "75" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add storage" }));
-    const mounts = screen.getAllByRole("textbox", { name: "Mount" });
-    fireEvent.change(mounts[1]!, { target: { value: "D:" } });
     fireEvent.click(screen.getByRole("button", { name: "Save check" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "Host health",
-        type: "host",
-        config: expect.objectContaining({
-          cpuWarningPercent: 75,
-          storage: [
-            { mount: "C:", warningPercent: 85, criticalPercent: 95 },
-            { mount: "D:", warningPercent: 85, criticalPercent: 95 },
-          ],
-        }),
+        name: "Disk usage",
+        type: "disk",
+        config: { mount: "C:", warningPercent: 75, criticalPercent: 95 },
       })
     );
   });

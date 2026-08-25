@@ -505,90 +505,36 @@ export function HostCheckFields({ fields, update }: CheckFormFieldsProps) {
           />
         </div>
       ) : null}
-      <div className="grid gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">Storage</p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              update("storage", [
-                ...fields.storage,
-                { id: crypto.randomUUID(), mount: "", warningPercent: "85", criticalPercent: "95" },
-              ])
-            }
-            disabled={fields.storage.length >= 20}
-          >
-            <Plus className="size-4" /> Add storage
-          </Button>
-        </div>
-        {fields.storage.map((storage) => (
-          <div
-            key={storage.id}
-            className="grid items-end gap-3 sm:grid-cols-[1fr_120px_120px_auto]"
-          >
-            <Field>
-              <FieldLabel htmlFor={`${storage.id}-mount`}>Mount</FieldLabel>
-              <Input
-                id={`${storage.id}-mount`}
-                value={storage.mount}
-                onChange={(event) =>
-                  update(
-                    "storage",
-                    fields.storage.map((item) =>
-                      item.id === storage.id ? { ...item, mount: event.target.value } : item
-                    )
-                  )
-                }
-                required
-              />
-            </Field>
-            <ThresholdField
-              id={`${storage.id}-warning`}
-              label="Warning · %"
-              value={storage.warningPercent}
-              onChange={(value) =>
-                update(
-                  "storage",
-                  fields.storage.map((item) =>
-                    item.id === storage.id ? { ...item, warningPercent: value } : item
-                  )
-                )
-              }
-              max={100}
-            />
-            <ThresholdField
-              id={`${storage.id}-critical`}
-              label="Critical · %"
-              value={storage.criticalPercent}
-              onChange={(value) =>
-                update(
-                  "storage",
-                  fields.storage.map((item) =>
-                    item.id === storage.id ? { ...item, criticalPercent: value } : item
-                  )
-                )
-              }
-              max={100}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove ${storage.mount || "storage"}`}
-              disabled={fields.storage.length === 1}
-              onClick={() =>
-                update(
-                  "storage",
-                  fields.storage.filter((item) => item.id !== storage.id)
-                )
-              }
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
+    </div>
+  );
+}
+
+export function DiskCheckFields({ fields, update }: CheckFormFieldsProps) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-[1fr_140px_140px]">
+      <Field>
+        <FieldLabel htmlFor="disk-mount">Mount</FieldLabel>
+        <Input
+          id="disk-mount"
+          value={fields.mount}
+          onChange={(event) => update("mount", event.target.value)}
+          required
+        />
+      </Field>
+      <ThresholdField
+        id="disk-warning"
+        label="Warning · %"
+        value={fields.disk}
+        onChange={(value) => update("disk", value)}
+        max={100}
+      />
+      <ThresholdField
+        id="disk-critical"
+        label="Critical · %"
+        value={fields.diskCritical}
+        onChange={(value) => update("diskCritical", value)}
+        max={100}
+      />
     </div>
   );
 }

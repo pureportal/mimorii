@@ -63,31 +63,20 @@ describe("check form configuration", () => {
       loadCritical: 8,
       swapWarningPercent: 90,
       swapCriticalPercent: 98,
-      storage: [{ mount: "/", warningPercent: 85, criticalPercent: 95 }],
     });
   });
 
-  it("round-trips multiple host storage thresholds", () => {
+  it("round-trips disk thresholds", () => {
     const fields = checkFields({
-      cpuWarningPercent: 80,
-      cpuCriticalPercent: 95,
-      memoryWarningPercent: 82,
-      memoryCriticalPercent: 96,
-      swapWarningPercent: 70,
-      swapCriticalPercent: 90,
-      storage: [
-        { mount: "C:", warningPercent: 75, criticalPercent: 92 },
-        { mount: "D:", warningPercent: 85, criticalPercent: 97 },
-      ],
+      mount: "C:",
+      warningPercent: 75,
+      criticalPercent: 92,
     });
 
-    expect(buildCheckConfig("host", fields)).toMatchObject({
-      cpuWarningPercent: 80,
-      storage: [
-        { mount: "C:", warningPercent: 75, criticalPercent: 92 },
-        { mount: "D:", warningPercent: 85, criticalPercent: 97 },
-      ],
+    expect(buildCheckConfig("disk", fields)).toEqual({
+      mount: "C:",
+      warningPercent: 75,
+      criticalPercent: 92,
     });
-    expect(buildCheckConfig("host", fields)).not.toHaveProperty("loadWarning");
   });
 });

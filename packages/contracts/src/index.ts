@@ -46,6 +46,7 @@ export const checkTypes = [
   "icmp",
   "wan",
   "host",
+  "disk",
   "docker",
   "database",
 ] as const;
@@ -430,11 +431,12 @@ export interface HostCheckConfig {
   loadCritical?: number;
   swapWarningPercent: number;
   swapCriticalPercent: number;
-  storage: Array<{
-    mount: string;
-    warningPercent: number;
-    criticalPercent: number;
-  }>;
+}
+
+export interface DiskCheckConfig {
+  mount: string;
+  warningPercent: number;
+  criticalPercent: number;
 }
 
 export interface DockerCheckConfig {
@@ -474,6 +476,7 @@ export type CheckConfig =
   | IcmpCheckConfig
   | WanCheckConfig
   | HostCheckConfig
+  | DiskCheckConfig
   | DockerCheckConfig
   | DatabaseCheckConfig;
 

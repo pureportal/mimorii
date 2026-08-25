@@ -104,6 +104,7 @@ pub enum CheckType {
     Icmp,
     Wan,
     Host,
+    Disk,
     Docker,
     Database,
 }

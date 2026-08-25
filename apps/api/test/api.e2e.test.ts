@@ -672,17 +672,22 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/checks?resourceId=${createdAgent.body.resourceId}`)
       .set("authorization", authorization)
       .expect(200)
-      .expect(({ body }) =>
-        expect(body).toEqual([
-          expect.objectContaining({
-            name: "Host health",
-            type: "host",
-            config: expect.objectContaining({
-              storage: [{ mount: "/", warningPercent: 85, criticalPercent: 95 }],
+      .expect(({ body }) => {
+        expect(body).toHaveLength(2);
+        expect(body).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              name: "Host health",
+              type: "host",
             }),
-          }),
-        ])
-      );
+            expect.objectContaining({
+              name: "Disk usage",
+              type: "disk",
+              config: { mount: "/", warningPercent: 85, criticalPercent: 95 },
+            }),
+          ])
+        );
+      });
     await request(app.getHttpServer())
       .patch(`/api/teams/${teamId}/agents/${createdAgent.body.id}`)
       .set("authorization", authorization)
@@ -823,8 +828,10 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/checks?resourceId=${createdAgent.body.resourceId}`)
       .set("authorization", authorization)
       .expect(200);
-    expect(generatedChecks.body).toHaveLength(1);
-    expect(generatedChecks.body[0]).toMatchObject({
+    expect(generatedChecks.body).toHaveLength(2);
+    const hostCheck = generatedChecks.body.find((check: { type: string }) => check.type === "host");
+    const diskCheck = generatedChecks.body.find((check: { type: string }) => check.type === "disk");
+    expect(hostCheck).toMatchObject({
       name: "Host health",
       type: "host",
       config: {
@@ -834,32 +841,41 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         memoryCriticalPercent: 98,
         swapWarningPercent: 90,
         swapCriticalPercent: 98,
-        storage: [{ mount: "C:", warningPercent: 85, criticalPercent: 95 }],
       },
     });
-    expect(generatedChecks.body[0].config).not.toHaveProperty("loadWarning");
+    expect(hostCheck.config).not.toHaveProperty("loadWarning");
+    expect(diskCheck).toMatchObject({
+      name: "Disk usage",
+      type: "disk",
+      config: { mount: "C:", warningPercent: 85, criticalPercent: 95 },
+    });
     await request(app.getHttpServer())
-      .patch(`/api/teams/${teamId}/checks/${generatedChecks.body[0].id}`)
+      .patch(`/api/teams/${teamId}/checks/${hostCheck.id}`)
       .set("authorization", authorization)
       .send({
         config: {
-          ...generatedChecks.body[0].config,
+          ...hostCheck.config,
           cpuWarningPercent: 75,
-          storage: [
-            { mount: "C:", warningPercent: 80, criticalPercent: 92 },
-            { mount: "D:", warningPercent: 85, criticalPercent: 97 },
-          ],
         },
       })
       .expect(200)
       .expect(({ body }) => {
         expect(body.config.cpuWarningPercent).toBe(75);
-        expect(body.config.storage).toHaveLength(2);
       });
     await request(app.getHttpServer())
-      .delete(`/api/teams/${teamId}/checks/${generatedChecks.body[0].id}`)
+      .patch(`/api/teams/${teamId}/checks/${diskCheck.id}`)
       .set("authorization", authorization)
-      .expect(204);
+      .send({ config: { mount: "D:", warningPercent: 80, criticalPercent: 92 } })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.config).toEqual({ mount: "D:", warningPercent: 80, criticalPercent: 92 });
+      });
+    for (const check of [hostCheck, diskCheck]) {
+      await request(app.getHttpServer())
+        .delete(`/api/teams/${teamId}/checks/${check.id}`)
+        .set("authorization", authorization)
+        .expect(204);
+    }
     await request(app.getHttpServer())
       .get("/api/agent/tasks")
       .set("authorization", agentAuthorization)
@@ -978,7 +994,6 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
           loadCritical: 8,
           swapWarningPercent: 80,
           swapCriticalPercent: 90,
-          storage: [{ mount: "C:", warningPercent: 80, criticalPercent: 90 }],
         },
         execution: { kind: "agent", agentId: createdAgent.body.id },
       })

@@ -22,6 +22,8 @@ Resource 1 ── 0..* Alert condition
 
 Host, disk, and Docker checks observe the agent's own resource. Network and database checks can observe any resource and can run directly or through a desktop agent. Android agents collect only their own device telemetry.
 
+Creating a desktop agent also creates a Host Health check and a Disk Usage check for the primary volume (`/` on Linux or `C:` on Windows). Host Health evaluates CPU, memory, load, and swap and is the only check that enables raw host snapshot reporting. Disk Usage and Docker checks evaluate a local snapshot and return only their check metrics.
+
 ## Rationale
 
 OpenTelemetry models a Resource as the entity producing telemetry and allows entity identity to be associated with that resource. Prometheus separates a monitored instance from the scrape job that observes it. Zabbix similarly separates hosts from items and item execution types. These systems consistently distinguish the monitored entity from the observation and its collection mechanism.

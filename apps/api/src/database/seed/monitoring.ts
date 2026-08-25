@@ -176,7 +176,6 @@ async function seedChecks(
     loadCritical: 8,
     swapWarningPercent: 70,
     swapCriticalPercent: 90,
-    storage: [{ mount: "/", warningPercent: 80, criticalPercent: 95 }],
   };
   const checks: CheckSeed[] = [
     {
@@ -267,10 +266,10 @@ async function seedChecks(
     {
       id: ids.storageCheckId,
       resourceId: ids.serverResourceId,
-      name: "Root storage health",
-      type: "host",
+      name: "Disk usage",
+      type: "disk",
       agentId: context.agentId,
-      config: hostConfig,
+      config: { mount: "/", warningPercent: 80, criticalPercent: 95 },
       intervalSeconds: 300,
       timeoutMs: 5_000,
       failureThreshold: 2,
@@ -332,7 +331,6 @@ async function seedChecks(
       agentId: identity.newAgentId,
       config: {
         ...hostConfig,
-        storage: [{ mount: "/archive", warningPercent: 85, criticalPercent: 95 }],
       },
       intervalSeconds: 600,
       timeoutMs: 5_000,
@@ -456,12 +454,12 @@ async function seedResults(context: SeedContext, ids: SeedMonitoringIds): Promis
       status: index === 2 ? "degraded" : "up",
       latencyMs: null,
       statusCode: null,
-      message: index === 2 ? "A host resource warning threshold was reached" : null,
+      message: index === 2 ? "Disk usage warning threshold was reached" : null,
       metrics: {
-        storagePercent: index === 2 ? 82 : 68 + index,
-        storage0Mount: "/",
-        storage0UsedBytes: 730_000_000_000,
-        storage0TotalBytes: 1_000_000_000_000,
+        mount: "/",
+        usedPercent: index === 2 ? 82 : 68 + index,
+        usedBytes: 730_000_000_000,
+        totalBytes: 1_000_000_000_000,
       },
       checkedAt: at(context, -hours((5 - index) * 12) - minutes(5)),
     });

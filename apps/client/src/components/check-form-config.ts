@@ -23,13 +23,6 @@ export interface JsonAssertionGroupField {
 
 export type JsonAssertionNodeField = JsonAssertionField | JsonAssertionGroupField;
 
-export interface StorageCheckField {
-  id: string;
-  mount: string;
-  warningPercent: string;
-  criticalPercent: string;
-}
-
 export const initialCheckFields = {
   url: "https://example.com/",
   method: "GET",
@@ -68,14 +61,9 @@ export const initialCheckFields = {
   monitorLoad: true,
   swap: "90",
   swapCritical: "98",
-  storage: [
-    {
-      id: "storage-0",
-      mount: "/",
-      warningPercent: "85",
-      criticalPercent: "95",
-    },
-  ] as StorageCheckField[],
+  mount: "/",
+  disk: "85",
+  diskCritical: "95",
   containerNamePattern: "*",
   requireHealthy: true,
   requireRunning: true,
@@ -145,7 +133,9 @@ export function checkFields(value: unknown): CheckFields {
       config === undefined || config.loadWarning !== undefined || config.loadCritical !== undefined,
     swap: stringField(config?.swapWarningPercent, initialCheckFields.swap),
     swapCritical: stringField(config?.swapCriticalPercent, initialCheckFields.swapCritical),
-    storage: storageFields(config?.storage),
+    mount: stringField(config?.mount, initialCheckFields.mount),
+    disk: stringField(config?.warningPercent, initialCheckFields.disk),
+    diskCritical: stringField(config?.criticalPercent, initialCheckFields.diskCritical),
     containerNamePattern: stringField(config?.containerNamePattern, "*"),
     requireHealthy: config?.requireHealthy !== false,
     requireRunning: config?.requireRunning !== false,
@@ -235,11 +225,12 @@ export function buildCheckConfig(type: CheckType, fields: CheckFields): Record<s
           : {}),
         swapWarningPercent: Number(fields.swap),
         swapCriticalPercent: Number(fields.swapCritical),
-        storage: fields.storage.map(({ mount, warningPercent, criticalPercent }) => ({
-          mount,
-          warningPercent: Number(warningPercent),
-          criticalPercent: Number(criticalPercent),
-        })),
+      };
+    case "disk":
+      return {
+        mount: fields.mount,
+        warningPercent: Number(fields.disk),
+        criticalPercent: Number(fields.diskCritical),
       };
     case "docker":
       return {
@@ -372,22 +363,6 @@ function wanTargetsField(value: unknown): string {
         : []
     )
     .join("\n");
-}
-
-function storageFields(value: unknown): StorageCheckField[] {
-  if (!Array.isArray(value)) return initialCheckFields.storage.map((item) => ({ ...item }));
-  return value.flatMap((item, index) =>
-    isRecord(item) && typeof item.mount === "string"
-      ? [
-          {
-            id: `storage-${index}`,
-            mount: item.mount,
-            warningPercent: stringField(item.warningPercent, "85"),
-            criticalPercent: stringField(item.criticalPercent, "95"),
-          },
-        ]
-      : []
-  );
 }
 
 function stringField(value: unknown, fallback: string): string {

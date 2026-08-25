@@ -44,8 +44,10 @@ const metricLabels: Record<string, string> = {
   swapPercent: "Swap",
   processCount: "Processes",
   storagePercent: "Storage",
-  storageCount: "Storage volumes",
-  unavailableStorageCount: "Unavailable storage",
+  mount: "Mount",
+  usedPercent: "Used",
+  usedBytes: "Used space",
+  totalBytes: "Capacity",
   containerCount: "Containers",
   runningContainerCount: "Running containers",
   unhealthyContainerCount: "Unhealthy containers",
@@ -73,14 +75,8 @@ const historyMetricOrder: Record<CheckType, string[]> = {
   dns: ["latencyMs", "recordCount"],
   icmp: ["latencyMs", "packetLossPercent", "minimumLatencyMs", "maximumLatencyMs"],
   wan: ["latencyMs", "reachableTargets"],
-  host: [
-    "cpuPercent",
-    "memoryPercent",
-    "storagePercent",
-    "loadAverage",
-    "swapPercent",
-    "processCount",
-  ],
+  host: ["cpuPercent", "memoryPercent", "loadAverage", "swapPercent", "processCount"],
+  disk: ["usedPercent", "usedBytes", "totalBytes"],
   docker: ["containerCount", "runningContainerCount", "unhealthyContainerCount", "restartCount"],
   database: [
     "connectionUtilizationPercent",
@@ -128,6 +124,9 @@ export function getCheckHealthItems(
       break;
     case "host":
       items.push(metricItem(metrics, "cpuPercent"), metricItem(metrics, "memoryPercent"));
+      break;
+    case "disk":
+      items.push(metricItem(metrics, "usedPercent"), metricItem(metrics, "mount"));
       break;
     case "docker":
       items.push(
@@ -190,15 +189,6 @@ export function createCheckHistorySeries(
 export function checkMetricLabel(metric: string): string {
   const known = metricLabels[metric];
   if (known) return known;
-  const storage = /^storage(\d+)(Mount|UsedPercent|UsedBytes|TotalBytes)$/.exec(metric);
-  if (storage) {
-    const field = storage[2]!
-      .replace("UsedPercent", "usage")
-      .replace("UsedBytes", "used")
-      .replace("TotalBytes", "total")
-      .toLowerCase();
-    return `Storage ${Number(storage[1]) + 1} ${field}`;
-  }
   const label = metric
     .replace(/[._]+/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
