@@ -33,7 +33,11 @@ pub fn delegate_if_needed(json: bool, privileged: bool) -> Result<bool> {
             drop(file);
             Ok(false)
         }
-        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied && !privileged => {
+        Err(error)
+            if error.kind() == std::io::ErrorKind::PermissionDenied
+                && !privileged
+                && !crate::linux::running_as_root() =>
+        {
             let mut command = Command::new("sudo");
             command
                 .arg("--")
