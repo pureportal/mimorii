@@ -11,7 +11,7 @@ const resource: ResourceSummary = {
   description: null,
   tags: [],
   agent: null,
-  status: "up",
+  status: "okay",
   checksUp: 1,
   checksTotal: 1,
   lastCheckedAt: null,

@@ -25,7 +25,7 @@ const resource: ResourceSummary = {
   description: null,
   tags: [],
   agent: null,
-  status: "up",
+  status: "okay",
   checksUp: 1,
   checksTotal: 2,
   lastCheckedAt: "2026-08-24T08:00:00.000Z",
@@ -58,6 +58,24 @@ const healthCheck: CheckSummary = {
     swapPercent: 4,
   },
 };
+const diskCheck: CheckSummary = {
+  ...createCheck("check-disk", "Disk usage", true),
+  type: "disk",
+  status: "critical",
+  config: { mount: "C:", warningPercent: 85, criticalPercent: 95 },
+  execution: { kind: "agent", agentId: "agent-1" },
+  lastLatencyMs: null,
+  latestMetrics: { mount: "C:", usedPercent: 97.3 },
+};
+const staleCheck: CheckSummary = {
+  ...createCheck("check-stale", "Offline host", true),
+  type: "host",
+  status: "down",
+  config: healthCheck.config,
+  execution: { kind: "agent", agentId: "agent-1" },
+  lastLatencyMs: null,
+  latestMetrics: { agentTimeout: true },
+};
 
 const healthHistory: CheckResult[] = [
   result("2026-08-24T08:01:00.000Z", { cpuPercent: 35, memoryPercent: 62 }),
@@ -70,7 +88,7 @@ describe("ChecksPage actions", () => {
     useAuthMock.mockReturnValue({ activeTeam: { id: "team-1" } });
     apiMock.mockImplementation((path: string) => {
       if (path === "/teams/team-1/checks")
-        return Promise.resolve([enabledCheck, pausedCheck, healthCheck]);
+        return Promise.resolve([enabledCheck, pausedCheck, healthCheck, diskCheck, staleCheck]);
       if (path === "/teams/team-1/resources") return Promise.resolve([resource]);
       if (path === "/teams/team-1/checks/check-health/history?limit=500")
         return Promise.resolve(healthHistory);
@@ -154,6 +172,19 @@ describe("ChecksPage actions", () => {
     );
   });
 
+  it("shows evaluated health separately from a stale reporter", async () => {
+    renderPage();
+
+    const okayRow = (await screen.findByText("Availability")).closest("article");
+    const criticalRow = screen.getByText("Disk usage").closest("article");
+    const downRow = screen.getByText("Offline host").closest("article");
+
+    expect(within(okayRow!).getByText("okay")).toBeInTheDocument();
+    expect(within(criticalRow!).getByText("critical")).toBeInTheDocument();
+    expect(within(criticalRow!).queryByText("down")).not.toBeInTheDocument();
+    expect(within(downRow!).getByText("down")).toBeInTheDocument();
+  });
+
   it("opens check details with CPU and memory history", async () => {
     renderPage();
 
@@ -207,7 +238,7 @@ function createCheck(id: string, name: string, enabled: boolean): CheckSummary {
     teamId: resource.teamId,
     name,
     type: "http",
-    status: enabled ? "up" : "paused",
+    status: enabled ? "okay" : "paused",
     enabled,
     intervalSeconds: 60,
     timeoutMs: 5_000,

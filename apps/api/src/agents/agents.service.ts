@@ -24,6 +24,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { AuditService } from "../common/audit.service.js";
+import { resolveAgentStatus } from "../common/agent-status.js";
 import { createSecret, decryptConfiguration, hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
@@ -604,20 +605,6 @@ export class AgentsService {
   }
 
   private map(row: AgentRow, deviceStatus: MobileDeviceStatus | null): AgentSummary {
-    const lastSeen = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
-    const age = Date.now() - lastSeen;
-    const mobileInterval = row.collection_interval_seconds * 1_000;
-    const onlineThreshold =
-      row.kind === "mobile" ? Math.max(30 * 60_000, mobileInterval * 2) : 90_000;
-    const staleThreshold =
-      row.kind === "mobile" ? Math.max(2 * 60 * 60_000, mobileInterval * 4) : 300_000;
-    const status = !lastSeen
-      ? "never"
-      : age <= onlineThreshold
-        ? "online"
-        : age <= staleThreshold
-          ? "stale"
-          : "offline";
     return {
       id: row.id,
       resourceId: row.resource_id,
@@ -625,7 +612,11 @@ export class AgentsService {
       teamId: row.team_id,
       kind: row.kind,
       collectionIntervalSeconds: row.collection_interval_seconds,
-      status,
+      status: resolveAgentStatus({
+        kind: row.kind,
+        collectionIntervalSeconds: row.collection_interval_seconds,
+        lastSeenAt: row.last_seen_at,
+      }),
       platform: row.platform,
       version: row.version,
       lastSeenAt: row.last_seen_at,

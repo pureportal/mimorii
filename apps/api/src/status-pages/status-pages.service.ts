@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import type {
-  CheckStatus,
   PublicStatusPage,
   StatusPageComponent,
   StatusPageSummary,
@@ -14,6 +13,7 @@ import type {
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
 import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
+import { ResourceHealthService } from "../common/resource-health.service.js";
 import { createSecret, hashSecret, verifySignedReference } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import { IncidentsService } from "../incidents/incidents.service.js";
@@ -41,7 +41,6 @@ interface StatusPageRow {
 interface ComponentRow {
   id: string;
   name: string;
-  status: CheckStatus;
   uptime_30d: number | null;
 }
 
@@ -53,7 +52,8 @@ export class StatusPagesService {
     private readonly incidents: IncidentsService,
     private readonly maintenance: MaintenanceService,
     private readonly notifications: NotificationsService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly health: ResourceHealthService
   ) {}
 
   async list(userId: string, teamId: string): Promise<StatusPageSummary[]> {
@@ -227,7 +227,7 @@ export class StatusPagesService {
     );
     if (!row) throw new NotFoundException("Status page not found");
     const resourceIds = await this.resourceIds(row.id);
-    const components = await this.components(row.id);
+    const components = await this.components(row.id, row.team_id);
     const maintenance = await this.maintenance.visibleForResources(
       resourceIds,
       new Date(Date.now() + 30 * 86_400_000)
@@ -245,7 +245,9 @@ export class StatusPagesService {
     }));
     const state = publicComponents.some((component) => component.status === "down")
       ? "outage"
-      : publicComponents.some((component) => component.status === "degraded")
+      : publicComponents.some(
+            (component) => component.status === "critical" || component.status === "warning"
+          )
         ? "degraded"
         : publicComponents.some((component) => component.status === "maintenance")
           ? "maintenance"
@@ -435,21 +437,9 @@ export class StatusPagesService {
     return rows.map((row) => row.resource_id);
   }
 
-  private async components(pageId: string): Promise<StatusPageComponent[]> {
+  private async components(pageId: string, teamId: string): Promise<StatusPageComponent[]> {
     const rows = await this.database.all<ComponentRow>(
       `${MONITOR_OBSERVATIONS_CTE} SELECT r.id, r.name,
-       CASE
-          WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'down')
-            OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'down') THEN 'down'
-          WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'degraded') THEN 'degraded'
-          WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'up')
-            OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'up') THEN 'up'
-          WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'pending')
-            OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'pending') THEN 'pending'
-          WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id)
-            OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id) THEN 'paused'
-          ELSE 'pending'
-        END AS status,
        AVG(CASE WHEN o.status IS NULL THEN NULL WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS uptime_30d
        FROM status_page_resources spr JOIN resources r ON r.id = spr.resource_id
        LEFT JOIN observations o ON o.resource_id = r.id AND o.observed_at >= ?
@@ -457,11 +447,15 @@ export class StatusPagesService {
       new Date(Date.now() - 30 * 86_400_000).toISOString(),
       pageId
     );
+    const statuses = await this.health.forResources(
+      teamId,
+      rows.map((row) => row.id)
+    );
     return Promise.all(
       rows.map(async (row) => ({
         id: row.id,
         name: row.name,
-        status: row.status,
+        status: statuses.get(row.id) ?? "pending",
         uptime30d: row.uptime_30d,
         dailyUptime: await this.dailyUptime(row.id, 30),
       }))

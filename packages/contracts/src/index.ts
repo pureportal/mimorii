@@ -58,6 +58,17 @@ export type HttpMethod = (typeof httpMethods)[number];
 export const checkStatuses = ["pending", "up", "degraded", "down", "paused"] as const;
 export type CheckStatus = (typeof checkStatuses)[number];
 
+export const checkHealthStatuses = [
+  "pending",
+  "okay",
+  "warning",
+  "critical",
+  "down",
+  "paused",
+] as const;
+export type CheckHealthStatus = (typeof checkHealthStatuses)[number];
+export type ResourceHealthStatus = CheckHealthStatus;
+
 export const dashboardAccessModes = ["public", "private", "protected"] as const;
 export type DashboardAccessMode = (typeof dashboardAccessModes)[number];
 
@@ -322,7 +333,7 @@ export interface ResourceSummary {
   description: string | null;
   tags: string[];
   agent: ResourceAgentSummary | null;
-  status: CheckStatus;
+  status: ResourceHealthStatus;
   checksUp: number;
   checksTotal: number;
   lastCheckedAt: string | null;
@@ -488,7 +499,7 @@ export interface CheckSummary {
   teamId: string;
   name: string;
   type: CheckType;
-  status: CheckStatus;
+  status: CheckHealthStatus;
   enabled: boolean;
   intervalSeconds: number;
   timeoutMs: number;
@@ -645,7 +656,7 @@ export interface StatusPageSubscriberSummary {
 export interface StatusPageComponent {
   id: string;
   name: string;
-  status: CheckStatus | "maintenance";
+  status: ResourceHealthStatus | "maintenance";
   uptime30d: number | null;
   dailyUptime: Array<{ date: string; uptime: number | null }>;
 }
@@ -774,7 +785,7 @@ export interface DashboardUptimeViewItem extends DashboardViewItemBase {
 export interface DashboardStatusViewItem extends DashboardViewItemBase {
   type: "status";
   resourceName: string;
-  status: CheckStatus;
+  status: ResourceHealthStatus;
 }
 
 export interface DashboardIncidentsViewItem extends DashboardViewItemBase {

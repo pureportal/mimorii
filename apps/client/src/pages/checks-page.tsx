@@ -162,8 +162,9 @@ export function ChecksPage() {
             className="w-32"
           >
             <option value="all">All states</option>
-            <option value="up">Up</option>
-            <option value="degraded">Degraded</option>
+            <option value="okay">Okay</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
             <option value="down">Down</option>
             <option value="paused">Paused</option>
             <option value="pending">Pending</option>

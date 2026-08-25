@@ -9,7 +9,9 @@ import type {
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
+import { resolveAgentStatus } from "../common/agent-status.js";
 import { encryptConfiguration } from "../common/crypto.js";
+import { resolveCheckHealthStatus } from "../common/health-status.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckConfigService } from "./check-config.service.js";
@@ -19,6 +21,9 @@ import { ResultsService } from "./results.service.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
 
 interface CheckSummaryRow extends CheckRow {
+  agent_kind: AgentKind | null;
+  agent_last_seen_at: string | null;
+  agent_collection_interval_seconds: number | null;
   latest_metrics_json: string | null;
   uptime_24h: number | null;
   uptime_30d: number | null;
@@ -227,6 +232,9 @@ export class ChecksService {
   private selectSql(where: string): string {
     return `
       SELECT c.*,
+        a.kind AS agent_kind,
+        a.last_seen_at AS agent_last_seen_at,
+        a.collection_interval_seconds AS agent_collection_interval_seconds,
         (SELECT latest.metrics_json FROM check_results latest
           WHERE latest.check_id = c.id
           ORDER BY latest.checked_at DESC, latest.id DESC LIMIT 1) AS latest_metrics_json,
@@ -234,20 +242,35 @@ export class ChecksService {
           THEN CASE WHEN cr.status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_24h,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '30 days'
           THEN CASE WHEN cr.status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_30d
-      FROM checks c LEFT JOIN check_results cr ON cr.check_id = c.id
+      FROM checks c
+      LEFT JOIN agents a ON a.id = c.agent_id
+      LEFT JOIN check_results cr ON cr.check_id = c.id
       WHERE ${where}
-      GROUP BY c.id
+      GROUP BY c.id, a.id
       ORDER BY LOWER(c.name)`;
   }
 
   private map(row: CheckSummaryRow): CheckSummary {
+    const latestMetrics = row.latest_metrics_json
+      ? (JSON.parse(row.latest_metrics_json) as CheckSummary["latestMetrics"])
+      : {};
+    const reporterOffline =
+      row.agent_kind !== null &&
+      resolveAgentStatus({
+        kind: row.agent_kind,
+        collectionIntervalSeconds: row.agent_collection_interval_seconds ?? 30,
+        lastSeenAt: row.agent_last_seen_at,
+      }) === "offline";
     return {
       id: row.id,
       resourceId: row.resource_id,
       teamId: row.team_id,
       name: row.name,
       type: row.type,
-      status: row.current_status,
+      status: resolveCheckHealthStatus(
+        row.current_status,
+        reporterOffline || latestMetrics.agentTimeout === true
+      ),
       enabled: Boolean(row.enabled),
       intervalSeconds: row.interval_seconds,
       timeoutMs: row.timeout_ms,
@@ -260,9 +283,7 @@ export class ChecksService {
       lastCheckedAt: row.last_checked_at,
       nextCheckAt: row.next_check_at,
       lastLatencyMs: row.last_latency_ms,
-      latestMetrics: row.latest_metrics_json
-        ? (JSON.parse(row.latest_metrics_json) as CheckSummary["latestMetrics"])
-        : {},
+      latestMetrics,
       uptime24h: row.uptime_24h,
       uptime30d: row.uptime_30d,
       createdAt: row.created_at,

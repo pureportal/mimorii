@@ -145,21 +145,32 @@ fn disk_check_matches_windows_drive_roots_and_additional_volumes() {
 fn disk_check_matches_windows_network_paths_case_insensitively() {
     let mut value = snapshot();
     value.disks[0].mount = "\\\\SERVER\\Data\\".to_owned();
-    let result = super::execute(
-        &task(CheckType::Disk, disk_config("//server/data")),
-        &value,
-    );
+    let result = super::execute(&task(CheckType::Disk, disk_config("//server/data")), &value);
 
     assert_result(&result, CheckState::Up, None, None);
     assert_eq!(result.metrics["usedPercent"], 50.0);
 }
 
 #[test]
-fn disk_check_reports_missing_and_inaccessible_volumes() {
-    let missing = super::execute(
-        &task(CheckType::Disk, disk_config("/missing")),
-        &snapshot(),
+fn disk_check_preserves_critical_threshold_evaluation() {
+    let mut value = snapshot();
+    value.disks[0].used_bytes = 973;
+    value.disks[0].total_bytes = 1_000;
+
+    let result = super::execute(&task(CheckType::Disk, disk_config("/")), &value);
+
+    assert_result(
+        &result,
+        CheckState::Down,
+        Some("Disk usage critical threshold was reached"),
+        None,
     );
+    assert_eq!(result.metrics["usedPercent"], 97.3);
+}
+
+#[test]
+fn disk_check_reports_missing_and_inaccessible_volumes() {
+    let missing = super::execute(&task(CheckType::Disk, disk_config("/missing")), &snapshot());
     assert_result(
         &missing,
         CheckState::Down,

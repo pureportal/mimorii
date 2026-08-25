@@ -2,10 +2,12 @@ import type { HTMLAttributes } from "react";
 import { cn } from "../../lib/cn";
 
 const styles = {
+  okay: "bg-success/12 text-success-strong",
   up: "bg-success/12 text-success-strong",
   online: "bg-success/12 text-success-strong",
   down: "bg-danger/12 text-danger",
   offline: "bg-danger/12 text-danger",
+  warning: "bg-warning/16 text-warning-strong",
   degraded: "bg-warning/16 text-warning-strong",
   stale: "bg-warning/16 text-warning-strong",
   pending: "bg-lavender-soft text-violet-strong",

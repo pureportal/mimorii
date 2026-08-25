@@ -1,6 +1,5 @@
 import { Injectable } from "@nestjs/common";
 import type {
-  CheckStatus,
   DashboardIncidentsItem,
   DashboardItem,
   DashboardMetricItem,
@@ -17,6 +16,7 @@ import type {
 } from "@mimorii/contracts";
 import { resourceMetricNames } from "@mimorii/contracts";
 import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
+import { ResourceHealthService } from "../common/resource-health.service.js";
 import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
 import { DatabaseService } from "../database/database.service.js";
 
@@ -33,7 +33,8 @@ interface IncidentRow {
 export class DashboardDataService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly telemetry: ResourceTelemetryService
+    private readonly telemetry: ResourceTelemetryService,
+    private readonly health: ResourceHealthService
   ) {}
 
   async render(
@@ -230,23 +231,12 @@ export class DashboardDataService {
     item: DashboardStatusItem,
     resourceName: string
   ): Promise<DashboardStatusViewItem> {
-    const row = await this.database.get<{ status: CheckStatus }>(
-      `SELECT CASE
-        WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'down')
-          OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'down') THEN 'down'
-        WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'degraded') THEN 'degraded'
-        WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'up')
-          OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'up') THEN 'up'
-        WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id AND c.current_status = 'pending')
-          OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id AND hm.current_status = 'pending') THEN 'pending'
-        WHEN EXISTS (SELECT 1 FROM checks c WHERE c.resource_id = r.id)
-          OR EXISTS (SELECT 1 FROM heartbeat_monitors hm WHERE hm.resource_id = r.id) THEN 'paused'
-        ELSE 'pending' END AS status
-       FROM resources r WHERE r.id = ? AND r.team_id = ?`,
-      item.resourceId,
-      teamId
-    );
-    return { ...this.viewBase(item), resourceName, status: row?.status ?? "pending" };
+    const statuses = await this.health.forResources(teamId, [item.resourceId]);
+    return {
+      ...this.viewBase(item),
+      resourceName,
+      status: statuses.get(item.resourceId) ?? "pending",
+    };
   }
 
   private async incidents(

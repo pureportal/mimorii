@@ -3,11 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuditService } from "../common/audit.service.js";
 import type { DatabaseService } from "../database/database.service.js";
 import type { MaintenanceService } from "../maintenance/maintenance.service.js";
+import type { ResourceHealthService } from "../common/resource-health.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
 import { ResourcesService } from "./resources.service.js";
 
 function service(
   database: object,
+  status = "pending",
   requireAccess: (userId: string, teamId: string, role: string) => Promise<unknown> = vi.fn(
     async () => ({})
   )
@@ -16,7 +18,10 @@ function service(
     database as DatabaseService,
     { require: requireAccess } as unknown as TeamAccessService,
     { isResourceActive: vi.fn(async () => false) } as unknown as MaintenanceService,
-    { record: vi.fn(async () => undefined) } as unknown as AuditService
+    { record: vi.fn(async () => undefined) } as unknown as AuditService,
+    {
+      forResources: vi.fn(async () => new Map([["resource-1", status]])),
+    } as unknown as ResourceHealthService
   );
 }
 
@@ -33,8 +38,6 @@ const row = {
   agent_version: null,
   agent_last_seen_at: null,
   agent_collection_interval_seconds: null,
-  status: "pending",
-  has_monitors: false,
   checks_up: 0,
   checks_total: 0,
   last_checked_at: null,
@@ -43,7 +46,7 @@ const row = {
 } as const;
 
 describe("ResourcesService", () => {
-  it("reports a reachable host without configured monitors as up", async () => {
+  it("reports a reachable host without configured monitors as okay", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
     try {
@@ -61,8 +64,10 @@ describe("ResourcesService", () => {
         })),
       };
 
-      await expect(service(database).get("user-1", "team-1", "resource-1")).resolves.toMatchObject({
-        status: "up",
+      await expect(
+        service(database, "okay").get("user-1", "team-1", "resource-1")
+      ).resolves.toMatchObject({
+        status: "okay",
         checksTotal: 0,
         agent: { status: "online" },
       });
@@ -83,7 +88,6 @@ describe("ResourcesService", () => {
           agent_kind: "desktop",
           agent_last_seen_at: "2026-08-25T11:59:30.000Z",
           agent_collection_interval_seconds: 30,
-          has_monitors: true,
           checks_total: 1,
         })),
       };
@@ -133,7 +137,11 @@ describe("ResourcesService", () => {
       if (role === "admin") throw new ForbiddenException();
       return {};
     });
-    const resources = service({ get: vi.fn(async () => ({ agent_id: "agent-1" })) }, requireAccess);
+    const resources = service(
+      { get: vi.fn(async () => ({ agent_id: "agent-1" })) },
+      "pending",
+      requireAccess
+    );
 
     await expect(resources.remove("member-1", "team-1", "agent-1")).rejects.toBeInstanceOf(
       ForbiddenException
