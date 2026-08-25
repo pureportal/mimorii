@@ -555,6 +555,37 @@ describe("AgentsService", () => {
     expect(observeAgent).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects snapshots with impossible memory or swap usage", async () => {
+    const service = new AgentsService(
+      {} as DatabaseService,
+      {} as TeamAccessService,
+      {} as AuditService,
+      {} as ResultsService,
+      {} as TechnologiesService,
+      mobileDeviceStatuses,
+      telemetry,
+      alerts,
+      images
+    );
+
+    await Promise.all(
+      [
+        { memoryUsedBytes: 8_001, memoryTotalBytes: 8_000 },
+        { swapUsedBytes: 1_001, swapTotalBytes: 1_000 },
+      ].map(async (invalid) => {
+        const invalidSnapshot = Object.assign(snapshot(new Date().toISOString(), 10), invalid);
+        await expect(
+          service.heartbeat(agent, {
+            agentVersion: "2.1.0",
+            snapshots: [invalidSnapshot],
+            results: [],
+            capabilities: ["host"],
+          })
+        ).rejects.toThrow("usage exceeds total capacity");
+      })
+    );
+  });
+
   it("registers check-only capabilities without storing host telemetry", async () => {
     const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
     const database = {

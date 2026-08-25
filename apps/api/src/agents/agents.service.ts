@@ -457,6 +457,12 @@ export class AgentsService {
   }
 
   private normalizeSnapshot(input: HostSnapshotDto, receivedAt: string): HostSnapshot {
+    if (input.memoryUsedBytes > input.memoryTotalBytes) {
+      throw new BadRequestException("Memory usage exceeds total capacity");
+    }
+    if (input.swapUsedBytes > input.swapTotalBytes) {
+      throw new BadRequestException("Swap usage exceeds total capacity");
+    }
     if (input.disks.some((disk) => disk.usedBytes > disk.totalBytes)) {
       throw new BadRequestException("Disk usage exceeds total capacity");
     }

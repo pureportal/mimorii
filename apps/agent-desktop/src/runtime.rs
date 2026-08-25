@@ -121,7 +121,7 @@ pub(crate) fn run_once() -> Result<()> {
     let store = SnapshotStore::new(collection_path()?);
     let outcome = cycle(&config, &store, |_, enabled| {
         if enabled {
-            store.append(&crate::collector::collect())?;
+            store.append(&crate::collector::collect()?)?;
         }
         Ok(())
     })?;
@@ -211,7 +211,7 @@ pub(crate) fn cycle(
                 heartbeat: Ok(None),
             });
         }
-        let snapshot = crate::collector::collect();
+        let snapshot = crate::collector::collect()?;
         let results = poll
             .tasks
             .iter()
@@ -244,7 +244,7 @@ fn transfer_trigger(
 ) -> Result<HeartbeatResponse> {
     let mut batch = store.load()?;
     if batch.is_empty() {
-        store.append(&crate::collector::collect())?;
+        store.append(&crate::collector::collect()?)?;
         batch = store.load()?;
     }
     let latest_snapshot = batch.snapshots().last().unwrap();
@@ -340,7 +340,9 @@ fn collect_locally(
             match command_receiver.recv_timeout(interval) {
                 Ok(command) => Some(command),
                 Err(RecvTimeoutError::Timeout) => {
-                    if let Err(error) = store.append(&crate::collector::collect()) {
+                    let result =
+                        crate::collector::collect().and_then(|snapshot| store.append(&snapshot));
+                    if let Err(error) = result {
                         let _ = error_sender.send(error);
                         return;
                     }
