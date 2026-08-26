@@ -1,10 +1,10 @@
+import type { TeamSummary } from "@mimorii/contracts";
 import {
   Activity,
   BarChart3,
   BellRing,
   Bot,
   CalendarClock,
-  ChevronDown,
   CircleHelp,
   CircleUserRound,
   ClipboardList,
@@ -41,9 +41,9 @@ import { Brand } from "./brand";
 import { BrowserNotificationPrompt } from "./browser-notification-prompt";
 import { ProductGuide } from "./guide/product-guide";
 import { SponsorFavicon } from "./sponsor-favicon";
+import { TeamPicker } from "./team-picker";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
-import { Select } from "./ui/input";
 
 const navigationIcons: Record<NavigationItemId, LucideIcon> = {
   overview: Gauge,
@@ -123,19 +123,12 @@ export function ProtectedLayout() {
       <aside className="safe-fixed-side fixed z-40 hidden w-[272px] border-r border-line bg-surface/94 px-3 py-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand className="px-3" />
         <div data-guide="workspace-switcher" className="relative mt-5 px-1">
-          <Select
-            aria-label="Workspace"
-            value={activeTeam.id}
-            onChange={(event) => setActiveTeamId(event.target.value)}
-            className="h-10 rounded-xl bg-canvas/65 pr-9 text-xs font-semibold"
-          >
-            {session.teams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </Select>
-          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+          <TeamPicker
+            activeTeamId={activeTeam.id}
+            teams={session.teams}
+            onTeamChange={setActiveTeamId}
+            className="h-10 bg-canvas/65 text-xs"
+          />
         </div>
 
         <nav
@@ -336,7 +329,7 @@ function MobileNavigation({
 }: {
   groups: NavigationGroup[];
   activeTeamId: string;
-  teams: Array<{ id: string; name: string }>;
+  teams: TeamSummary[];
   onTeamChange: (id: string) => void;
   onSignOut: () => void;
   onGuideOpen: () => void;
@@ -410,20 +403,15 @@ function MobileNavigation({
             title="Navigation"
             className="mb-0 flex h-14 items-center border-b border-line px-5 pr-12"
           />
-          <div className="relative border-b border-line px-5 py-4">
-            <Select
-              aria-label="Workspace"
-              value={activeTeamId}
-              onChange={(event) => onTeamChange(event.target.value)}
-              className="pr-9 font-semibold"
-            >
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </Select>
-            <ChevronDown className="pointer-events-none absolute right-8 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <div className="border-b border-line px-5 py-4">
+            <TeamPicker
+              activeTeamId={activeTeamId}
+              teams={teams}
+              onTeamChange={(id) => {
+                onTeamChange(id);
+                setOpen(false);
+              }}
+            />
           </div>
           <nav
             aria-label="All destinations"

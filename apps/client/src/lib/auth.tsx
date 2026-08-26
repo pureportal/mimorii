@@ -91,6 +91,9 @@ function isTeamSummary(value: unknown): value is TeamSummary {
     typeof value.name === "string" &&
     typeof value.role === "string" &&
     teamRoles.has(value.role) &&
+    (value.logoUpdatedAt === undefined ||
+      typeof value.logoUpdatedAt === "string" ||
+      value.logoUpdatedAt === null) &&
     typeof value.createdAt === "string"
   );
 }

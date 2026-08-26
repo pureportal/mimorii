@@ -1,9 +1,10 @@
 import type { TeamInvitationSummary, TeamRole } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Crown, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
+import { TeamLogoField } from "../components/team-logo-field";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
@@ -282,11 +283,12 @@ function TeamDetailsPage() {
       />
       <CreateTeamDialog open={teamOpen} onOpenChange={setTeamOpen} onCreated={refreshIdentity} />
       <ManageTeamDialog
-        key={`${teamId}-${activeTeam!.name}`}
+        key={`${teamId}-${activeTeam!.name}-${activeTeam!.logoUpdatedAt ?? "no-logo"}`}
         open={manageOpen}
         onOpenChange={setManageOpen}
         teamId={teamId}
         name={activeTeam!.name}
+        logoUpdatedAt={activeTeam!.logoUpdatedAt ?? null}
         canDelete={activeTeam!.role === "owner"}
         onChanged={refreshIdentity}
       />
@@ -431,18 +433,28 @@ function CreateTeamDialog({
   onCreated: () => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [logo, setLogo] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setLogo(null);
+    setError("");
+  }, [open]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api("/teams", { method: "POST", ...jsonBody({ name }) });
+      await api("/teams", { method: "POST", body: teamMutationBody(name, logo) });
       await onCreated();
       toast.success("Team created");
       onOpenChange(false);
       setName("");
+      setLogo(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Team could not be created");
     } finally {
@@ -451,7 +463,7 @@ function CreateTeamDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeDisabled={busy}>
         <DialogHeader title="New team" />
         <form className="grid gap-5" onSubmit={submit}>
           <Field>
@@ -464,6 +476,13 @@ function CreateTeamDialog({
               maxLength={80}
             />
           </Field>
+          <TeamLogoField
+            name={name}
+            file={logo}
+            disabled={busy}
+            onFileChange={setLogo}
+            onError={setError}
+          />
           <FieldError>{error}</FieldError>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
@@ -484,6 +503,7 @@ function ManageTeamDialog({
   onOpenChange,
   teamId,
   name: initialName,
+  logoUpdatedAt,
   canDelete,
   onChanged,
 }: {
@@ -491,20 +511,32 @@ function ManageTeamDialog({
   onOpenChange: (open: boolean) => void;
   teamId: string;
   name: string;
+  logoUpdatedAt: string | null;
   canDelete: boolean;
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(initialName);
+  const [logo, setLogo] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(initialName);
+    setLogo(null);
+    setError("");
+  }, [initialName, open]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api(`/teams/${teamId}`, { method: "PATCH", ...jsonBody({ name }) });
+      await api(`/teams/${teamId}`, {
+        method: "PATCH",
+        body: teamMutationBody(name, logo),
+      });
       await onChanged();
       toast.success("Team updated");
       onOpenChange(false);
@@ -537,7 +569,7 @@ function ManageTeamDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent closeDisabled={busy}>
           <DialogHeader title="Edit team" />
           <form className="grid gap-5" onSubmit={submit}>
             <Field>
@@ -550,6 +582,14 @@ function ManageTeamDialog({
                 maxLength={80}
               />
             </Field>
+            <TeamLogoField
+              team={{ id: teamId, name, logoUpdatedAt }}
+              name={name}
+              file={logo}
+              disabled={busy}
+              onFileChange={setLogo}
+              onError={setError}
+            />
             <FieldError>{error}</FieldError>
             <div className="flex justify-between gap-2">
               {canDelete ? (
@@ -587,4 +627,11 @@ function ManageTeamDialog({
       />
     </>
   );
+}
+
+function teamMutationBody(name: string, logo: File | null): FormData {
+  const body = new FormData();
+  body.set("name", name);
+  if (logo) body.set("logo", logo);
+  return body;
 }
