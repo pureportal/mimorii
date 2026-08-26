@@ -1,6 +1,6 @@
 import type { CheckResult, CheckSummary } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
-import { createCheckHistorySeries, getCheckHealthItems } from "./check-health";
+import { checkMetricScale, createCheckHistorySeries, getCheckHealthItems } from "./check-health";
 
 describe("check health presentation", () => {
   it("uses latency and response size for HTTP checks", () => {
@@ -65,6 +65,15 @@ describe("check health presentation", () => {
         ],
       },
     ]);
+  });
+
+  it("separates history metrics with incompatible scales", () => {
+    expect(checkMetricScale("usedPercent")).toBe("percent");
+    expect(checkMetricScale("usedBytes")).toBe("bytes");
+    expect(checkMetricScale("latencyMs")).toBe("milliseconds");
+    expect(checkMetricScale("replicationLagSeconds")).toBe("seconds");
+    expect(checkMetricScale("containerCount")).toBe("number");
+    expect(checkMetricScale("cpuPercent")).toBe(checkMetricScale("memoryPercent"));
   });
 });
 

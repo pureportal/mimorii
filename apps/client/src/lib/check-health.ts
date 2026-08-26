@@ -21,6 +21,8 @@ export interface CheckHistorySeries {
   points: Array<{ checkedAt: string; value: number }>;
 }
 
+export type CheckMetricScale = "bytes" | "percent" | "milliseconds" | "days" | "seconds" | "number";
+
 const metricLabels: Record<string, string> = {
   latencyMs: "Latency",
   averageLatencyMs: "Average latency",
@@ -210,6 +212,16 @@ export function checkMetricLabel(metric: string): string {
     .replace(/\bms\b/gi, "ms")
     .replace(/\bio\b/gi, "I/O");
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+export function checkMetricScale(metric: string): CheckMetricScale {
+  const normalized = metric.toLowerCase();
+  if (normalized.includes("bytes")) return "bytes";
+  if (normalized.includes("percent")) return "percent";
+  if (normalized.endsWith("ms")) return "milliseconds";
+  if (normalized.includes("days")) return "days";
+  if (normalized.includes("seconds")) return "seconds";
+  return "number";
 }
 
 export function formatCheckMetric(metric: string, value: CheckMetricValue): string {

@@ -174,8 +174,9 @@ function MetricChart({ series }: { series: CheckHistorySeries }) {
               tick={{ fill: chartColors.muted, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
+              tickFormatter={(value: number) => formatCheckMetric(series.key, value)}
               domain={percent ? [0, 100] : ["auto", "auto"]}
-              unit={percent ? "%" : undefined}
+              width={56}
             />
             <Tooltip
               labelFormatter={(value) =>

@@ -46,8 +46,10 @@ import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import {
   checkPassingLabel,
+  checkMetricScale,
   createCheckHistorySeries as createTypedCheckHistorySeries,
   formatCheckMetric as formatTypedCheckMetric,
+  type CheckMetricScale,
 } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
 import {
@@ -135,6 +137,15 @@ export function ResourceDetailPage() {
   const primaryHistorySeries = activeCheck
     ? createTypedCheckHistorySeries(activeCheck.type, chartData).slice(0, 2)
     : [];
+  const primaryHistoryAxes = primaryHistorySeries.reduce<
+    Array<{ scale: CheckMetricScale; metricKey: string; seriesIndex: number }>
+  >((axes, series, seriesIndex) => {
+    const scale = checkMetricScale(series.key);
+    if (!axes.some((axis) => axis.scale === scale)) {
+      axes.push({ scale, metricKey: series.key, seriesIndex });
+    }
+    return axes;
+  }, []);
   const primaryHistoryData = chartData.map((result) => ({
     checkedAt: result.checkedAt,
     ...Object.fromEntries(
@@ -283,9 +294,14 @@ export function ResourceDetailPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={primaryHistoryData}
-                  margin={{ top: 8, right: 12, left: -18, bottom: 0 }}
+                  margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
+                  <CartesianGrid
+                    yAxisId={primaryHistoryAxes[0]?.scale}
+                    stroke={chartColors.grid}
+                    strokeDasharray="4 6"
+                    vertical={false}
+                  />
                   <XAxis
                     dataKey="checkedAt"
                     tickFormatter={(value) =>
@@ -296,19 +312,29 @@ export function ResourceDetailPage() {
                     tickLine={false}
                     minTickGap={35}
                   />
-                  <YAxis
-                    tick={{ fill: chartColors.muted, fontSize: 10 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                    unit={
-                      primaryHistorySeries.every((series) =>
-                        series.key.toLowerCase().includes("percent")
-                      )
-                        ? "%"
-                        : undefined
-                    }
-                  />
+                  {primaryHistoryAxes.map((axis, axisIndex) => (
+                    <YAxis
+                      key={axis.scale}
+                      yAxisId={axis.scale}
+                      orientation={axisIndex === 0 ? "left" : "right"}
+                      tick={{
+                        fill:
+                          primaryHistoryAxes.length === 1
+                            ? chartColors.muted
+                            : axis.seriesIndex === 0
+                              ? chartColors.lavender
+                              : chartColors.coral,
+                        fontSize: 10,
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(value: number) =>
+                        formatTypedCheckMetric(axis.metricKey, value)
+                      }
+                      domain={axis.scale === "percent" ? [0, 100] : ["auto", "auto"]}
+                      width={56}
+                    />
+                  ))}
                   <Tooltip
                     labelFormatter={(value) =>
                       typeof value === "string" || typeof value === "number"
@@ -332,6 +358,7 @@ export function ResourceDetailPage() {
                       type="monotone"
                       dataKey={`metric${index}`}
                       name={series.label}
+                      yAxisId={checkMetricScale(series.key)}
                       stroke={index === 0 ? chartColors.lavender : chartColors.coral}
                       strokeWidth={2.5}
                       dot={false}
