@@ -800,7 +800,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/analytics/overview`)
       .set("authorization", authorization)
       .expect(200);
-    expect(recoveredOverview.body).toMatchObject({ up: 1, openIncidents: 0 });
+    expect(recoveredOverview.body).toMatchObject({ passing: 1, openIncidents: 0 });
     expect(recoveredOverview.body.incidents[0]).toMatchObject({ status: "resolved" });
 
     const snapshots = await request(app.getHttpServer())
