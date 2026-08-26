@@ -1,6 +1,6 @@
 [package]
 name = "mimorii-agent-desktop"
-version = "11.2.1"
+version = "11.2.2"
 description = "Read-only Mimorii desktop relay and host metrics agent"
 edition = "2024"
 license = "MIT"
