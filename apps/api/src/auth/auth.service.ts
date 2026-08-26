@@ -24,7 +24,6 @@ const SESSION_SECONDS = 12 * 60 * 60;
 interface TeamRow {
   id: string;
   name: string;
-  slug: string;
   role: TeamSummary["role"];
   created_at: string;
 }
@@ -72,14 +71,11 @@ export class AuthService {
       if (inserted.changes === 0) {
         throw new ConflictException("An account already uses this email");
       }
-      await this.database.get("SELECT pg_advisory_xact_lock(hashtext(?))", "mimorii:team-slug");
-      const slug = await this.availableSlug(name);
       await this.database.run(
-        `INSERT INTO teams (id, name, slug, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO teams (id, name, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
         teamId,
         `${name}'s team`,
-        slug,
         userId,
         now,
         now
@@ -212,7 +208,7 @@ export class AuthService {
 
   private async listTeams(userId: string): Promise<TeamSummary[]> {
     const rows = await this.database.all<TeamRow>(
-      `SELECT t.id, t.name, t.slug, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, t.created_at
        FROM teams t JOIN team_members m ON m.team_id = t.id
        WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
@@ -220,7 +216,6 @@ export class AuthService {
     return rows.map((team) => ({
       id: team.id,
       name: team.name,
-      slug: team.slug,
       role: team.role,
       createdAt: team.created_at,
     }));
@@ -241,24 +236,6 @@ export class AuthService {
       acknowledgedTourIds: parseAcknowledgedTourIds(profile.acknowledged_tour_ids),
       createdAt: profile.created_at,
     };
-  }
-
-  private async availableSlug(name: string): Promise<string> {
-    const base =
-      name
-        .toLowerCase()
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 42) || "team";
-    let candidate = base;
-    let suffix = 2;
-    while (await this.database.get("SELECT id FROM teams WHERE slug = ?", candidate)) {
-      candidate = `${base}-${suffix}`;
-      suffix += 1;
-    }
-    return candidate;
   }
 }
 

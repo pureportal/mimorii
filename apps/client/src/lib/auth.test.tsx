@@ -26,7 +26,6 @@ vi.mock("./swetrix", () => ({
 const team = {
   id: "team-1",
   name: "Operations",
-  slug: "operations",
   role: "owner" as const,
   createdAt: "2026-08-14T08:00:00.000Z",
 };

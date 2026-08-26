@@ -17,8 +17,8 @@ export async function seedDevelopmentData(
     password: string;
   }
 ): Promise<void> {
-  const team = await database.get<{ slug: string }>(
-    "SELECT slug FROM teams WHERE id = ?",
+  const team = await database.get<{ id: string }>(
+    "SELECT id FROM teams WHERE id = ?",
     input.teamId
   );
   if (!team) throw new Error("Seed team is unavailable");
@@ -26,7 +26,7 @@ export async function seedDevelopmentData(
     database,
     userId: input.userId,
     teamId: input.teamId,
-    teamSlug: team.slug,
+    teamKey: team.id,
     agentId: input.agentId,
     passwordHash: await hashPassword(input.password),
     now: new Date(),

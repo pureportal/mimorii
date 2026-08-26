@@ -33,7 +33,7 @@ async function seedStatusPages(context: SeedContext, monitoring: SeedMonitoringI
     {
       id: publicPageId,
       name: "Mimorii service status",
-      slug: `${context.teamSlug}-status`,
+      slug: `${context.teamKey}-status`,
       published: 1,
       showUptime: 1,
       resources: [
@@ -46,7 +46,7 @@ async function seedStatusPages(context: SeedContext, monitoring: SeedMonitoringI
     {
       id: internalPageId,
       name: "Internal readiness",
-      slug: `${context.teamSlug}-internal`,
+      slug: `${context.teamKey}-internal`,
       published: 0,
       showUptime: 0,
       resources: [monitoring.pendingResourceId, monitoring.pausedResourceId],
@@ -84,13 +84,13 @@ async function seedStatusPages(context: SeedContext, monitoring: SeedMonitoringI
   const subscribers = [
     {
       key: "verified",
-      email: `subscriber+${context.teamSlug}@example.com`,
+      email: `subscriber+${context.teamKey}@example.com`,
       verifiedAt: at(context, -days(20)),
       verificationExpiresAt: null,
     },
     {
       key: "pending",
-      email: `pending+${context.teamSlug}@example.com`,
+      email: `pending+${context.teamKey}@example.com`,
       verifiedAt: null,
       verificationExpiresAt: at(context, hours(12)),
     },

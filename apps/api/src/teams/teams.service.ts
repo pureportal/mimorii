@@ -22,7 +22,6 @@ import { TeamAccessService } from "./team-access.service.js";
 interface TeamRow {
   id: string;
   name: string;
-  slug: string;
   role: TeamRole;
   created_at: string;
 }
@@ -54,7 +53,7 @@ export class TeamsService {
 
   async list(userId: string): Promise<TeamSummary[]> {
     const teams = await this.database.all<TeamRow>(
-      `SELECT t.id, t.name, t.slug, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, t.created_at
          FROM teams t JOIN team_members m ON m.team_id = t.id
          WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
@@ -66,16 +65,12 @@ export class TeamsService {
     const id = randomUUID();
     const now = new Date().toISOString();
     const name = input.name.trim();
-    let slug = "";
     await this.database.transaction(async () => {
-      await this.database.get("SELECT pg_advisory_xact_lock(hashtext(?))", "mimorii:team-slug");
-      slug = await this.availableSlug(name);
       await this.database.run(
-        `INSERT INTO teams (id, name, slug, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO teams (id, name, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
         id,
         name,
-        slug,
         userId,
         now,
         now
@@ -94,7 +89,7 @@ export class TeamsService {
       subjectType: "team",
       subjectId: id,
     });
-    return { id, name, slug, role: "owner", createdAt: now };
+    return { id, name, role: "owner", createdAt: now };
   }
 
   async update(userId: string, teamId: string, input: UpdateTeamDto): Promise<TeamSummary> {
@@ -343,7 +338,7 @@ export class TeamsService {
 
   private async getSummary(userId: string, teamId: string): Promise<TeamSummary> {
     const row = await this.database.get<TeamRow>(
-      `SELECT t.id, t.name, t.slug, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, t.created_at
        FROM teams t JOIN team_members m ON m.team_id = t.id
        WHERE t.id = ? AND m.user_id = ?`,
       teamId,
@@ -357,7 +352,6 @@ export class TeamsService {
     return {
       id: team.id,
       name: team.name,
-      slug: team.slug,
       role: team.role,
       createdAt: team.created_at,
     };
@@ -373,23 +367,5 @@ export class TeamsService {
   private async lockTeam(teamId: string): Promise<void> {
     const team = await this.database.get("SELECT id FROM teams WHERE id = ? FOR UPDATE", teamId);
     if (!team) throw new NotFoundException("Team not found");
-  }
-
-  private async availableSlug(name: string): Promise<string> {
-    const base =
-      name
-        .toLowerCase()
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 42) || "team";
-    let candidate = base;
-    let suffix = 2;
-    while (await this.database.get("SELECT id FROM teams WHERE slug = ?", candidate)) {
-      candidate = `${base}-${suffix}`;
-      suffix += 1;
-    }
-    return candidate;
   }
 }

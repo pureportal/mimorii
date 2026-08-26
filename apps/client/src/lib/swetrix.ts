@@ -45,8 +45,8 @@ const staticPaths = new Set([
 ]);
 const dynamicPaths: Array<[RegExp, string]> = [
   [/^\/invite\/[^/]+$/, "/invite/:token"],
-  [/^\/status\/[^/]+$/, "/status/:slug"],
-  [/^\/dashboard\/[^/]+$/, "/dashboard/:slug"],
+  [/^\/status\/[^/]+\/[^/]+$/, "/status/:id/:slug"],
+  [/^\/dashboard\/[^/]+\/[^/]+$/, "/dashboard/:id/:slug"],
   [/^\/app\/monitoring\/resources\/[^/]+$/, "/app/monitoring/resources/:id"],
   [/^\/app\/publishing\/dashboards\/[^/]+\/edit$/, "/app/publishing/dashboards/:id/edit"],
 ];

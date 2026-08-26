@@ -70,7 +70,6 @@ describe("OperationsPage incident updates", () => {
       activeTeam: {
         id: "team-1",
         name: "Operations",
-        slug: "operations",
         role: "owner",
         createdAt: "2026-08-20T08:00:00.000Z",
       },

@@ -205,11 +205,10 @@ async function createUser(
       now
     );
     await database.run(
-      `INSERT INTO teams (id, name, slug, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO teams (id, name, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
       teamId,
       `${name}'s team`,
-      await seedSlug(database, name),
       userId,
       now,
       now
@@ -229,24 +228,6 @@ async function createUser(
     subjectId: userId,
   });
   return { id: userId };
-}
-
-async function seedSlug(database: DatabaseService, name: string): Promise<string> {
-  const base =
-    name
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 42) || "team";
-  let candidate = base;
-  let suffix = 2;
-  while (await database.get("SELECT id FROM teams WHERE slug = ?", candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
 }
 
 async function recordAudit(

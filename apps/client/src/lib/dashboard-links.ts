@@ -1,16 +1,16 @@
 import { getServerUrl } from "./api";
 
-export function dashboardViewPath(slug: string, accessKey?: string): string {
-  const path = `/dashboard/${encodeURIComponent(slug)}`;
+export function dashboardViewPath(id: string, slug: string, accessKey?: string): string {
+  const path = `/dashboard/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`;
   return accessKey ? `${path}#${new URLSearchParams({ key: accessKey })}` : path;
 }
 
-export function dashboardShareUrl(slug: string, accessKey: string): string {
+export function dashboardShareUrl(id: string, slug: string, accessKey: string): string {
   const url =
     window.location.protocol === "tauri:"
       ? new URL(getServerUrl().replace(/\/api\/?$/, ""))
       : new URL(window.location.origin);
-  url.pathname = `/dashboard/${encodeURIComponent(slug)}`;
+  url.pathname = `/dashboard/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`;
   url.search = "";
   url.hash = new URLSearchParams({ key: accessKey }).toString();
   return url.toString();

@@ -75,6 +75,7 @@ export function DashboardEditorPage() {
   const [saving, setSaving] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareKey, setShareKey] = useState<string | null>(null);
+  const [shareId, setShareId] = useState("");
   const [shareSlug, setShareSlug] = useState("");
   const [navigateAfterShare, setNavigateAfterShare] = useState<string | null>(null);
   const [accessConfirmation, setAccessConfirmation] = useState<"regenerate" | "revoke" | null>(
@@ -136,6 +137,7 @@ export function DashboardEditorPage() {
       }
       toast.success(isNew ? "Dashboard created" : "Dashboard saved");
       if (result.accessKey) {
+        setShareId(result.dashboard.id);
         setShareSlug(result.dashboard.slug);
         setShareKey(result.accessKey);
         if (isNew) setNavigateAfterShare(appRoutes.dashboardEdit(result.dashboard.id));
@@ -158,6 +160,7 @@ export function DashboardEditorPage() {
         { method: "POST" }
       );
       setHasAccessKey(true);
+      setShareId(id);
       setShareSlug(dashboard.data?.slug ?? slug);
       setShareKey(result.accessKey);
       await queryClient.invalidateQueries({ queryKey: ["dashboards", teamId] });
@@ -443,6 +446,7 @@ export function DashboardEditorPage() {
       />
       <DashboardAccessKeyDialog
         accessKey={shareKey}
+        dashboardId={shareId}
         slug={shareSlug}
         onOpenChange={(open) => {
           if (open) return;

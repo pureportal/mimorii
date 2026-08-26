@@ -20,7 +20,12 @@ describe("DashboardDataService", () => {
 
     const view = await service.render(
       "team-1",
-      { name: "Operations", slug: "operations", updatedAt: "2026-08-25T12:00:00.000Z" },
+      {
+        id: "dashboard-1",
+        name: "Operations",
+        slug: "operations",
+        updatedAt: "2026-08-25T12:00:00.000Z",
+      },
       [{ id: "status-1", type: "status", title: "Host status", width: 1, resourceId: "resource-1" }]
     );
 

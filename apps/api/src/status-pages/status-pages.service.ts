@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   PublicStatusPage,
   StatusPageComponent,
@@ -71,33 +66,23 @@ export class StatusPagesService {
     const resourceIds = await this.validateResources(teamId, input.resourceIds);
     const id = randomUUID();
     const now = new Date().toISOString();
-    try {
-      await this.database.transaction(async () => {
-        await this.database.run(
-          `INSERT INTO status_pages
-           (id, team_id, name, slug, published, show_uptime, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          id,
-          teamId,
-          input.name.trim(),
-          input.slug.toLowerCase(),
-          input.published ? 1 : 0,
-          input.showUptime === false ? 0 : 1,
-          userId,
-          now,
-          now
-        );
-        await this.replaceResources(id, resourceIds);
-      });
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("duplicate key value violates unique constraint")
-      ) {
-        throw new ConflictException("Status page address is already in use");
-      }
-      throw error;
-    }
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `INSERT INTO status_pages
+         (id, team_id, name, slug, published, show_uptime, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        teamId,
+        input.name.trim(),
+        input.slug.toLowerCase(),
+        input.published ? 1 : 0,
+        input.showUptime === false ? 0 : 1,
+        userId,
+        now,
+        now
+      );
+      await this.replaceResources(id, resourceIds);
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -119,30 +104,20 @@ export class StatusPagesService {
     const resourceIds = input.resourceIds
       ? await this.validateResources(teamId, input.resourceIds)
       : await this.resourceIds(id);
-    try {
-      await this.database.transaction(async () => {
-        await this.database.run(
-          `UPDATE status_pages SET name = ?, slug = ?, published = ?, show_uptime = ?, updated_at = ?
-           WHERE id = ? AND team_id = ?`,
-          input.name?.trim() ?? current.name,
-          input.slug?.toLowerCase() ?? current.slug,
-          (input.published ?? Boolean(current.published)) ? 1 : 0,
-          (input.showUptime ?? Boolean(current.show_uptime)) ? 1 : 0,
-          new Date().toISOString(),
-          id,
-          teamId
-        );
-        await this.replaceResources(id, resourceIds);
-      });
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("duplicate key value violates unique constraint")
-      ) {
-        throw new ConflictException("Status page address is already in use");
-      }
-      throw error;
-    }
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `UPDATE status_pages SET name = ?, slug = ?, published = ?, show_uptime = ?, updated_at = ?
+         WHERE id = ? AND team_id = ?`,
+        input.name?.trim() ?? current.name,
+        input.slug?.toLowerCase() ?? current.slug,
+        (input.published ?? Boolean(current.published)) ? 1 : 0,
+        (input.showUptime ?? Boolean(current.show_uptime)) ? 1 : 0,
+        new Date().toISOString(),
+        id,
+        teamId
+      );
+      await this.replaceResources(id, resourceIds);
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -220,10 +195,10 @@ export class StatusPagesService {
     });
   }
 
-  async publicPage(slug: string): Promise<PublicStatusPage> {
+  async publicPage(id: string): Promise<PublicStatusPage> {
     const row = await this.database.get<StatusPageRow>(
-      `${this.selectSql()} WHERE sp.slug = ? AND sp.published = 1 GROUP BY sp.id`,
-      slug.toLowerCase()
+      `${this.selectSql()} WHERE sp.id = ? AND sp.published = 1 GROUP BY sp.id`,
+      id
     );
     if (!row) throw new NotFoundException("Status page not found");
     const resourceIds = await this.resourceIds(row.id);
@@ -272,6 +247,7 @@ export class StatusPagesService {
     )?.updated_at;
     const incidents = await this.incidents.forResources(resourceIds, resolvedSince);
     return {
+      id: row.id,
       name: row.name,
       slug: row.slug,
       state,
@@ -308,13 +284,13 @@ export class StatusPagesService {
     };
   }
 
-  async subscribe(slug: string, input: SubscribeStatusPageDto): Promise<{ accepted: true }> {
+  async subscribe(id: string, input: SubscribeStatusPageDto): Promise<{ accepted: true }> {
     if (!this.notifications.emailAvailable()) {
       throw new BadRequestException("Email subscriptions are unavailable");
     }
     const page = await this.database.get<StatusPageRow>(
-      `${this.selectSql()} WHERE sp.slug = ? AND sp.published = 1 GROUP BY sp.id`,
-      slug.toLowerCase()
+      `${this.selectSql()} WHERE sp.id = ? AND sp.published = 1 GROUP BY sp.id`,
+      id
     );
     if (!page) throw new NotFoundException("Status page not found");
     const email = input.email.trim().toLowerCase();
@@ -324,7 +300,7 @@ export class StatusPagesService {
       email
     );
     if (existing?.verified_at) return { accepted: true };
-    const id = existing?.id ?? randomUUID();
+    const subscriberId = existing?.id ?? randomUUID();
     const token = createSecret("mim_status");
     const now = new Date().toISOString();
     const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
@@ -335,14 +311,14 @@ export class StatusPagesService {
         hashSecret(token),
         verificationExpiresAt,
         now,
-        id
+        subscriberId
       );
     } else {
       await this.database.run(
         `INSERT INTO status_subscribers
          (id, status_page_id, email, token_hash, verification_expires_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        id,
+        subscriberId,
         page.id,
         email,
         hashSecret(token),
@@ -354,7 +330,7 @@ export class StatusPagesService {
     await this.notifications.sendTransactionalEmail(
       email,
       `Confirm ${page.name} updates`,
-      `${baseUrl}/status/${page.slug}?verify=${encodeURIComponent(token)}`
+      `${baseUrl}/status/${page.id}/${page.slug}?verify=${encodeURIComponent(token)}`
     );
     return { accepted: true };
   }

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -97,27 +96,23 @@ export class DashboardsService {
     const id = randomUUID();
     const now = new Date().toISOString();
     const accessKey = input.accessMode === "protected" ? createSecret("mim_dash") : null;
-    try {
-      await this.database.transaction(async () => {
-        await this.database.run(
-          `INSERT INTO dashboards
-           (id, team_id, name, slug, access_mode, access_key_hash, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          id,
-          teamId,
-          input.name.trim(),
-          input.slug.toLowerCase(),
-          input.accessMode,
-          accessKey ? hashSecret(accessKey) : null,
-          userId,
-          now,
-          now
-        );
-        await this.replaceItems(id, items);
-      });
-    } catch (error) {
-      this.throwAddressConflict(error);
-    }
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `INSERT INTO dashboards
+         (id, team_id, name, slug, access_mode, access_key_hash, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        teamId,
+        input.name.trim(),
+        input.slug.toLowerCase(),
+        input.accessMode,
+        accessKey ? hashSecret(accessKey) : null,
+        userId,
+        now,
+        now
+      );
+      await this.replaceItems(id, items);
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -151,24 +146,20 @@ export class DashboardsService {
       }
     }
     if (accessMode !== "protected") accessKeyHash = null;
-    try {
-      await this.database.transaction(async () => {
-        await this.database.run(
-          `UPDATE dashboards SET name = ?, slug = ?, access_mode = ?, access_key_hash = ?, updated_at = ?
-           WHERE id = ? AND team_id = ?`,
-          input.name?.trim() ?? current.name,
-          input.slug?.toLowerCase() ?? current.slug,
-          accessMode,
-          accessKeyHash,
-          new Date().toISOString(),
-          id,
-          teamId
-        );
-        if (items) await this.replaceItems(id, items);
-      });
-    } catch (error) {
-      this.throwAddressConflict(error);
-    }
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `UPDATE dashboards SET name = ?, slug = ?, access_mode = ?, access_key_hash = ?, updated_at = ?
+         WHERE id = ? AND team_id = ?`,
+        input.name?.trim() ?? current.name,
+        input.slug?.toLowerCase() ?? current.slug,
+        accessMode,
+        accessKeyHash,
+        new Date().toISOString(),
+        id,
+        teamId
+      );
+      if (items) await this.replaceItems(id, items);
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -247,13 +238,13 @@ export class DashboardsService {
   }
 
   async view(
-    slug: string,
+    id: string,
     user: { id: string } | undefined,
     accessKey: string | undefined
   ): Promise<DashboardView> {
     const row = await this.database.get<DashboardRow>(
-      `${this.selectSql()} WHERE LOWER(d.slug) = LOWER(?) GROUP BY d.id`,
-      slug
+      `${this.selectSql()} WHERE d.id = ? GROUP BY d.id`,
+      id
     );
     if (!row) throw new NotFoundException("Dashboard not found");
     if (row.access_mode === "private") {
@@ -276,7 +267,7 @@ export class DashboardsService {
     }
     return this.data.render(
       row.team_id,
-      { name: row.name, slug: row.slug, updatedAt: row.updated_at },
+      { id: row.id, name: row.name, slug: row.slug, updatedAt: row.updated_at },
       await this.items(row.id)
     );
   }
@@ -535,13 +526,6 @@ export class DashboardsService {
   private selectSql(): string {
     return `SELECT d.*, COUNT(di.id)::integer AS item_count FROM dashboards d
       LEFT JOIN dashboard_items di ON di.dashboard_id = d.id`;
-  }
-
-  private throwAddressConflict(error: unknown): never {
-    if (error instanceof Error && error.message.includes("dashboards_slug_unique")) {
-      throw new ConflictException("Dashboard address is already in use");
-    }
-    throw error;
   }
 }
 

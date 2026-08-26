@@ -39,7 +39,7 @@ export class DashboardDataService {
 
   async render(
     teamId: string,
-    dashboard: { name: string; slug: string; updatedAt: string },
+    dashboard: { id: string; name: string; slug: string; updatedAt: string },
     items: DashboardItem[]
   ): Promise<DashboardView> {
     const resourceNames = await this.resourceNames(
@@ -47,6 +47,7 @@ export class DashboardDataService {
       items.flatMap((item) => (item.resourceId ? [item.resourceId] : []))
     );
     return {
+      id: dashboard.id,
       name: dashboard.name,
       slug: dashboard.slug,
       items: await Promise.all(

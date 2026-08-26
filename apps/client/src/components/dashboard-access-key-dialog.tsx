@@ -7,14 +7,16 @@ import { Input } from "./ui/input";
 
 export function DashboardAccessKeyDialog({
   accessKey,
+  dashboardId,
   slug,
   onOpenChange,
 }: {
   accessKey: string | null;
+  dashboardId: string;
   slug: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const url = accessKey ? dashboardShareUrl(slug, accessKey) : "";
+  const url = accessKey ? dashboardShareUrl(dashboardId, slug, accessKey) : "";
 
   async function copy() {
     try {

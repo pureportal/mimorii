@@ -21,6 +21,7 @@ import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount } from "../lib/format";
+import { statusPagePath } from "../lib/status-page-links";
 
 export function StatusPagesPage() {
   const { activeTeam } = useAuth();
@@ -118,7 +119,9 @@ export function StatusPagesPage() {
                         {page.published ? "Published" : "Draft"}
                       </StatusBadge>
                     </div>
-                    <p className="mt-1 truncate text-sm text-muted">/status/{page.slug}</p>
+                    <p className="mt-1 truncate text-sm text-muted">
+                      {statusPagePath(page.id, page.slug)}
+                    </p>
                     <div className="mt-3 flex gap-4 text-xs text-muted">
                       <span className="flex items-center gap-1.5">
                         <Radio className="size-3.5" />{" "}
@@ -134,7 +137,7 @@ export function StatusPagesPage() {
                 <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
                   {page.published ? (
                     <Button asChild variant="ghost" size="sm">
-                      <Link to={`/status/${page.slug}`} target="_blank">
+                      <Link to={statusPagePath(page.id, page.slug)} target="_blank">
                         <ExternalLink /> Open
                       </Link>
                     </Button>

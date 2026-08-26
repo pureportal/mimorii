@@ -89,7 +89,6 @@ function isTeamSummary(value: unknown): value is TeamSummary {
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.name === "string" &&
-    typeof value.slug === "string" &&
     typeof value.role === "string" &&
     teamRoles.has(value.role) &&
     typeof value.createdAt === "string"

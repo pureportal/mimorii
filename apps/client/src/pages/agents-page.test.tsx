@@ -67,7 +67,6 @@ describe("AgentsPage confirmations", () => {
       activeTeam: {
         id: "team-1",
         name: "Operations",
-        slug: "operations",
         role: "owner",
         createdAt: "2026-08-13T07:00:00.000Z",
       },

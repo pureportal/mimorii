@@ -98,15 +98,16 @@ export class DashboardsController {
 export class DashboardViewsController {
   constructor(private readonly dashboards: DashboardsService) {}
 
-  @Get(":slug")
+  @Get(":id/:slug")
   @Header("Cache-Control", "no-store")
   @Header("Referrer-Policy", "no-referrer")
   @ApiHeader({ name: "X-Dashboard-Key", required: false })
   view(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
-    @Param("slug") slug: string,
+    @Param("id") id: string,
+    @Param("slug") _slug: string,
     @Headers("x-dashboard-key") accessKey: string | undefined
   ) {
-    return this.dashboards.view(slug, user, accessKey);
+    return this.dashboards.view(id, user, accessKey);
   }
 }

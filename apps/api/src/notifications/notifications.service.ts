@@ -76,6 +76,7 @@ interface SubscriberDeliveryRow {
   id: string;
   subscriber_id: string;
   email: string;
+  page_id: string;
   page_name: string;
   page_slug: string;
   event: NotificationEvent;
@@ -629,7 +630,7 @@ export class NotificationsService {
 
   private async deliverSubscriberById(id: string): Promise<void> {
     const row = await this.database.get<SubscriberDeliveryRow>(
-      `SELECT sd.*, ss.email, sp.name AS page_name, sp.slug AS page_slug
+      `SELECT sd.*, ss.email, sp.id AS page_id, sp.name AS page_name, sp.slug AS page_slug
        FROM status_subscriber_deliveries sd
        JOIN status_subscribers ss ON ss.id = sd.subscriber_id
        JOIN status_pages sp ON sp.id = ss.status_page_id
@@ -653,8 +654,8 @@ export class NotificationsService {
         [
           title,
           message,
-          `${baseUrl}/status/${row.page_slug}`,
-          `Unsubscribe: ${baseUrl}/status/${row.page_slug}?unsubscribe=${encodeURIComponent(unsubscribe)}`,
+          `${baseUrl}/status/${row.page_id}/${row.page_slug}`,
+          `Unsubscribe: ${baseUrl}/status/${row.page_id}/${row.page_slug}?unsubscribe=${encodeURIComponent(unsubscribe)}`,
         ]
           .filter(Boolean)
           .join("\n\n")

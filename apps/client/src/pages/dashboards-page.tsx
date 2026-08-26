@@ -84,7 +84,7 @@ export function DashboardsPage() {
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-display text-lg font-bold">{dashboard.name}</h3>
                       <p className="mt-1 truncate text-sm text-muted">
-                        /dashboard/{dashboard.slug}
+                        /dashboard/{dashboard.id}/{dashboard.slug}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">
                         <span className="flex items-center gap-1.5">
@@ -103,7 +103,7 @@ export function DashboardsPage() {
                     {dashboard.accessMode !== "protected" ? (
                       <Button asChild variant="ghost" size="sm">
                         <Link
-                          to={dashboardViewPath(dashboard.slug)}
+                          to={dashboardViewPath(dashboard.id, dashboard.slug)}
                           target="_blank"
                           rel="noreferrer"
                         >

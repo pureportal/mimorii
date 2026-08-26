@@ -49,8 +49,9 @@ describe("StatusPagesService", () => {
       health as unknown as ResourceHealthService
     );
 
-    const page = await service.publicPage("status");
+    const page = await service.publicPage("page-1");
 
+    expect(page.id).toBe("page-1");
     expect(page.state).toBe("degraded");
     expect(page.components).toEqual([
       expect.objectContaining({ name: "Host", status: "critical" }),

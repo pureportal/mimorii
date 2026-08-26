@@ -11,15 +11,19 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { formatPercent, formatRelative } from "../lib/format";
+import { statusPagePath } from "../lib/status-page-links";
 
 export function PublicStatusPageView() {
-  const { slug = "" } = useParams();
+  const { id = "", slug = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const [subscribing, setSubscribing] = useState(false);
   const page = useQuery({
-    queryKey: ["public-status-page", slug],
-    queryFn: () => api<PublicStatusPage>(`/public/status-pages/${encodeURIComponent(slug)}`),
+    queryKey: ["public-status-page", id],
+    queryFn: () =>
+      api<PublicStatusPage>(
+        `/public/status-pages/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`
+      ),
     refetchInterval: 60_000,
   });
 
@@ -40,6 +44,15 @@ export function PublicStatusPageView() {
       .catch((error: Error) => toast.error(error.message))
       .finally(() => navigate(location.pathname, { replace: true }));
   }, [location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!page.data) return;
+    const parameters = new URLSearchParams(location.search);
+    if (parameters.has("verify") || parameters.has("unsubscribe")) return;
+    const pathname = statusPagePath(page.data.id, page.data.slug);
+    if (location.pathname === pathname) return;
+    void navigate({ pathname, search: location.search, hash: location.hash }, { replace: true });
+  }, [location.hash, location.pathname, location.search, navigate, page.data]);
 
   if (page.isLoading) return <LoadingState />;
   if (page.isError || !page.data) return <ErrorState retry={() => void page.refetch()} />;
@@ -73,10 +86,13 @@ export function PublicStatusPageView() {
     const form = new FormData(event.currentTarget);
     setSubscribing(true);
     try {
-      await api(`/public/status-pages/${encodeURIComponent(slug)}/subscribers`, {
-        method: "POST",
-        ...jsonBody({ email: form.get("email") }),
-      });
+      await api(
+        `/public/status-pages/${encodeURIComponent(id)}/${encodeURIComponent(slug)}/subscribers`,
+        {
+          method: "POST",
+          ...jsonBody({ email: form.get("email") }),
+        }
+      );
       event.currentTarget.reset();
       toast.success("Check your email");
     } catch (error) {

@@ -76,7 +76,7 @@ describe("development seed", () => {
     const runs: RunCall[] = [];
     const database = {
       get: async (sql: string) => {
-        if (sql.includes("SELECT slug FROM teams")) return { slug: "t4ggno" };
+        if (sql.includes("SELECT id FROM teams")) return { id: "team-1" };
         if (sql.includes("AS owns_team")) return completeSummary;
         return undefined;
       },

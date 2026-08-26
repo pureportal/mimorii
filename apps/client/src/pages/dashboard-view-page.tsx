@@ -1,23 +1,28 @@
 import type { DashboardView } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { DashboardCanvas } from "../components/dashboard-canvas";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ApiError, api } from "../lib/api";
-import { dashboardAccessKey, dashboardKeyFingerprint } from "../lib/dashboard-links";
+import {
+  dashboardAccessKey,
+  dashboardKeyFingerprint,
+  dashboardViewPath,
+} from "../lib/dashboard-links";
 import { formatRelative } from "../lib/format";
 
 export function DashboardViewPage() {
-  const { slug = "" } = useParams();
+  const { id = "", slug = "" } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const accessKey = dashboardAccessKey(location.hash);
   const dashboard = useQuery({
-    queryKey: ["dashboard-view", slug, dashboardKeyFingerprint(accessKey)],
+    queryKey: ["dashboard-view", id, dashboardKeyFingerprint(accessKey)],
     queryFn: () =>
-      api<DashboardView>(`/dashboards/${encodeURIComponent(slug)}`, {
+      api<DashboardView>(`/dashboards/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`, {
         headers: accessKey ? { "X-Dashboard-Key": accessKey } : undefined,
       }),
     refetchInterval: 30_000,
@@ -25,6 +30,13 @@ export function DashboardViewPage() {
       !(error instanceof ApiError && (error.status === 401 || error.status === 404)) &&
       failureCount < 2,
   });
+
+  useEffect(() => {
+    if (!dashboard.data) return;
+    const pathname = dashboardViewPath(dashboard.data.id, dashboard.data.slug);
+    if (location.pathname === pathname) return;
+    void navigate({ pathname, search: location.search, hash: location.hash }, { replace: true });
+  }, [dashboard.data, location.hash, location.pathname, location.search, navigate]);
 
   if (dashboard.isLoading) return <LoadingState />;
   if (dashboard.error instanceof ApiError && dashboard.error.status === 401) {

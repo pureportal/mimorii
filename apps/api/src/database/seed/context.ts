@@ -5,7 +5,7 @@ export interface SeedContext {
   database: DatabaseService;
   userId: string;
   teamId: string;
-  teamSlug: string;
+  teamKey: string;
   agentId: string;
   passwordHash: string;
   now: Date;

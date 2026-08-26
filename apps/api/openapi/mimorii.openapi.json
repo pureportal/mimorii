@@ -1357,10 +1357,18 @@
         ]
       }
     },
-    "/api/dashboards/{slug}": {
+    "/api/dashboards/{id}/{slug}": {
       "get": {
         "operationId": "view",
         "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "slug",
             "required": true,
@@ -4270,10 +4278,18 @@
         ]
       }
     },
-    "/api/public/status-pages/{slug}": {
+    "/api/public/status-pages/{id}/{slug}": {
       "get": {
         "operationId": "get",
         "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "slug",
             "required": true,
@@ -4293,10 +4309,18 @@
         ]
       }
     },
-    "/api/public/status-pages/{slug}/subscribers": {
+    "/api/public/status-pages/{id}/{slug}/subscribers": {
       "post": {
         "operationId": "subscribe",
         "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "slug",
             "required": true,

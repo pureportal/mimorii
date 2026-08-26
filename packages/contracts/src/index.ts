@@ -308,7 +308,6 @@ export type GlobalAuditEventSummary = AuditEventSummary;
 export interface TeamSummary {
   id: string;
   name: string;
-  slug: string;
   role: TeamRole;
   createdAt: string;
 }
@@ -694,6 +693,7 @@ export interface PublicMaintenanceWindow {
 }
 
 export interface PublicStatusPage {
+  id: string;
   name: string;
   slug: string;
   state: "operational" | "degraded" | "outage" | "maintenance";
@@ -813,6 +813,7 @@ export type DashboardViewItem =
   | DashboardIncidentsViewItem;
 
 export interface DashboardView {
+  id: string;
   name: string;
   slug: string;
   items: DashboardViewItem[];

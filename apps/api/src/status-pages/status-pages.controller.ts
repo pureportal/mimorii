@@ -87,14 +87,18 @@ export class StatusPagesController {
 export class PublicStatusPagesController {
   constructor(private readonly statusPages: StatusPagesService) {}
 
-  @Get(":slug")
-  get(@Param("slug") slug: string) {
-    return this.statusPages.publicPage(slug);
+  @Get(":id/:slug")
+  get(@Param("id") id: string, @Param("slug") _slug: string) {
+    return this.statusPages.publicPage(id);
   }
 
-  @Post(":slug/subscribers")
-  subscribe(@Param("slug") slug: string, @Body() input: SubscribeStatusPageDto) {
-    return this.statusPages.subscribe(slug, input);
+  @Post(":id/:slug/subscribers")
+  subscribe(
+    @Param("id") id: string,
+    @Param("slug") _slug: string,
+    @Body() input: SubscribeStatusPageDto
+  ) {
+    return this.statusPages.subscribe(id, input);
   }
 
   @Post("subscriptions/:token/verify")

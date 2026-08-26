@@ -112,8 +112,8 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/imprint" element={<ImprintPage />} />
           <Route path="/invite/:token" element={<InvitePage />} />
-          <Route path="/status/:slug" element={<PublicStatusPageView />} />
-          <Route path="/dashboard/:slug" element={<DashboardViewPage />} />
+          <Route path="/status/:id/:slug" element={<PublicStatusPageView />} />
+          <Route path="/dashboard/:id/:slug" element={<DashboardViewPage />} />
         </Route>
         <Route path="/app" element={<ProtectedLayout />}>
           <Route index element={<OverviewPage />} />

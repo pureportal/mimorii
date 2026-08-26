@@ -223,7 +223,20 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260829000000");
+      expect(migration?.name).toBe("Migration20260830000000");
+
+      const teamSlugColumn = await database.all<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'teams' AND column_name = 'slug'`
+      );
+      expect(teamSlugColumn).toEqual([]);
+
+      const publishingSlugIndexes = await database.all<{ indexname: string }>(
+        `SELECT indexname FROM pg_indexes
+         WHERE schemaname = 'public'
+         AND indexname IN ('dashboards_slug_unique', 'status_pages_slug_unique')`
+      );
+      expect(publishingSlugIndexes).toEqual([]);
 
       const faviconRequestColumn = await database.all<{
         column_name: string;

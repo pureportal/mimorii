@@ -1809,15 +1809,6 @@
           "primary": true
         },
         {
-          "columnNames": ["lower(slug)"],
-          "composite": false,
-          "constraint": false,
-          "keyName": "dashboards_slug_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX dashboards_slug_unique ON public.dashboards USING btree (lower(slug))"
-        },
-        {
           "columnNames": ["team_id", "updated_at"],
           "composite": true,
           "constraint": false,
@@ -6673,15 +6664,6 @@
           "keyName": "status_pages_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": ["lower(slug)"],
-          "composite": false,
-          "constraint": false,
-          "keyName": "status_pages_slug_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX status_pages_slug_unique ON public.status_pages USING btree (lower(slug))"
         }
       ],
       "checks": [],
@@ -7443,22 +7425,6 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
         "created_by": {
           "name": "created_by",
           "type": "text",
@@ -7518,15 +7484,6 @@
           "keyName": "teams_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": ["lower(slug)"],
-          "composite": false,
-          "constraint": false,
-          "keyName": "teams_slug_unique",
-          "unique": true,
-          "primary": false,
-          "expression": "CREATE UNIQUE INDEX teams_slug_unique ON public.teams USING btree (lower(slug))"
         }
       ],
       "checks": [],

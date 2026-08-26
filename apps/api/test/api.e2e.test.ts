@@ -117,7 +117,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(openapi.body.paths["/api/sponsors/applications"]).toBeDefined();
     expect(openapi.body.paths["/api/admin/statistics"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/dashboards"]).toBeDefined();
-    expect(openapi.body.paths["/api/dashboards/{slug}"]).toBeDefined();
+    expect(openapi.body.paths["/api/dashboards/{id}/{slug}"]).toBeDefined();
+    expect(openapi.body.paths["/api/public/status-pages/{id}/{slug}"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/notifications/policies"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/resources/{id}/metrics"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/resources/{resourceId}/alerts"]).toBeDefined();
@@ -1356,7 +1357,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       })
       .expect(201);
     await request(app.getHttpServer())
-      .get(`/api/public/status-pages/${statusPage.body.slug}`)
+      .get(`/api/public/status-pages/${statusPage.body.id}/${statusPage.body.slug}`)
       .expect(200)
       .expect(({ body }) => {
         expect(body.state).toBe("maintenance");
@@ -1474,7 +1475,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       dashboard: { accessMode: "public", itemCount: 4, hasAccessKey: false },
     });
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${publicSlug}`)
+      .get(`/api/dashboards/${publicDashboard.body.dashboard.id}/${publicSlug}`)
       .expect(200)
       .expect(({ body }) => {
         expect(body.items.map((item: { id: string }) => item.id)).toEqual([
@@ -1496,7 +1497,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       });
 
     const privateSlug = `dashboard-private-${Date.now()}`;
-    await request(app.getHttpServer())
+    const privateDashboard = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/dashboards`)
       .set("authorization", authorization)
       .send({
@@ -1506,13 +1507,16 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         items: createItems(),
       })
       .expect(201);
-    await request(app.getHttpServer()).get(`/api/dashboards/${privateSlug}`).expect(401);
+    const privateId = privateDashboard.body.dashboard.id as string;
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${privateSlug}`)
+      .get(`/api/dashboards/${privateId}/${privateSlug}`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .get(`/api/dashboards/${privateId}/${privateSlug}`)
       .set("authorization", authorization)
       .expect(200);
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${privateSlug}`)
+      .get(`/api/dashboards/${privateId}/${privateSlug}`)
       .set("authorization", outsiderAuthorization)
       .expect(404);
 
@@ -1541,15 +1545,15 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(stored?.access_key_hash).not.toBe(originalKey);
 
     const missingKey = await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .expect(404);
     const invalidKey = await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", "mim_dash_invalid")
       .expect(404);
     expect(invalidKey.body).toEqual(missingKey.body);
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", originalKey)
       .expect(200);
 
@@ -1571,7 +1575,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expect(body.dashboard.items[0].width).toBe(3);
       });
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", originalKey)
       .expect(200)
       .expect(({ body }) => {
@@ -1601,11 +1605,11 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const rotatedKey = rotated.body.accessKey as string;
     expect(rotatedKey).not.toBe(originalKey);
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", originalKey)
       .expect(404);
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", rotatedKey)
       .expect(200);
     await request(app.getHttpServer())
@@ -1613,7 +1617,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(204);
     await request(app.getHttpServer())
-      .get(`/api/dashboards/${protectedSlug}`)
+      .get(`/api/dashboards/${protectedId}/${protectedSlug}`)
       .set("x-dashboard-key", rotatedKey)
       .expect(404);
 
@@ -1628,7 +1632,126 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .delete(`/api/teams/${teamId}/dashboards/${publicDashboard.body.dashboard.id}`)
       .set("authorization", authorization)
       .expect(204);
-    await request(app.getHttpServer()).get(`/api/dashboards/${publicSlug}`).expect(404);
+    await request(app.getHttpServer())
+      .get(`/api/dashboards/${publicDashboard.body.dashboard.id}/${publicSlug}`)
+      .expect(404);
+  });
+
+  it("allows duplicate names and slugs while stable identifiers resolve each resource", async () => {
+    const testId = randomUUID();
+    const [firstAccount, secondAccount] = await Promise.all([
+      register(`identifiers-a-${testId}@example.com`, "Default"),
+      register(`identifiers-b-${testId}@example.com`, "Default"),
+    ]);
+    const firstTeam = firstAccount.teams[0]!;
+    const secondTeam = secondAccount.teams[0]!;
+    expect(firstTeam.name).toBe(secondTeam.name);
+    expect(firstTeam.id).not.toBe(secondTeam.id);
+    expect(firstTeam).not.toHaveProperty("slug");
+    expect(secondTeam).not.toHaveProperty("slug");
+
+    const firstAuthorization = `Bearer ${firstAccount.accessToken}`;
+    const secondAuthorization = `Bearer ${secondAccount.accessToken}`;
+    const [firstResource, secondResource] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/api/teams/${firstTeam.id}/resources`)
+        .set("authorization", firstAuthorization)
+        .send({ name: "First API", kind: "service" }),
+      request(app.getHttpServer())
+        .post(`/api/teams/${secondTeam.id}/resources`)
+        .set("authorization", secondAuthorization)
+        .send({ name: "Second API", kind: "service" }),
+    ]);
+    expect([firstResource.status, secondResource.status]).toEqual([201, 201]);
+
+    const sharedSlug = "service-health";
+    const [firstDashboard, secondDashboard] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/api/teams/${firstTeam.id}/dashboards`)
+        .set("authorization", firstAuthorization)
+        .send({ name: "First dashboard", slug: sharedSlug, accessMode: "public", items: [] }),
+      request(app.getHttpServer())
+        .post(`/api/teams/${secondTeam.id}/dashboards`)
+        .set("authorization", secondAuthorization)
+        .send({ name: "Second dashboard", slug: sharedSlug, accessMode: "public", items: [] }),
+    ]);
+    expect([firstDashboard.status, secondDashboard.status]).toEqual([201, 201]);
+    const firstDashboardId = firstDashboard.body.dashboard.id as string;
+    const secondDashboardId = secondDashboard.body.dashboard.id as string;
+    expect(firstDashboardId).not.toBe(secondDashboardId);
+
+    await request(app.getHttpServer())
+      .get(`/api/dashboards/${firstDashboardId}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: firstDashboardId, name: "First dashboard" })
+      );
+    await request(app.getHttpServer())
+      .get(`/api/dashboards/${secondDashboardId}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: secondDashboardId, name: "Second dashboard" })
+      );
+
+    const [firstStatusPage, secondStatusPage] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/api/teams/${firstTeam.id}/status-pages`)
+        .set("authorization", firstAuthorization)
+        .send({
+          name: "First status",
+          slug: sharedSlug,
+          resourceIds: [firstResource.body.id],
+          published: true,
+        }),
+      request(app.getHttpServer())
+        .post(`/api/teams/${secondTeam.id}/status-pages`)
+        .set("authorization", secondAuthorization)
+        .send({
+          name: "Second status",
+          slug: sharedSlug,
+          resourceIds: [secondResource.body.id],
+          published: true,
+        }),
+    ]);
+    expect([firstStatusPage.status, secondStatusPage.status]).toEqual([201, 201]);
+    expect(firstStatusPage.body.id).not.toBe(secondStatusPage.body.id);
+
+    await request(app.getHttpServer())
+      .get(`/api/public/status-pages/${firstStatusPage.body.id}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: firstStatusPage.body.id, name: "First status" })
+      );
+    await request(app.getHttpServer())
+      .get(`/api/public/status-pages/${secondStatusPage.body.id}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: secondStatusPage.body.id, name: "Second status" })
+      );
+
+    await request(app.getHttpServer())
+      .patch(`/api/teams/${firstTeam.id}/dashboards/${firstDashboardId}`)
+      .set("authorization", firstAuthorization)
+      .send({ slug: "renamed-dashboard" })
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/api/dashboards/${firstDashboardId}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: firstDashboardId, slug: "renamed-dashboard" })
+      );
+
+    await request(app.getHttpServer())
+      .patch(`/api/teams/${firstTeam.id}/status-pages/${firstStatusPage.body.id}`)
+      .set("authorization", firstAuthorization)
+      .send({ slug: "renamed-status" })
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/api/public/status-pages/${firstStatusPage.body.id}/${sharedSlug}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ id: firstStatusPage.body.id, slug: "renamed-status" })
+      );
   });
 
   it("delivers signed webhook notifications and records delivery state", async () => {
@@ -1874,7 +1997,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(200)
       .expect(({ body }) => expect(body.status).toBe("down"));
     await request(app.getHttpServer())
-      .get(`/api/public/status-pages/${statusPage.body.slug}`)
+      .get(`/api/public/status-pages/${statusPage.body.id}/${statusPage.body.slug}`)
       .expect(200)
       .expect(({ body }) => expect(body.state).toBe("outage"));
 
@@ -1903,7 +2026,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expect(body.averageDurationMs30d).toBe(1_250);
       });
     await request(app.getHttpServer())
-      .get(`/api/public/status-pages/${statusPage.body.slug}`)
+      .get(`/api/public/status-pages/${statusPage.body.id}/${statusPage.body.slug}`)
       .expect(200)
       .expect(({ body }) => {
         expect(body.state).toBe("operational");
@@ -2048,7 +2171,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(201);
   });
 
-  it("handles concurrent account and team-slug creation", async () => {
+  it("handles concurrent account creation with duplicate team names", async () => {
     const suffix = randomUUID().slice(0, 8);
     const registration = {
       name: "Concurrent account",
@@ -2073,9 +2196,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         .send({ ...registration, email: `slug-b-${suffix}@example.com` }),
     ]);
     expect(sameNameResponses.map((response) => response.status)).toEqual([201, 201]);
-    expect(sameNameResponses[0]!.body.teams[0].slug).not.toBe(
-      sameNameResponses[1]!.body.teams[0].slug
-    );
+    expect(sameNameResponses[0]!.body.teams[0].name).toBe(sameNameResponses[1]!.body.teams[0].name);
+    expect(sameNameResponses[0]!.body.teams[0].id).not.toBe(sameNameResponses[1]!.body.teams[0].id);
   });
 
   it("enforces and performs Global Administrator workflows", async () => {

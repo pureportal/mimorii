@@ -30,7 +30,6 @@ describe("ProtectedLayout navigation", () => {
           {
             id: "team-1",
             name: "Operations",
-            slug: "operations",
             role: "owner",
             createdAt: "2026-08-13T08:00:00.000Z",
           },
@@ -40,7 +39,6 @@ describe("ProtectedLayout navigation", () => {
       activeTeam: {
         id: "team-1",
         name: "Operations",
-        slug: "operations",
         role: "owner",
         createdAt: "2026-08-13T08:00:00.000Z",
       },

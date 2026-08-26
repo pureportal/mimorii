@@ -34,19 +34,19 @@ async function seedMembers(context: SeedContext, ids: SeedIdentityIds): Promise<
   const people = [
     {
       id: ids.adminUserId,
-      email: `admin+${context.teamSlug}@example.com`,
+      email: `admin+${context.teamKey}@example.com`,
       name: "Mina Park",
       role: "admin",
     },
     {
       id: ids.memberUserId,
-      email: `member+${context.teamSlug}@example.com`,
+      email: `member+${context.teamKey}@example.com`,
       name: "Leo Martins",
       role: "member",
     },
     {
       id: ids.viewerUserId,
-      email: `viewer+${context.teamSlug}@example.com`,
+      email: `viewer+${context.teamKey}@example.com`,
       name: "Sam Rivera",
       role: "viewer",
     },
@@ -83,13 +83,13 @@ async function seedInvitations(context: SeedContext): Promise<void> {
   const invites = [
     {
       key: "pending",
-      email: `on-call+${context.teamSlug}@example.com`,
+      email: `on-call+${context.teamKey}@example.com`,
       role: "member",
       expiresAt: at(context, days(5)),
     },
     {
       key: "expired",
-      email: `auditor+${context.teamSlug}@example.com`,
+      email: `auditor+${context.teamKey}@example.com`,
       role: "viewer",
       expiresAt: at(context, -days(2)),
     },
