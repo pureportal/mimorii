@@ -3,6 +3,7 @@ import { Interval } from "@nestjs/schedule";
 import type { AgentTask, CheckConfig, AgentCapability, AgentKind } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { decryptConfiguration } from "../common/crypto.js";
+import { reconcileAgentRelationships } from "../common/agent-relationships.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckRunnerService } from "./check-runner.service.js";
@@ -32,6 +33,7 @@ export class CheckOrchestratorService {
     if (process.env.MIMORII_SCHEDULER_ENABLED === "false" || this.schedulerBusy) return;
     this.schedulerBusy = true;
     try {
+      await reconcileAgentRelationships(this.database);
       await this.expireAgentTasks();
       const due = await this.database.all<ScheduledCheckRow>(
         `SELECT c.*, a.kind AS agent_kind,

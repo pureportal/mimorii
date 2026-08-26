@@ -69,6 +69,18 @@ describe("ResourceHealthService", () => {
     );
   });
 
+  it("ignores a previous agent timeout while a replacement check is pending", async () => {
+    setNow();
+    const health = service([
+      resourceRow,
+      { ...checkRow, status: "pending", latest_metrics_json: '{"agentTimeout":true}' },
+    ]);
+
+    await expect(health.forResources("team-1", ["resource-1"])).resolves.toEqual(
+      new Map([["resource-1", "pending"]])
+    );
+  });
+
   it("keeps a critical check critical while the host reporter is stale", async () => {
     setNow();
     const stale = "2026-08-25T11:57:00.000Z";

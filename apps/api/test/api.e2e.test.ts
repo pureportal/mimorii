@@ -814,6 +814,117 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     ).toBe(true);
   });
 
+  it("replaces a revoked host agent without duplicating or blocking its resource", async () => {
+    const account = await register(
+      `agent-replacement-${randomUUID()}@example.com`,
+      "Agent Replacement"
+    );
+    const teamId = account.teams[0]!.id;
+    const authorization = `Bearer ${account.accessToken}`;
+    const original = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .send({ name: "Homeserver", kind: "desktop", platform: "linux" })
+      .expect(201);
+    const externalResource = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .send({ name: "SABnzbd", kind: "service" })
+      .expect(201);
+    const externalCheck = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/checks`)
+      .set("authorization", authorization)
+      .send({
+        resourceId: externalResource.body.id,
+        name: "SABnzbd TCP",
+        type: "tcp",
+        config: { target: { host: "sabnzbd.internal", port: 8080 } },
+        execution: { kind: "agent", agentId: original.body.id },
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .delete(`/api/teams/${teamId}/agents/${original.body.id}`)
+      .set("authorization", authorization)
+      .expect(204);
+    await request(app.getHttpServer())
+      .get("/api/agent/enrollment")
+      .set("authorization", `Bearer ${original.body.enrollmentKey}`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect([]);
+    const orphanedResource = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${original.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(orphanedResource.body).toMatchObject({ name: "Homeserver", agent: null });
+    const suspendedChecks = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks?resourceId=${original.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(suspendedChecks.body).toHaveLength(2);
+    expect(suspendedChecks.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "pending",
+          nextCheckAt: null,
+          execution: { kind: "agent", agentId: original.body.id },
+        }),
+      ])
+    );
+
+    const replacement = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/agents`)
+      .set("authorization", authorization)
+      .send({ resourceId: original.body.resourceId, kind: "desktop", platform: "linux" })
+      .expect(201);
+    expect(replacement.body.id).not.toBe(original.body.id);
+    expect(replacement.body.resourceId).toBe(original.body.resourceId);
+    expect(replacement.body.resourceName).toBe("Homeserver");
+    await request(app.getHttpServer())
+      .get("/api/agent/enrollment")
+      .set("authorization", `Bearer ${replacement.body.enrollmentKey}`)
+      .expect(200)
+      .expect(({ body }) => expect(body.agentId).toBe(replacement.body.id));
+
+    const resources = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(
+      resources.body.filter((resource: { name: string }) => resource.name === "Homeserver")
+    ).toEqual([
+      expect.objectContaining({
+        id: original.body.resourceId,
+        agent: expect.objectContaining({ id: replacement.body.id }),
+      }),
+    ]);
+    const replacementChecks = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks?resourceId=${original.body.resourceId}`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(replacementChecks.body).toHaveLength(2);
+    expect(replacementChecks.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "pending",
+          nextCheckAt: expect.any(String),
+          execution: { kind: "agent", agentId: replacement.body.id },
+        }),
+      ])
+    );
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/checks/${externalCheck.body.id}`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.execution).toEqual({ kind: "agent", agentId: replacement.body.id })
+      );
+  });
+
   it("registers a check-only agent without exposing host telemetry", async () => {
     const account = await register("check-runner@example.com", "Check Runner");
     const teamId = account.teams[0]!.id;

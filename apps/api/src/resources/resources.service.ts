@@ -150,19 +150,30 @@ export class ResourcesService {
     if (agent) {
       await this.access.require(userId, teamId, "admin");
       const assigned = await this.database.get<{ count: number }>(
-        "SELECT COUNT(*)::int AS count FROM checks WHERE agent_id = ? AND resource_id != ?",
-        agent.id,
+        `SELECT COUNT(*)::int AS count FROM checks c
+         JOIN agents a ON a.id = c.agent_id
+         WHERE a.resource_id = ? AND c.resource_id != ?`,
+        id,
         id
       );
       if (assigned?.count) {
         throw new BadRequestException("Reassign checks that use this agent before deleting it");
       }
     }
-    const result = await this.database.run(
-      "DELETE FROM resources WHERE id = ? AND team_id = ?",
-      id,
-      teamId
-    );
+    const result = agent
+      ? await this.database.transaction(async () => {
+          await this.database.run(
+            "DELETE FROM checks WHERE resource_id = ? AND team_id = ?",
+            id,
+            teamId
+          );
+          return this.database.run(
+            "DELETE FROM resources WHERE id = ? AND team_id = ?",
+            id,
+            teamId
+          );
+        })
+      : await this.database.run("DELETE FROM resources WHERE id = ? AND team_id = ?", id, teamId);
     if (result.changes === 0) throw new NotFoundException("Resource not found");
     await this.audit.record({
       teamId,

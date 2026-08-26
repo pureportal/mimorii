@@ -31,11 +31,17 @@ import {
 } from "class-validator";
 
 export class CreateAgentDto {
-  @ApiProperty({ minLength: 1, maxLength: 100 })
+  @ApiPropertyOptional({ minLength: 1, maxLength: 100 })
+  @ValidateIf((input: CreateAgentDto) => !input.resourceId)
   @IsString()
   @Length(1, 100)
   @Matches(/\S/)
-  name!: string;
+  name?: string;
+
+  @ApiPropertyOptional({ format: "uuid" })
+  @IsOptional()
+  @IsUUID()
+  resourceId?: string;
 
   @ApiProperty({ enum: agentKinds })
   @IsIn(agentKinds)

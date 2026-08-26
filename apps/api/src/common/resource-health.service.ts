@@ -101,7 +101,7 @@ export class ResourceHealthService {
   }
 
   private reportingDown(row: ResourceHealthRow): boolean {
-    if (row.latest_metrics_json) {
+    if (row.status !== "pending" && row.latest_metrics_json) {
       const metrics: unknown = JSON.parse(row.latest_metrics_json);
       if (
         typeof metrics === "object" &&

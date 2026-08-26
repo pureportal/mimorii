@@ -4,6 +4,7 @@ import {
   type DesktopAgentPlatform,
   type AgentSummary,
   type AgentKind,
+  type ResourceSummary,
 } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Copy, KeyRound, Pencil, Plus, Smartphone, Trash2 } from "lucide-react";
@@ -58,7 +59,11 @@ export function AgentsPage() {
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),
     refetchInterval: 30_000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["agents", teamId] });
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["agents", teamId] }),
+      queryClient.invalidateQueries({ queryKey: ["resources", teamId] }),
+    ]);
 
   if (agents.isLoading) return <LoadingState />;
   if (agents.isError) return <ErrorState retry={() => void agents.refetch()} />;
@@ -205,7 +210,7 @@ export function AgentsPage() {
         description={
           confirmation?.action === "rotate"
             ? "The installed agent must be enrolled again."
-            : "Its current key will stop working."
+            : "Its checks will pause until a replacement is connected."
         }
         confirmLabel={confirmation?.action === "rotate" ? "Rotate key" : "Revoke agent"}
         pending={actionPending}
@@ -320,16 +325,26 @@ function CreateAgentDialog({
   onCreated: () => Promise<unknown>;
 }) {
   const [name, setName] = useState("");
+  const [resourceId, setResourceId] = useState("");
   const [kind, setKind] = useState<AgentKind>("desktop");
   const [platform, setPlatform] = useState<DesktopAgentPlatform>("linux");
   const [interval, setInterval] = useState(String(agentCollectionInterval.defaultSeconds));
   const [created, setCreated] = useState<CreatedAgent | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const resources = useQuery({
+    queryKey: ["resources", teamId],
+    queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
+    enabled: open,
+  });
+  const availableResources = (resources.data ?? []).filter(
+    (resource) => !resource.agent && resource.kind === (kind === "mobile" ? "device" : "host")
+  );
 
   useEffect(() => {
     if (!open) return;
     setKind("desktop");
+    setResourceId("");
     setPlatform("linux");
     setInterval(String(agentCollectionInterval.defaultSeconds));
   }, [open]);
@@ -342,7 +357,7 @@ function CreateAgentDialog({
       const agent = await api<CreatedAgent>(`/teams/${teamId}/agents`, {
         method: "POST",
         ...jsonBody({
-          name,
+          ...(resourceId ? { resourceId } : { name }),
           kind,
           ...(kind === "desktop" ? { platform } : {}),
           collectionIntervalSeconds: Number(interval),
@@ -361,6 +376,7 @@ function CreateAgentDialog({
     if (!value) {
       setCreated(null);
       setName("");
+      setResourceId("");
       setKind("desktop");
       setPlatform("linux");
       setInterval(String(agentCollectionInterval.defaultSeconds));
@@ -455,6 +471,7 @@ function CreateAgentDialog({
                   const nextKind: AgentKind =
                     event.target.value === "mobile" ? "mobile" : "desktop";
                   setKind(nextKind);
+                  setResourceId("");
                   setInterval(
                     String(
                       nextKind === "mobile"
@@ -483,17 +500,36 @@ function CreateAgentDialog({
                 </Select>
               </Field>
             ) : null}
-            <Field>
-              <FieldLabel htmlFor="agent-name">Name</FieldLabel>
-              <Input
-                id="agent-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={kind === "mobile" ? "Field phone" : "Office network"}
-                required
-                maxLength={100}
-              />
-            </Field>
+            {availableResources.length ? (
+              <Field>
+                <FieldLabel htmlFor="agent-resource">Resource</FieldLabel>
+                <Select
+                  id="agent-resource"
+                  value={resourceId}
+                  onChange={(event) => setResourceId(event.target.value)}
+                >
+                  <option value="">New resource</option>
+                  {availableResources.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+            {!resourceId ? (
+              <Field>
+                <FieldLabel htmlFor="agent-name">Name</FieldLabel>
+                <Input
+                  id="agent-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={kind === "mobile" ? "Field phone" : "Office network"}
+                  required
+                  maxLength={100}
+                />
+              </Field>
+            ) : null}
             <Field>
               <FieldLabel htmlFor="agent-interval">Collection interval · seconds</FieldLabel>
               <Input

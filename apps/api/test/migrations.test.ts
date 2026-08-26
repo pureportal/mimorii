@@ -238,7 +238,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260831000000");
+      expect(migration?.name).toBe("Migration20260901000000");
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
@@ -271,6 +271,13 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       );
       expect(checkTypeConstraint?.definition).toContain("'host'::text");
       expect(checkTypeConstraint?.definition).toContain("'disk'::text");
+
+      const activeAgentResourceIndex = await database.get<{ indexdef: string }>(
+        `SELECT indexdef FROM pg_indexes
+         WHERE schemaname = 'public' AND indexname = 'agents_active_resource_unique'`
+      );
+      expect(activeAgentResourceIndex?.indexdef).toContain("UNIQUE");
+      expect(activeAgentResourceIndex?.indexdef).toContain("WHERE (revoked_at IS NULL)");
     } finally {
       await orm.close(true);
     }

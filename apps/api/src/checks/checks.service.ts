@@ -270,7 +270,7 @@ export class ChecksService {
       status: resolveMonitorStatus(
         row.type,
         row.current_status,
-        reporterOffline || latestMetrics.agentTimeout === true
+        reporterOffline || (row.current_status !== "pending" && latestMetrics.agentTimeout === true)
       ),
       enabled: Boolean(row.enabled),
       intervalSeconds: row.interval_seconds,

@@ -386,7 +386,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": true,
+          "unique": false,
           "length": null,
           "precision": null,
           "scale": null,
@@ -399,6 +399,15 @@
       "name": "agents",
       "schema": "public",
       "indexes": [
+        {
+          "columnNames": ["resource_id"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "agents_active_resource_unique",
+          "unique": true,
+          "primary": false,
+          "expression": "CREATE UNIQUE INDEX agents_active_resource_unique ON public.agents USING btree (resource_id) WHERE (revoked_at IS NULL)"
+        },
         {
           "columnNames": ["key_hash"],
           "composite": false,
@@ -414,14 +423,6 @@
           "keyName": "agents_pkey",
           "unique": true,
           "primary": true
-        },
-        {
-          "columnNames": ["resource_id"],
-          "composite": false,
-          "constraint": true,
-          "keyName": "agents_resource_id_unique",
-          "unique": true,
-          "primary": false
         }
       ],
       "checks": [

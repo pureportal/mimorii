@@ -257,6 +257,56 @@ describe("AgentsPage confirmations", () => {
     expect(writeTextMock).toHaveBeenNthCalledWith(3, enrollmentKey);
   });
 
+  it("attaches a replacement agent to an unassigned host resource", async () => {
+    const enrollmentKey = `mim_agent_${"e".repeat(32)}`;
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/agents" && options?.method === "POST") {
+        return Promise.resolve({ ...warehouseRelay, resourceName: "Homeserver", enrollmentKey });
+      }
+      if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      if (path === "/teams/team-1/resources") {
+        return Promise.resolve([
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            teamId: "team-1",
+            name: "Homeserver",
+            kind: "host",
+            description: null,
+            tags: [],
+            agent: null,
+            status: "pending",
+            checksPassing: 0,
+            checksTotal: 2,
+            lastCheckedAt: null,
+            inMaintenance: false,
+            imageUpdatedAt: null,
+            createdAt: "2026-08-13T07:00:00.000Z",
+          },
+        ]);
+      }
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByText("No agents yet");
+    fireEvent.click(screen.getAllByRole("button", { name: "Add agent" })[0]!);
+    const resource = await screen.findByLabelText("Resource");
+    fireEvent.change(resource, { target: { value: "11111111-1111-4111-8111-111111111111" } });
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+
+    await screen.findByText("Connect agent");
+    const request = apiMock.mock.calls.find(
+      ([path, options]) => path === "/teams/team-1/agents" && options?.method === "POST"
+    );
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
+      resourceId: "11111111-1111-4111-8111-111111111111",
+      kind: "desktop",
+      platform: "linux",
+    });
+    expect(JSON.parse(String(request?.[1]?.body))).not.toHaveProperty("name");
+  });
+
   it("submits the selected desktop platform", async () => {
     apiMock.mockImplementation((path: string, options?: RequestInit) => {
       if (path === "/teams/team-1/agents" && options?.method === "POST") {

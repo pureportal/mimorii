@@ -24,6 +24,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { AuditService } from "../common/audit.service.js";
+import { reconcileAgentRelationships } from "../common/agent-relationships.js";
 import { resolveAgentStatus } from "../common/agent-status.js";
 import { createSecret, decryptConfiguration, hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -69,6 +70,11 @@ interface TaskRow {
   favicon_request_id: string | null;
 }
 
+interface AgentResourceRow {
+  id: string;
+  kind: "host" | "device" | "service";
+}
+
 @Injectable()
 export class AgentsService {
   constructor(
@@ -105,7 +111,11 @@ export class AgentsService {
     if (input.kind === "mobile" && input.platform) {
       throw new BadRequestException("Mobile agents do not use a desktop platform");
     }
+    if (!input.resourceId && !input.name?.trim()) {
+      throw new BadRequestException("Agent name is required");
+    }
     const id = randomUUID();
+    const resourceId = input.resourceId ?? id;
     const hostCheckId = input.kind === "desktop" ? randomUUID() : null;
     const diskCheckId = input.kind === "desktop" ? randomUUID() : null;
     const enrollmentKey = createSecret("mim_agent");
@@ -116,17 +126,34 @@ export class AgentsService {
     );
     const capabilities = [...agentCapabilitiesByKind[input.kind]];
     await this.database.transaction(async () => {
-      await this.database.run(
-        `INSERT INTO resources
-         (id, team_id, name, kind, description, tags_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, '[]', ?, ?)`,
-        id,
-        teamId,
-        input.name.trim(),
-        input.kind === "mobile" ? "device" : "host",
-        now,
-        now
-      );
+      if (input.resourceId) {
+        const resource = await this.database.get<AgentResourceRow>(
+          "SELECT id, kind FROM resources WHERE id = ? AND team_id = ? FOR UPDATE",
+          resourceId,
+          teamId
+        );
+        const expectedKind = input.kind === "mobile" ? "device" : "host";
+        if (!resource || resource.kind !== expectedKind) {
+          throw new BadRequestException(`Select an available ${expectedKind} resource`);
+        }
+        const assigned = await this.database.get<{ id: string }>(
+          "SELECT id FROM agents WHERE resource_id = ? AND revoked_at IS NULL",
+          resourceId
+        );
+        if (assigned) throw new BadRequestException("Resource already has an agent");
+      } else {
+        await this.database.run(
+          `INSERT INTO resources
+           (id, team_id, name, kind, description, tags_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, '[]', ?, ?)`,
+          resourceId,
+          teamId,
+          input.name!.trim(),
+          input.kind === "mobile" ? "device" : "host",
+          now,
+          now
+        );
+      }
       await this.database.run(
         `INSERT INTO agents
          (id, team_id, resource_id, key_hash, kind, capabilities_json,
@@ -134,7 +161,7 @@ export class AgentsService {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         teamId,
-        id,
+        resourceId,
         hashSecret(enrollmentKey),
         input.kind,
         JSON.stringify(capabilities),
@@ -143,47 +170,62 @@ export class AgentsService {
         now,
         now
       );
+      await reconcileAgentRelationships(this.database, resourceId);
       if (hostCheckId && diskCheckId && input.platform) {
-        await this.database.run(
-          `INSERT INTO checks
-           (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
-            interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
-            current_status, next_check_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'host', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
-          hostCheckId,
-          teamId,
-          id,
-          "Host health",
-          JSON.stringify(this.defaultHostCheckConfig(input.platform)),
-          id,
-          60,
-          5_000,
-          2,
-          1,
-          now,
-          now,
-          now
-        );
-        await this.database.run(
-          `INSERT INTO checks
-           (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
-            interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
-            current_status, next_check_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'disk', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
-          diskCheckId,
-          teamId,
-          id,
-          "Disk usage",
-          JSON.stringify(this.defaultDiskCheckConfig(input.platform)),
-          id,
-          60,
-          5_000,
-          2,
-          1,
-          now,
-          now,
-          now
-        );
+        const existingTypes = input.resourceId
+          ? new Set(
+              (
+                await this.database.all<{ type: CheckType }>(
+                  "SELECT type FROM checks WHERE resource_id = ? AND type IN ('host', 'disk')",
+                  resourceId
+                )
+              ).map((check) => check.type)
+            )
+          : new Set<CheckType>();
+        if (!existingTypes.has("host")) {
+          await this.database.run(
+            `INSERT INTO checks
+             (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
+              interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
+              current_status, next_check_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 'host', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
+            hostCheckId,
+            teamId,
+            resourceId,
+            "Host health",
+            JSON.stringify(this.defaultHostCheckConfig(input.platform)),
+            id,
+            60,
+            5_000,
+            2,
+            1,
+            now,
+            now,
+            now
+          );
+        }
+        if (!existingTypes.has("disk")) {
+          await this.database.run(
+            `INSERT INTO checks
+             (id, team_id, resource_id, name, type, config_json, agent_id, encrypted_secret,
+              interval_seconds, timeout_ms, failure_threshold, recovery_threshold, enabled,
+              current_status, next_check_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 'disk', ?, ?, NULL, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)`,
+            diskCheckId,
+            teamId,
+            resourceId,
+            "Disk usage",
+            JSON.stringify(this.defaultDiskCheckConfig(input.platform)),
+            id,
+            60,
+            5_000,
+            2,
+            1,
+            now,
+            now,
+            now
+          );
+        }
       }
     });
     await this.audit.record({
@@ -192,7 +234,11 @@ export class AgentsService {
       action: "agent.created",
       subjectType: "agent",
       subjectId: id,
-      metadata: { kind: input.kind, ...(input.platform ? { platform: input.platform } : {}) },
+      metadata: {
+        kind: input.kind,
+        ...(input.platform ? { platform: input.platform } : {}),
+        ...(input.resourceId ? { replacement: true } : {}),
+      },
     });
     return { ...this.map(await this.requireRow(teamId, id), null), enrollmentKey };
   }
@@ -260,13 +306,19 @@ export class AgentsService {
 
   async revoke(userId: string, teamId: string, id: string): Promise<void> {
     await this.access.require(userId, teamId, "admin");
-    const result = await this.database.run(
-      "UPDATE agents SET revoked_at = ?, updated_at = ? WHERE id = ? AND team_id = ? AND revoked_at IS NULL",
-      new Date().toISOString(),
-      new Date().toISOString(),
-      id,
-      teamId
-    );
+    const agent = await this.requireRow(teamId, id);
+    const now = new Date().toISOString();
+    const result = await this.database.transaction(async () => {
+      const revoked = await this.database.run(
+        "UPDATE agents SET revoked_at = ?, updated_at = ? WHERE id = ? AND team_id = ? AND revoked_at IS NULL",
+        now,
+        now,
+        id,
+        teamId
+      );
+      await reconcileAgentRelationships(this.database, agent.resource_id);
+      return revoked;
+    });
     if (result.changes === 0) throw new NotFoundException("Agent not found");
     await this.audit.record({
       teamId,
