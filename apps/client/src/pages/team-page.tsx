@@ -11,7 +11,7 @@ import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
-import { api, jsonBody } from "../lib/api";
+import { ApiError, api, jsonBody } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatCount } from "../lib/format";
 
@@ -434,6 +434,8 @@ function CreateTeamDialog({
 }) {
   const [name, setName] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState("");
+  const [logoReady, setLogoReady] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -441,11 +443,14 @@ function CreateTeamDialog({
     if (!open) return;
     setName("");
     setLogo(null);
+    setLogoError("");
+    setLogoReady(true);
     setError("");
   }, [open]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!logoReady) return;
     setBusy(true);
     setError("");
     try {
@@ -456,7 +461,7 @@ function CreateTeamDialog({
       setName("");
       setLogo(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Team could not be created");
+      setError(teamMutationFailureMessage(cause, "Team could not be created. Try again."));
     } finally {
       setBusy(false);
     }
@@ -480,15 +485,19 @@ function CreateTeamDialog({
             name={name}
             file={logo}
             disabled={busy}
+            uploading={busy && Boolean(logo)}
+            validationError={logoError}
             onFileChange={setLogo}
-            onError={setError}
+            onInteraction={() => setError("")}
+            onReadyChange={setLogoReady}
+            onValidationErrorChange={setLogoError}
           />
-          <FieldError>{error}</FieldError>
+          <FieldError>{error ? <span role="alert">{error}</span> : null}</FieldError>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="coral" disabled={busy}>
+            <Button type="submit" variant="coral" disabled={busy || !logoReady}>
               {busy ? "Creating…" : "Create team"}
             </Button>
           </div>
@@ -517,6 +526,8 @@ function ManageTeamDialog({
 }) {
   const [name, setName] = useState(initialName);
   const [logo, setLogo] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState("");
+  const [logoReady, setLogoReady] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -525,11 +536,14 @@ function ManageTeamDialog({
     if (!open) return;
     setName(initialName);
     setLogo(null);
+    setLogoError("");
+    setLogoReady(true);
     setError("");
   }, [initialName, open]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!logoReady) return;
     setBusy(true);
     setError("");
     try {
@@ -541,7 +555,7 @@ function ManageTeamDialog({
       toast.success("Team updated");
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Team could not be updated");
+      setError(teamMutationFailureMessage(cause, "Team could not be updated. Try again."));
     } finally {
       setBusy(false);
     }
@@ -587,15 +601,20 @@ function ManageTeamDialog({
               name={name}
               file={logo}
               disabled={busy}
+              uploading={busy && Boolean(logo)}
+              validationError={logoError}
               onFileChange={setLogo}
-              onError={setError}
+              onInteraction={() => setError("")}
+              onReadyChange={setLogoReady}
+              onValidationErrorChange={setLogoError}
             />
-            <FieldError>{error}</FieldError>
-            <div className="flex justify-between gap-2">
+            <FieldError>{error ? <span role="alert">{error}</span> : null}</FieldError>
+            <div className="grid gap-2 min-[460px]:flex min-[460px]:justify-between">
               {canDelete ? (
                 <Button
                   type="button"
                   variant="danger"
+                  className="w-full min-[460px]:w-auto"
                   disabled={busy}
                   onClick={() => setDeleteOpen(true)}
                 >
@@ -604,12 +623,22 @@ function ManageTeamDialog({
               ) : (
                 <span />
               )}
-              <div className="flex gap-2">
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              <div className="grid grid-cols-2 gap-2 min-[460px]:flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full min-[460px]:w-auto"
+                  onClick={() => onOpenChange(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" variant="coral" disabled={busy}>
-                  Save team
+                <Button
+                  type="submit"
+                  variant="coral"
+                  className="w-full min-[460px]:w-auto"
+                  disabled={busy || !logoReady}
+                >
+                  {busy ? "Saving…" : "Save team"}
                 </Button>
               </div>
             </div>
@@ -634,4 +663,8 @@ function teamMutationBody(name: string, logo: File | null): FormData {
   body.set("name", name);
   if (logo) body.set("logo", logo);
   return body;
+}
+
+function teamMutationFailureMessage(cause: unknown, fallback: string): string {
+  return cause instanceof ApiError && cause.status < 500 ? cause.message : fallback;
 }

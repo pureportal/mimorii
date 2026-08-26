@@ -1,6 +1,6 @@
 import { imageAssetMaxBytes, imageAssetMaxDimension } from "@mimorii/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { validateImageAsset } from "./image-asset";
+import { validateImageAsset, validateImageAssetSelection } from "./image-asset";
 
 describe("image asset validation", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -22,6 +22,16 @@ describe("image asset validation", () => {
     await expect(
       validateImageAsset(new File(["image"], "logo.svg", { type: "image/svg+xml" }))
     ).rejects.toThrow("Choose a PNG, JPEG, WebP, or GIF image");
+  });
+
+  it("requires exactly one selected image", async () => {
+    await expect(validateImageAssetSelection([])).rejects.toThrow("Choose one image");
+    await expect(
+      validateImageAssetSelection([
+        new File(["first"], "first.png", { type: "image/png" }),
+        new File(["second"], "second.png", { type: "image/png" }),
+      ])
+    ).rejects.toThrow("Choose one image");
   });
 
   it("rejects corrupt files with a supported type", async () => {

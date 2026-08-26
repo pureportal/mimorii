@@ -1,14 +1,15 @@
 import type { ResourceFaviconRefresh, ResourceSummary } from "@mimorii/contracts";
-import { RefreshCw, Upload } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { api } from "../lib/api";
-import { imageAssetAccept, imageAssetRequirements, validateImageAsset } from "../lib/image-asset";
+import { ApiError, api } from "../lib/api";
+import { ImageUploadField } from "./image-upload-field";
 import { ResourceImage } from "./resource-image";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
-import { Field, FieldError, FieldLabel } from "./ui/field";
-import { Input } from "./ui/input";
+import { FieldError } from "./ui/field";
+
+type ImageOperation = "idle" | "refreshing" | "uploading";
 
 export function ResourceImageDialog({
   open,
@@ -21,56 +22,30 @@ export function ResourceImageDialog({
   resource: ResourceSummary;
   onSaved: () => Promise<void>;
 }) {
-  const inputId = useId();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const validationSequence = useRef(0);
+  const [validationError, setValidationError] = useState("");
+  const [imageReady, setImageReady] = useState(true);
+  const [uploadError, setUploadError] = useState("");
+  const [refreshError, setRefreshError] = useState("");
+  const [operation, setOperation] = useState<ImageOperation>("idle");
+  const busy = operation !== "idle";
 
   useEffect(() => {
     if (!open) return;
-    validationSequence.current += 1;
     setFile(null);
-    setError("");
-    setBusy(false);
+    setValidationError("");
+    setImageReady(true);
+    setUploadError("");
+    setRefreshError("");
+    setOperation("idle");
   }, [open]);
-
-  useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return undefined;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  async function chooseImage(event: ChangeEvent<HTMLInputElement>) {
-    const selected = event.currentTarget.files?.[0] ?? null;
-    event.currentTarget.value = "";
-    const sequence = ++validationSequence.current;
-    setError("");
-    if (!selected) {
-      setFile(null);
-      return;
-    }
-    setFile(null);
-    try {
-      await validateImageAsset(selected);
-      if (validationSequence.current === sequence) setFile(selected);
-    } catch (cause) {
-      if (validationSequence.current !== sequence) return;
-      setFile(null);
-      setError(cause instanceof Error ? cause.message : "Choose a valid image");
-    }
-  }
 
   async function upload(event: FormEvent) {
     event.preventDefault();
-    if (!file) return;
-    setBusy(true);
-    setError("");
+    if (!file || !imageReady) return;
+    setOperation("uploading");
+    setUploadError("");
+    setRefreshError("");
     try {
       const body = new FormData();
       body.set("image", file);
@@ -82,15 +57,16 @@ export function ResourceImageDialog({
       toast.success("Resource image updated");
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Resource image could not be updated");
+      setUploadError(uploadFailureMessage(cause, "Image upload failed. Try again."));
     } finally {
-      setBusy(false);
+      setOperation("idle");
     }
   }
 
   async function refreshFavicon() {
-    setBusy(true);
-    setError("");
+    setOperation("refreshing");
+    setUploadError("");
+    setRefreshError("");
     try {
       const result = await api<ResourceFaviconRefresh>(
         `/teams/${encodeURIComponent(resource.teamId)}/resources/${encodeURIComponent(resource.id)}/favicon`,
@@ -104,9 +80,9 @@ export function ResourceImageDialog({
       }
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Favicon could not be updated");
+      setRefreshError(uploadFailureMessage(cause, "Favicon update failed. Try again."));
     } finally {
-      setBusy(false);
+      setOperation("idle");
     }
   }
 
@@ -115,32 +91,30 @@ export function ResourceImageDialog({
       <DialogContent closeDisabled={busy}>
         <DialogHeader title="Resource image" />
         <form className="grid gap-5" onSubmit={upload}>
-          <div className="flex justify-center">
-            {preview ? (
-              <span className="grid size-24 place-items-center overflow-hidden rounded-2xl bg-lavender-soft">
-                <img alt="" className="size-full object-contain p-2" src={preview} />
-              </span>
-            ) : (
+          <ImageUploadField
+            label="Image"
+            file={file}
+            currentPreview={
               <ResourceImage
                 resource={resource}
-                className="size-24 rounded-2xl"
-                iconClassName="size-8"
+                className="size-full rounded-xl"
+                iconClassName="size-7"
               />
-            )}
-          </div>
-          <Field>
-            <FieldLabel htmlFor={inputId}>Image</FieldLabel>
-            <Input
-              id={inputId}
-              type="file"
-              accept={imageAssetAccept}
-              disabled={busy}
-              onChange={(event) => void chooseImage(event)}
-              className="py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-lavender-soft file:px-3 file:py-1 file:text-xs file:font-semibold file:text-violet-strong"
-            />
-            <p className="text-xs text-muted">{imageAssetRequirements}</p>
-          </Field>
-          <FieldError>{error}</FieldError>
+            }
+            idleStatus={resource.imageUpdatedAt ? "Current image" : "No image selected"}
+            disabled={busy}
+            uploading={operation === "uploading"}
+            validationError={validationError}
+            failureError={uploadError}
+            onFileChange={setFile}
+            onInteraction={() => {
+              setUploadError("");
+              setRefreshError("");
+            }}
+            onReadyChange={setImageReady}
+            onValidationErrorChange={setValidationError}
+          />
+          <FieldError>{refreshError ? <span role="alert">{refreshError}</span> : null}</FieldError>
           <div className="flex flex-wrap justify-between gap-2">
             {resource.kind === "service" ? (
               <Button
@@ -149,7 +123,14 @@ export function ResourceImageDialog({
                 disabled={busy}
                 onClick={() => void refreshFavicon()}
               >
-                <RefreshCw /> Update favicon
+                <RefreshCw
+                  className={
+                    operation === "refreshing"
+                      ? "animate-spin motion-reduce:animate-none"
+                      : undefined
+                  }
+                />
+                {operation === "refreshing" ? "Updating…" : "Update favicon"}
               </Button>
             ) : (
               <span />
@@ -163,8 +144,13 @@ export function ResourceImageDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="coral" disabled={busy || !file}>
-                <Upload /> {busy ? "Saving…" : "Save image"}
+              <Button type="submit" variant="coral" disabled={busy || !file || !imageReady}>
+                {operation === "uploading" ? (
+                  <LoaderCircle className="animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Upload />
+                )}
+                {operation === "uploading" ? "Uploading…" : "Save image"}
               </Button>
             </div>
           </div>
@@ -172,4 +158,8 @@ export function ResourceImageDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function uploadFailureMessage(cause: unknown, fallback: string): string {
+  return cause instanceof ApiError && cause.status < 500 ? cause.message : fallback;
 }

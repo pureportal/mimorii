@@ -8,6 +8,13 @@ export const imageAssetAccept = imageAssetMimeTypes.join(",");
 const imageAssetMaxMegabytes = imageAssetMaxBytes / (1024 * 1024);
 export const imageAssetRequirements = `PNG, JPEG, WebP, or GIF · up to ${imageAssetMaxMegabytes} MB · max ${imageAssetMaxDimension} × ${imageAssetMaxDimension} px`;
 
+export async function validateImageAssetSelection(files: readonly File[]): Promise<File> {
+  if (files.length !== 1) throw new Error("Choose one image");
+  const file = files[0]!;
+  await validateImageAsset(file);
+  return file;
+}
+
 export async function validateImageAsset(file: File): Promise<void> {
   if (!imageAssetMimeTypes.some((type) => type === file.type)) {
     throw new Error("Choose a PNG, JPEG, WebP, or GIF image");

@@ -97,6 +97,15 @@ html[data-public-theme="light"] {
   }
 }
 
+@keyframes upload-progress {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
