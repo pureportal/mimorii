@@ -95,6 +95,11 @@ function Get-ServerEvents {
     @(Receive-Job $serverJob -Keep -ErrorAction Stop)
 }
 
+function Get-ServiceRequests {
+    param([string]$AgentKey)
+    @(Get-ServerEvents | Where-Object { $_ -eq "GET /api/agent/tasks?limit=100 Bearer $AgentKey" })
+}
+
 function Remove-TestInstallation {
     foreach ($productCode in @(Get-InstalledProductCodes)) {
         $process = Start-Process msiexec.exe -ArgumentList @("/x", $productCode, "/qn", "/norestart") -Wait -PassThru -WindowStyle Hidden
@@ -185,23 +190,23 @@ try {
     Assert-True ($LASTEXITCODE -eq 0) "Enrollment failed"
     $controlStatus = & $cli status --json | ConvertFrom-Json
     Assert-True ($controlStatus.enrolled -and $controlStatus.serverUrl -eq "http://127.0.0.1:$port/api") "The Agent UI did not read enrollment state"
-    Wait-For { (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $firstKey" })).Count -ge 2 } "The running service did not apply enrollment"
+    Wait-For { @(Get-ServiceRequests -AgentKey $firstKey).Count -ge 1 } "The running service did not apply enrollment"
 
     $servicePid = (Get-ServiceRecord).ProcessId
     & $cli enroll --server "http://127.0.0.1:$port" --key $secondKey --allow-insecure-http
     Assert-True ($LASTEXITCODE -eq 0) "Configuration update failed"
-    Wait-For { (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $secondKey" })).Count -ge 1 } "The running service did not apply the configuration update"
+    Wait-For { @(Get-ServiceRequests -AgentKey $secondKey).Count -ge 1 } "The running service did not apply the configuration update"
     Assert-True ((Get-ServiceRecord).ProcessId -eq $servicePid) "The service restarted while applying configuration"
 
-    $secondKeyRequests = (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $secondKey" })).Count
+    $secondKeyRequests = @(Get-ServiceRequests -AgentKey $secondKey).Count
     $rejectionCount = ([regex]::Matches((Get-Content (Join-Path $dataDirectory "agent-desktop.log") -Raw), "configuration update rejected")).Count
     Set-Content -LiteralPath (Join-Path $dataDirectory "agent-desktop.json") -Value "invalid"
     Wait-For { ([regex]::Matches((Get-Content (Join-Path $dataDirectory "agent-desktop.log") -Raw), "configuration update rejected")).Count -gt $rejectionCount } "The rejected configuration was not reported"
-    Wait-For { (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $secondKey" })).Count -gt $secondKeyRequests } "The service did not retain the active configuration" 40
+    Wait-For { @(Get-ServiceRequests -AgentKey $secondKey).Count -gt $secondKeyRequests } "The service did not retain the active configuration" 40
     & $cli enroll --server "http://127.0.0.1:$port" --key $secondKey --allow-insecure-http
     Assert-True ($LASTEXITCODE -eq 0) "Configuration recovery failed"
 
-    $requestsBeforeRecovery = (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $secondKey" })).Count
+    $requestsBeforeRecovery = @(Get-ServiceRequests -AgentKey $secondKey).Count
     $failedProcessId = (Get-ServiceRecord).ProcessId
     Stop-Process -Id $failedProcessId -Force
     Wait-For {
@@ -209,7 +214,7 @@ try {
         $recovered.State -eq "Running" -and $recovered.ProcessId -ne $failedProcessId
     } "The service did not recover from process failure" 25
     Assert-Installed
-    Wait-For { (@(Get-ServerEvents | Where-Object { $_ -match "Bearer $secondKey" })).Count -gt $requestsBeforeRecovery } "The recovered service did not retain configuration" 40
+    Wait-For { @(Get-ServiceRequests -AgentKey $secondKey).Count -gt $requestsBeforeRecovery } "The recovered service did not retain configuration" 40
 
     $configPath = Join-Path $dataDirectory "agent-desktop.json"
     $configHash = (Get-FileHash $configPath -Algorithm SHA256).Hash
