@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use super::{
-    LinuxServicePaths, command, linger_requires_sudo, service_installation_warning, systemd_quote,
+    LinuxServicePaths, command, linger_requires_sudo, service_installation_warning,
+    systemctl_user_command, systemd_quote, systemd_user_runtime_directory,
     systemd_user_unit_content,
 };
 
@@ -38,6 +39,23 @@ fn root_service_installation_is_allowed_with_a_configuration_notice() {
 fn root_service_setup_enables_lingering_without_sudo() {
     assert!(!linger_requires_sudo("0"));
     assert!(linger_requires_sudo("1000"));
+}
+
+#[test]
+fn root_service_setup_targets_the_root_user_manager() {
+    let command = systemctl_user_command("0", &["daemon-reload"]);
+    let arguments = command.get_args().collect::<Vec<_>>();
+    let environment = command.get_envs().collect::<Vec<_>>();
+    let runtime_directory = systemd_user_runtime_directory("0");
+
+    assert_eq!(command.get_program(), "systemctl");
+    assert_eq!(arguments, ["--user", "daemon-reload"]);
+    assert_eq!(runtime_directory, Path::new("/run/user/0"));
+    assert!(environment.contains(&(
+        std::ffi::OsStr::new("XDG_RUNTIME_DIR"),
+        Some(runtime_directory.as_os_str())
+    )));
+    assert!(environment.contains(&(std::ffi::OsStr::new("DBUS_SESSION_BUS_ADDRESS"), None)));
 }
 
 #[test]

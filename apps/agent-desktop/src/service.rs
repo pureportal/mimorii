@@ -54,15 +54,13 @@ pub fn install(executable: &Path) -> Result<()> {
     std::fs::create_dir_all(&paths.collection)?;
     std::fs::set_permissions(&paths.collection, std::fs::Permissions::from_mode(0o700))?;
     write_unit(&unit, &systemd_user_unit_content(executable, &paths)?)?;
-    ensure_linger_enabled()?;
-    command("systemctl", &["--user", "daemon-reload"])?;
-    command("systemctl", &["--user", "reset-failed", LINUX_SERVICE_NAME])?;
-    command("systemctl", &["--user", "enable", LINUX_SERVICE_NAME])?;
-    command("systemctl", &["--user", "restart", LINUX_SERVICE_NAME])?;
-    command(
-        "systemctl",
-        &["--user", "is-active", "--quiet", LINUX_SERVICE_NAME],
-    )?;
+    let user_id = current_user_id()?;
+    ensure_linger_enabled(&user_id)?;
+    systemctl_user(&user_id, &["daemon-reload"])?;
+    systemctl_user(&user_id, &["reset-failed", LINUX_SERVICE_NAME])?;
+    systemctl_user(&user_id, &["enable", LINUX_SERVICE_NAME])?;
+    systemctl_user(&user_id, &["restart", LINUX_SERVICE_NAME])?;
+    systemctl_user(&user_id, &["is-active", "--quiet", LINUX_SERVICE_NAME])?;
     println!("installed {}", unit.display());
     println!("service: running");
     Ok(())
@@ -82,23 +80,22 @@ fn linger_requires_sudo(user_id: &str) -> bool {
 
 #[cfg(target_os = "linux")]
 pub fn uninstall() -> Result<()> {
-    let _ = command(
-        "systemctl",
-        &["--user", "disable", "--now", LINUX_SERVICE_NAME],
-    );
+    let user_id = current_user_id()?;
+    let _ = systemctl_user(&user_id, &["disable", "--now", LINUX_SERVICE_NAME]);
     let unit = systemd_user_unit()?;
     if unit.exists() {
         std::fs::remove_file(unit)?;
     }
-    command("systemctl", &["--user", "daemon-reload"])?;
+    systemctl_user(&user_id, &["daemon-reload"])?;
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
 pub fn restart_if_installed() -> Result<()> {
     if systemd_user_unit()?.is_file() {
-        command("systemctl", &["--user", "reset-failed", LINUX_SERVICE_NAME])?;
-        command("systemctl", &["--user", "restart", LINUX_SERVICE_NAME])?;
+        let user_id = current_user_id()?;
+        systemctl_user(&user_id, &["reset-failed", LINUX_SERVICE_NAME])?;
+        systemctl_user(&user_id, &["restart", LINUX_SERVICE_NAME])?;
     }
     Ok(())
 }
@@ -191,16 +188,21 @@ fn write_unit(path: &Path, content: &str) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn ensure_linger_enabled() -> Result<()> {
+fn current_user_id() -> Result<String> {
     let user_id = command_output("id", &["--user"])?;
     let user_id = user_id.trim();
     if user_id.is_empty() || !user_id.chars().all(|character| character.is_ascii_digit()) {
         bail!("could not determine the current numeric user ID");
     }
-    if linger_enabled(user_id)? {
-        return Ok(());
-    }
+    Ok(user_id.to_owned())
+}
+
+#[cfg(target_os = "linux")]
+fn ensure_linger_enabled(user_id: &str) -> Result<()> {
     if linger_requires_sudo(user_id) {
+        if linger_enabled(user_id)? {
+            return Ok(());
+        }
         command("sudo", &["--", "loginctl", "enable-linger", user_id])?;
     } else {
         command("loginctl", &["enable-linger", user_id])?;
@@ -219,6 +221,27 @@ fn linger_enabled(user_id: &str) -> Result<bool> {
     )?
     .trim()
     .eq_ignore_ascii_case("yes"))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemd_user_runtime_directory(user_id: &str) -> PathBuf {
+    Path::new("/run/user").join(user_id)
+}
+
+#[cfg(target_os = "linux")]
+fn systemctl_user(user_id: &str, arguments: &[&str]) -> Result<()> {
+    checked_command_output("systemctl", systemctl_user_command(user_id, arguments)).map(|_| ())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn systemctl_user_command(user_id: &str, arguments: &[&str]) -> Command {
+    let mut process = Command::new("systemctl");
+    process
+        .arg("--user")
+        .args(arguments)
+        .env("XDG_RUNTIME_DIR", systemd_user_runtime_directory(user_id))
+        .env_remove("DBUS_SESSION_BUS_ADDRESS");
+    process
 }
 
 #[cfg(windows)]
@@ -517,8 +540,14 @@ fn command_output(program: &str, arguments: &[&str]) -> Result<String> {
 
 #[cfg(any(target_os = "linux", test))]
 fn checked_output(program: &str, arguments: &[&str]) -> Result<Output> {
-    let output = Command::new(program)
-        .args(arguments)
+    let mut process = Command::new(program);
+    process.args(arguments);
+    checked_command_output(program, process)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn checked_command_output(program: &str, mut process: Command) -> Result<Output> {
+    let output = process
         .output()
         .with_context(|| format!("could not run {program}"))?;
     if !output.status.success() {
