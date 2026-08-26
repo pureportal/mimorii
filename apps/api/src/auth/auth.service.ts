@@ -25,6 +25,7 @@ interface TeamRow {
   id: string;
   name: string;
   role: TeamSummary["role"];
+  logo_updated_at: string | null;
   created_at: string;
 }
 
@@ -208,8 +209,9 @@ export class AuthService {
 
   private async listTeams(userId: string): Promise<TeamSummary[]> {
     const rows = await this.database.all<TeamRow>(
-      `SELECT t.id, t.name, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at, t.created_at
        FROM teams t JOIN team_members m ON m.team_id = t.id
+       LEFT JOIN team_logos logo ON logo.team_id = t.id
        WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
     );
@@ -217,6 +219,7 @@ export class AuthService {
       id: team.id,
       name: team.name,
       role: team.role,
+      logoUpdatedAt: team.logo_updated_at,
       createdAt: team.created_at,
     }));
   }

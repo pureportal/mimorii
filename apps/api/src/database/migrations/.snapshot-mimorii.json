@@ -7099,6 +7099,91 @@
     },
     {
       "columns": {
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "image_data": {
+          "name": "image_data",
+          "type": "bytea",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "blob"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "team_logos",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": ["team_id"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "team_logos_pkey",
+          "unique": true,
+          "primary": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "team_logos_size_check",
+          "columnName": "image_data",
+          "definition": "CHECK ((octet_length(image_data) <= 1048576))",
+          "expression": "octet_length(image_data) <= 1048576"
+        }
+      ],
+      "foreignKeys": {
+        "team_logos_team_id_fkey": {
+          "columnNames": ["team_id"],
+          "constraintName": "team_logos_team_id_fkey",
+          "localTableName": "public.team_logos",
+          "referencedTableName": "public.teams",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
         "id": {
           "name": "id",
           "type": "text",

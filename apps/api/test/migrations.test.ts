@@ -28,6 +28,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         expect.arrayContaining([
           "users",
           "teams",
+          "team_logos",
           "resources",
           "resource_images",
           "checks",
@@ -152,6 +153,20 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         { column_name: "updated_at", data_type: "timestamp with time zone" },
       ]);
 
+      const teamLogoColumns = await database.all<{
+        column_name: string;
+        data_type: string;
+      }>(
+        `SELECT column_name, data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'team_logos'
+         ORDER BY column_name`
+      );
+      expect(teamLogoColumns).toEqual([
+        { column_name: "image_data", data_type: "bytea" },
+        { column_name: "team_id", data_type: "text" },
+        { column_name: "updated_at", data_type: "timestamp with time zone" },
+      ]);
+
       const privacyColumns = await database.all<{ table_name: string; column_name: string }>(
         `SELECT table_name, column_name FROM information_schema.columns
          WHERE table_schema = 'public'
@@ -223,7 +238,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260830000000");
+      expect(migration?.name).toBe("Migration20260831000000");
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns

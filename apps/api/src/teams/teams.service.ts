@@ -18,11 +18,13 @@ import type {
   UpdateTeamDto,
 } from "./teams.dto.js";
 import { TeamAccessService } from "./team-access.service.js";
+import { TeamLogosService } from "./team-logos.service.js";
 
 interface TeamRow {
   id: string;
   name: string;
   role: TeamRole;
+  logo_updated_at: string | null;
   created_at: string;
 }
 
@@ -48,23 +50,27 @@ export class TeamsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly access: TeamAccessService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly logos: TeamLogosService
   ) {}
 
   async list(userId: string): Promise<TeamSummary[]> {
     const teams = await this.database.all<TeamRow>(
-      `SELECT t.id, t.name, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at, t.created_at
          FROM teams t JOIN team_members m ON m.team_id = t.id
+         LEFT JOIN team_logos logo ON logo.team_id = t.id
          WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
     );
     return teams.map((team) => this.mapTeam(team));
   }
 
-  async create(userId: string, input: CreateTeamDto): Promise<TeamSummary> {
+  async create(userId: string, input: CreateTeamDto, logoInput?: Buffer): Promise<TeamSummary> {
+    const logo = logoInput ? await this.logos.prepare(logoInput) : null;
     const id = randomUUID();
     const now = new Date().toISOString();
     const name = input.name.trim();
+    let logoUpdatedAt: string | null = null;
     await this.database.transaction(async () => {
       await this.database.run(
         `INSERT INTO teams (id, name, created_by, created_at, updated_at)
@@ -81,6 +87,7 @@ export class TeamsService {
         userId,
         now
       );
+      if (logo) logoUpdatedAt = await this.logos.store(id, logo);
     });
     await this.audit.record({
       teamId: id,
@@ -89,19 +96,37 @@ export class TeamsService {
       subjectType: "team",
       subjectId: id,
     });
-    return { id, name, role: "owner", createdAt: now };
+    return { id, name, role: "owner", logoUpdatedAt, createdAt: now };
   }
 
-  async update(userId: string, teamId: string, input: UpdateTeamDto): Promise<TeamSummary> {
+  async update(
+    userId: string,
+    teamId: string,
+    input: UpdateTeamDto,
+    logoInput?: Buffer
+  ): Promise<TeamSummary> {
     await this.access.require(userId, teamId, "admin");
+    const logo = logoInput ? await this.logos.prepare(logoInput) : null;
     const name = input.name.trim();
-    const result = await this.database.run(
-      "UPDATE teams SET name = ?, updated_at = ? WHERE id = ?",
-      name,
-      new Date().toISOString(),
-      teamId
-    );
-    if (result.changes === 0) throw new NotFoundException("Team not found");
+    await this.database.transaction(async () => {
+      const result = await this.database.run(
+        "UPDATE teams SET name = ?, updated_at = ? WHERE id = ?",
+        name,
+        new Date().toISOString(),
+        teamId
+      );
+      if (result.changes === 0) throw new NotFoundException("Team not found");
+      if (logo) {
+        await this.logos.store(teamId, logo);
+        await this.audit.record({
+          teamId,
+          userId,
+          action: "team.logo_updated",
+          subjectType: "team",
+          subjectId: teamId,
+        });
+      }
+    });
     await this.audit.record({
       teamId,
       userId,
@@ -338,8 +363,9 @@ export class TeamsService {
 
   private async getSummary(userId: string, teamId: string): Promise<TeamSummary> {
     const row = await this.database.get<TeamRow>(
-      `SELECT t.id, t.name, m.role, t.created_at
+      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at, t.created_at
        FROM teams t JOIN team_members m ON m.team_id = t.id
+       LEFT JOIN team_logos logo ON logo.team_id = t.id
        WHERE t.id = ? AND m.user_id = ?`,
       teamId,
       userId
@@ -353,6 +379,7 @@ export class TeamsService {
       id: team.id,
       name: team.name,
       role: team.role,
+      logoUpdatedAt: team.logo_updated_at,
       createdAt: team.created_at,
     };
   }

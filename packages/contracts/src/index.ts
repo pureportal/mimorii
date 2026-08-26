@@ -309,6 +309,7 @@ export interface TeamSummary {
   id: string;
   name: string;
   role: TeamRole;
+  logoUpdatedAt?: string | null;
   createdAt: string;
 }
 
