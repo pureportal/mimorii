@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use super::{
-    LinuxServicePaths, command, linger_requires_sudo, service_installation_warning,
-    systemctl_user_command, systemd_quote, systemd_user_runtime_directory,
-    systemd_user_unit_content,
+    LINUX_SERVICE_INSTALL_ACTIONS, LinuxServicePaths, command, linger_requires_sudo,
+    service_installation_warning, systemctl_user_command, systemd_quote,
+    systemd_user_runtime_directory, systemd_user_unit_content,
 };
 
 #[test]
@@ -56,6 +56,19 @@ fn root_service_setup_targets_the_root_user_manager() {
         Some(runtime_directory.as_os_str())
     )));
     assert!(environment.contains(&(std::ffi::OsStr::new("DBUS_SESSION_BUS_ADDRESS"), None)));
+}
+
+#[test]
+fn service_installation_does_not_reset_an_unloaded_unit() {
+    assert_eq!(
+        LINUX_SERVICE_INSTALL_ACTIONS,
+        &[
+            &["daemon-reload"][..],
+            &["enable", "mimorii-agent-desktop.service"],
+            &["restart", "mimorii-agent-desktop.service"],
+            &["is-active", "--quiet", "mimorii-agent-desktop.service"],
+        ]
+    );
 }
 
 #[test]

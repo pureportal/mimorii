@@ -6,8 +6,16 @@ use std::process::{Command, Output};
 #[cfg(any(target_os = "linux", test))]
 use anyhow::{Context, Result, bail};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", test))]
 const LINUX_SERVICE_NAME: &str = "mimorii-agent-desktop.service";
+
+#[cfg(any(target_os = "linux", test))]
+const LINUX_SERVICE_INSTALL_ACTIONS: &[&[&str]] = &[
+    &["daemon-reload"],
+    &["enable", LINUX_SERVICE_NAME],
+    &["restart", LINUX_SERVICE_NAME],
+    &["is-active", "--quiet", LINUX_SERVICE_NAME],
+];
 
 #[cfg(any(target_os = "linux", test))]
 struct LinuxServicePaths {
@@ -56,11 +64,9 @@ pub fn install(executable: &Path) -> Result<()> {
     write_unit(&unit, &systemd_user_unit_content(executable, &paths)?)?;
     let user_id = current_user_id()?;
     ensure_linger_enabled(&user_id)?;
-    systemctl_user(&user_id, &["daemon-reload"])?;
-    systemctl_user(&user_id, &["reset-failed", LINUX_SERVICE_NAME])?;
-    systemctl_user(&user_id, &["enable", LINUX_SERVICE_NAME])?;
-    systemctl_user(&user_id, &["restart", LINUX_SERVICE_NAME])?;
-    systemctl_user(&user_id, &["is-active", "--quiet", LINUX_SERVICE_NAME])?;
+    for action in LINUX_SERVICE_INSTALL_ACTIONS {
+        systemctl_user(&user_id, action)?;
+    }
     println!("installed {}", unit.display());
     println!("service: running");
     Ok(())
