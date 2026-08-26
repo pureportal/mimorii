@@ -1,6 +1,6 @@
-node_modules
-dist
-target
+**/node_modules
+**/dist
+**/target
 .git
 .devcontainer
 .github
