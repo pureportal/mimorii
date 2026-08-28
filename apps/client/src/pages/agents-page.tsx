@@ -26,6 +26,7 @@ import { createAgentEnrollmentCode } from "../lib/agent-enrollment";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatRelative } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 interface CreatedAgent extends AgentSummary {
   enrollmentKey: string;
@@ -340,6 +341,7 @@ function CreateAgentDialog({
   const availableResources = (resources.data ?? []).filter(
     (resource) => !resource.agent && resource.kind === (kind === "mobile" ? "device" : "host")
   );
+  const resourceLabels = resourceOptionLabels(availableResources);
 
   useEffect(() => {
     if (!open) return;
@@ -511,7 +513,7 @@ function CreateAgentDialog({
                   <option value="">New resource</option>
                   {availableResources.map((resource) => (
                     <option key={resource.id} value={resource.id}>
-                      {resource.name}
+                      {resourceLabels.get(resource.id)}
                     </option>
                   ))}
                 </Select>

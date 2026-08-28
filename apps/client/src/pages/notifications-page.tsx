@@ -46,6 +46,7 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
   const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<NotificationPolicySummary | null>(null);
   const [confirmation, setConfirmation] = useState<NotificationConfirmation | null>(null);
+  const [visibleDeliveryCount, setVisibleDeliveryCount] = useState(20);
   const channels = useQuery({
     queryKey: ["notification-channels", teamId],
     queryFn: () => api<NotificationChannelSummary[]>(`/teams/${teamId}/notifications/channels`),
@@ -140,7 +141,7 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
             ? formatCount(channels.data?.length ?? 0, "channel")
             : section === "rules"
               ? formatCount(policies.data?.length ?? 0, "rule")
-              : `${formatCount(deliveries.data?.length ?? 0, "delivery")} loaded`}
+              : `${formatCount(deliveries.data?.length ?? 0, "delivery", "deliveries")} loaded`}
         </p>
         {section === "channels" ? (
           <Button
@@ -292,48 +293,101 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
 
         {section === "history" ? (
           <Card>
-            <CardContent className="overflow-x-auto pt-5">
+            <CardContent className="p-0 md:p-5 md:pt-5">
               {deliveries.data?.length ? (
-                <table className="w-full min-w-[680px] text-left text-sm">
-                  <thead className="text-xs text-muted">
-                    <tr>
-                      <th className="pb-3 font-medium">Channel</th>
-                      <th className="pb-3 font-medium">Event</th>
-                      <th className="pb-3 font-medium">Time</th>
-                      <th className="pb-3 font-medium">Attempts</th>
-                      <th className="pb-3 font-medium">Error</th>
-                      <th className="pb-3 text-right font-medium">Status</th>
-                      <th className="pb-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deliveries.data.map((delivery) => (
-                      <tr key={delivery.id} className="border-t border-line">
-                        <td className="py-3 font-semibold">{delivery.channelName}</td>
-                        <td className="py-3 text-muted">{delivery.event}</td>
-                        <td className="py-3 text-muted">{formatRelative(delivery.createdAt)}</td>
-                        <td className="py-3 text-muted">{delivery.attempts}</td>
-                        <td className="max-w-72 break-words py-3 text-muted">
-                          {delivery.error ?? "—"}
-                        </td>
-                        <td className="py-3 text-right">
+                <>
+                  <div className="divide-y divide-line md:hidden">
+                    {deliveries.data.slice(0, visibleDeliveryCount).map((delivery) => (
+                      <article key={delivery.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold">{delivery.channelName}</h3>
+                            <p className="mt-1 text-xs text-muted">{delivery.event}</p>
+                          </div>
                           <StatusBadge status={delivery.status} />
-                        </td>
-                        <td className="py-3 text-right">
-                          {delivery.status === "failed" ? (
+                        </div>
+                        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <dt className="text-[11px] text-muted">Time</dt>
+                            <dd className="mt-1 font-medium">
+                              {formatRelative(delivery.createdAt)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] text-muted">Attempts</dt>
+                            <dd className="mt-1 font-medium">{delivery.attempts}</dd>
+                          </div>
+                        </dl>
+                        {delivery.error ? (
+                          <p className="mt-3 break-words rounded-xl bg-danger/7 p-3 text-xs text-danger">
+                            {delivery.error}
+                          </p>
+                        ) : null}
+                        {delivery.status === "failed" ? (
+                          <div className="mt-3 flex justify-end">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => retry.mutate(delivery.id)}
                             >
                               <RotateCcw /> Retry
                             </Button>
-                          ) : null}
-                        </td>
-                      </tr>
+                          </div>
+                        ) : null}
+                      </article>
                     ))}
-                  </tbody>
-                </table>
+                    {visibleDeliveryCount < deliveries.data.length ? (
+                      <div className="flex justify-center p-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setVisibleDeliveryCount((count) => count + 20)}
+                        >
+                          Load more
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <table className="hidden w-full min-w-[680px] text-left text-sm md:table">
+                    <thead className="text-xs text-muted">
+                      <tr>
+                        <th className="pb-3 font-medium">Channel</th>
+                        <th className="pb-3 font-medium">Event</th>
+                        <th className="pb-3 font-medium">Time</th>
+                        <th className="pb-3 font-medium">Attempts</th>
+                        <th className="pb-3 font-medium">Error</th>
+                        <th className="pb-3 text-right font-medium">Status</th>
+                        <th className="pb-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveries.data.map((delivery) => (
+                        <tr key={delivery.id} className="border-t border-line">
+                          <td className="py-3 font-semibold">{delivery.channelName}</td>
+                          <td className="py-3 text-muted">{delivery.event}</td>
+                          <td className="py-3 text-muted">{formatRelative(delivery.createdAt)}</td>
+                          <td className="py-3 text-muted">{delivery.attempts}</td>
+                          <td className="max-w-72 break-words py-3 text-muted">
+                            {delivery.error ?? "—"}
+                          </td>
+                          <td className="py-3 text-right">
+                            <StatusBadge status={delivery.status} />
+                          </td>
+                          <td className="py-3 text-right">
+                            {delivery.status === "failed" ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => retry.mutate(delivery.id)}
+                              >
+                                <RotateCcw /> Retry
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               ) : (
                 <div className="grid h-32 place-items-center text-sm text-muted">No deliveries</div>
               )}

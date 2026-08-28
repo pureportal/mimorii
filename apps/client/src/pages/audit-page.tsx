@@ -8,7 +8,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatRelative } from "../lib/format";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 20;
 
 export function AuditPage() {
   const { activeTeam } = useAuth();

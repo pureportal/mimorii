@@ -10,6 +10,7 @@ import {
   type ResourceSummary,
 } from "@mimorii/contracts";
 import { useState, type FormEvent } from "react";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
@@ -49,6 +50,7 @@ export function DashboardItemDialog({
   onOpenChange: (open: boolean) => void;
   onSave: (item: DashboardItem) => void;
 }) {
+  const resourceLabels = resourceOptionLabels(resources);
   const [type, setType] = useState<DashboardItemType>(item?.type ?? "metric");
   const [title, setTitle] = useState(item?.title ?? defaultTitles.metric);
   const [width, setWidth] = useState<DashboardWidth>(item?.width ?? 1);
@@ -189,7 +191,7 @@ export function DashboardItemDialog({
                 )}
                 {resources.map((resource) => (
                   <option key={resource.id} value={resource.id}>
-                    {resource.name}
+                    {resourceLabels.get(resource.id)}
                   </option>
                 ))}
               </Select>

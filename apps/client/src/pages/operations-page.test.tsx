@@ -133,6 +133,31 @@ describe("OperationsPage incident updates", () => {
     await waitFor(() => expect(screen.getByText(status)).toBeInTheDocument());
     if (message) expect(screen.getByText(message)).toBeInTheDocument();
   });
+
+  it("loads long incident histories in manageable groups", async () => {
+    const incidents = Array.from({ length: 21 }, (_, index) => ({
+      ...incident,
+      id: `incident-${index + 1}`,
+      title: `Incident ${index + 1}`,
+      updates: [],
+    }));
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/teams/team-1/incidents?limit=500") return Promise.resolve(incidents);
+      if (path === "/teams/team-1/maintenance") return Promise.resolve([]);
+      if (path === "/teams/team-1/resources") return Promise.resolve([resource]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+
+    await screen.findByText("Incident 20");
+    expect(screen.queryByText("Incident 21")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(screen.getByText("Incident 21")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
 });
 
 function renderPage() {

@@ -10,7 +10,7 @@ export function CheckHealthSummary({
   className?: string;
 }) {
   const items = getCheckHealthItems(check);
-  if (!items.length) return <span className="text-muted">—</span>;
+  if (!items.length) return <span className={cn("text-muted", className)}>—</span>;
 
   return (
     <div className={cn("flex min-w-48 items-start gap-5", className)}>

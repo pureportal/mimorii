@@ -20,7 +20,8 @@ import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { isHealthCheckType } from "../lib/check-health";
-import { formatCount, formatLatency, formatPercent } from "../lib/format";
+import { formatCount, formatDuration, formatLatency, formatPercent } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function ObjectivesPage() {
   const { activeTeam } = useAuth();
@@ -121,10 +122,7 @@ export function ObjectivesPage() {
                 <div className="mt-5 grid grid-cols-3 gap-3">
                   <Metric label="Target" value={`${objective.targetPercent}%`} />
                   <Metric label="P95 latency" value={formatLatency(objective.latencyP95Ms)} />
-                  <Metric
-                    label="Budget"
-                    value={`${Math.round(objective.remainingBudgetMinutes)}m`}
-                  />
+                  <Metric label="Budget" value={formatBudget(objective.remainingBudgetMinutes)} />
                 </div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-ink/6">
                   <div
@@ -196,6 +194,12 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatBudget(minutes: number): string {
+  const roundedMinutes = Math.round(minutes);
+  const sign = roundedMinutes < 0 ? "−" : "";
+  return `${sign}${formatDuration(Math.abs(roundedMinutes) * 60)}`;
+}
+
 function ObjectiveDialog({
   open,
   onOpenChange,
@@ -213,6 +217,7 @@ function ObjectiveDialog({
   teamId: string;
   onSaved: () => Promise<unknown>;
 }) {
+  const resourceLabels = resourceOptionLabels(resources);
   const [resourceId, setResourceId] = useState(objective?.resourceId ?? resources[0]?.id ?? "");
   const [checkId, setCheckId] = useState(objective?.checkId ?? "");
   const [saving, setSaving] = useState(false);
@@ -274,7 +279,7 @@ function ObjectiveDialog({
             >
               {resources.map((resource) => (
                 <option key={resource.id} value={resource.id}>
-                  {resource.name}
+                  {resourceLabels.get(resource.id)}
                 </option>
               ))}
             </Select>

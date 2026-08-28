@@ -21,6 +21,7 @@ import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatMilliseconds, formatPercent, formatRelative } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 interface HeartbeatConfirmation {
   action: "rotate" | "delete";
@@ -90,6 +91,7 @@ export function HeartbeatsPage() {
   const filtered =
     heartbeats.data?.filter((heartbeat) => !resourceId || heartbeat.resourceId === resourceId) ??
     [];
+  const resourceNames = resourceOptionLabels(resources.data ?? []);
 
   return (
     <div className="space-y-6">
@@ -113,7 +115,7 @@ export function HeartbeatsPage() {
             <option value="">All resources</option>
             {resources.data?.map((resource) => (
               <option key={resource.id} value={resource.id}>
-                {resource.name}
+                {resourceNames.get(resource.id)}
               </option>
             ))}
           </Select>
@@ -138,106 +140,145 @@ export function HeartbeatsPage() {
       </div>
 
       {filtered.length ? (
-        <Card data-guide-page="heartbeats-list">
-          <CardHeader>
-            <h3 className="font-display font-bold">Monitors</h3>
-            <span className="text-xs text-muted">
-              {filtered.filter((heartbeat) => heartbeat.status === "down").length} down
-            </span>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="pb-3 font-medium">Heartbeat</th>
-                  <th className="pb-3 font-medium">Resource</th>
-                  <th className="pb-3 font-medium">Interval</th>
-                  <th className="pb-3 font-medium">30d success</th>
-                  <th className="pb-3 font-medium">Avg duration</th>
-                  <th className="pb-3 font-medium">Last signal</th>
-                  <th className="pb-3 font-medium">Deadline</th>
-                  <th className="pb-3 text-right font-medium">Status</th>
-                  <th className="pb-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((heartbeat) => (
-                  <tr key={heartbeat.id} className="border-t border-line">
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-9 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                          <Radio className="size-4" />
-                        </span>
-                        <div>
-                          <p className="font-semibold">{heartbeat.name}</p>
-                          {heartbeat.lastMessage ? (
-                            <p className="max-w-64 truncate text-xs text-muted">
-                              {heartbeat.lastMessage}
-                            </p>
-                          ) : null}
-                        </div>
+        <div data-guide-page="heartbeats-list">
+          <div className="grid gap-3 xl:hidden">
+            {filtered.map((heartbeat) => (
+              <Card key={heartbeat.id} className="p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
+                    <Radio className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-display font-bold">{heartbeat.name}</h3>
+                        <p className="mt-0.5 truncate text-xs text-muted">
+                          {resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
+                        </p>
                       </div>
-                    </td>
-                    <td className="py-4 text-muted">{heartbeat.resourceName}</td>
-                    <td className="py-4 text-muted">{formatInterval(heartbeat.intervalSeconds)}</td>
-                    <td className="py-4 text-muted">{formatPercent(heartbeat.successRate30d)}</td>
-                    <td className="py-4 text-muted">
-                      {formatMilliseconds(heartbeat.averageDurationMs30d)}
-                    </td>
-                    <td className="py-4 text-muted">{formatRelative(heartbeat.lastPingAt)}</td>
-                    <td className="py-4 text-muted">
-                      {heartbeat.runningSince
-                        ? "Running"
-                        : formatRelative(heartbeat.nextDeadlineAt)}
-                    </td>
-                    <td className="py-4 text-right">
                       <StatusBadge status={heartbeat.status} />
-                    </td>
-                    <td className="py-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`View ${heartbeat.name} history`}
-                          onClick={() => setHistoryHeartbeat(heartbeat)}
-                        >
-                          <History />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Rotate ${heartbeat.name} token`}
-                          onClick={() => setConfirmation({ action: "rotate", heartbeat })}
-                        >
-                          <KeyRound />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Edit ${heartbeat.name}`}
-                          onClick={() => {
+                    </div>
+                    {heartbeat.lastMessage ? (
+                      <p className="mt-2 line-clamp-2 text-xs text-muted">
+                        {heartbeat.lastMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
+                  <HeartbeatStat
+                    label="Interval"
+                    value={formatInterval(heartbeat.intervalSeconds)}
+                  />
+                  <HeartbeatStat
+                    label="30d success"
+                    value={formatPercent(heartbeat.successRate30d)}
+                  />
+                  <HeartbeatStat
+                    label="Avg duration"
+                    value={formatMilliseconds(heartbeat.averageDurationMs30d)}
+                  />
+                  <HeartbeatStat label="Last signal" value={formatRelative(heartbeat.lastPingAt)} />
+                  <HeartbeatStat
+                    label="Deadline"
+                    value={
+                      heartbeat.runningSince ? "Running" : formatRelative(heartbeat.nextDeadlineAt)
+                    }
+                  />
+                </dl>
+                <div className="mt-4 flex justify-end border-t border-line pt-3">
+                  <HeartbeatActions
+                    heartbeat={heartbeat}
+                    onHistory={() => setHistoryHeartbeat(heartbeat)}
+                    onRotate={() => setConfirmation({ action: "rotate", heartbeat })}
+                    onEdit={() => {
+                      setSelected(heartbeat);
+                      setFormOpen(true);
+                    }}
+                    onDelete={() => setConfirmation({ action: "delete", heartbeat })}
+                  />
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card className="hidden xl:block">
+            <CardHeader>
+              <h3 className="font-display font-bold">Monitors</h3>
+              <span className="text-xs text-muted">
+                {filtered.filter((heartbeat) => heartbeat.status === "down").length} down
+              </span>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="text-xs text-muted">
+                  <tr>
+                    <th className="pb-3 font-medium">Heartbeat</th>
+                    <th className="pb-3 font-medium">Resource</th>
+                    <th className="pb-3 font-medium">Interval</th>
+                    <th className="pb-3 font-medium">30d success</th>
+                    <th className="pb-3 font-medium">Avg duration</th>
+                    <th className="pb-3 font-medium">Last signal</th>
+                    <th className="pb-3 font-medium">Deadline</th>
+                    <th className="pb-3 text-right font-medium">Status</th>
+                    <th className="pb-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((heartbeat) => (
+                    <tr key={heartbeat.id} className="border-t border-line">
+                      <td className="py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-9 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
+                            <Radio className="size-4" />
+                          </span>
+                          <div>
+                            <p className="font-semibold">{heartbeat.name}</p>
+                            {heartbeat.lastMessage ? (
+                              <p className="max-w-64 truncate text-xs text-muted">
+                                {heartbeat.lastMessage}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 text-muted">
+                        {resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
+                      </td>
+                      <td className="py-4 text-muted">
+                        {formatInterval(heartbeat.intervalSeconds)}
+                      </td>
+                      <td className="py-4 text-muted">{formatPercent(heartbeat.successRate30d)}</td>
+                      <td className="py-4 text-muted">
+                        {formatMilliseconds(heartbeat.averageDurationMs30d)}
+                      </td>
+                      <td className="py-4 text-muted">{formatRelative(heartbeat.lastPingAt)}</td>
+                      <td className="py-4 text-muted">
+                        {heartbeat.runningSince
+                          ? "Running"
+                          : formatRelative(heartbeat.nextDeadlineAt)}
+                      </td>
+                      <td className="py-4 text-right">
+                        <StatusBadge status={heartbeat.status} />
+                      </td>
+                      <td className="py-4">
+                        <HeartbeatActions
+                          heartbeat={heartbeat}
+                          onHistory={() => setHistoryHeartbeat(heartbeat)}
+                          onRotate={() => setConfirmation({ action: "rotate", heartbeat })}
+                          onEdit={() => {
                             setSelected(heartbeat);
                             setFormOpen(true);
                           }}
-                        >
-                          <Pencil />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Delete ${heartbeat.name}`}
-                          onClick={() => setConfirmation({ action: "delete", heartbeat })}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+                          onDelete={() => setConfirmation({ action: "delete", heartbeat })}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <EmptyState
           title={resources.data?.length ? "No heartbeats" : "No resources"}
@@ -282,6 +323,61 @@ export function HeartbeatsPage() {
         teamId={teamId}
         onClose={() => setHistoryHeartbeat(null)}
       />
+    </div>
+  );
+}
+
+function HeartbeatStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] text-muted">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+function HeartbeatActions({
+  heartbeat,
+  onHistory,
+  onRotate,
+  onEdit,
+  onDelete,
+}: {
+  heartbeat: HeartbeatMonitorSummary;
+  onHistory: () => void;
+  onRotate: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex justify-end gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`View ${heartbeat.name} history`}
+        onClick={onHistory}
+      >
+        <History />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Rotate ${heartbeat.name} token`}
+        onClick={onRotate}
+      >
+        <KeyRound />
+      </Button>
+      <Button variant="ghost" size="icon" aria-label={`Edit ${heartbeat.name}`} onClick={onEdit}>
+        <Pencil />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Delete ${heartbeat.name}`}
+        onClick={onDelete}
+      >
+        <Trash2 />
+      </Button>
     </div>
   );
 }

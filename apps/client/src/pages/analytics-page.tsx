@@ -13,12 +13,14 @@ import {
 } from "recharts";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import { isHealthCheckType } from "../lib/check-health";
 import { formatCount, formatDuration, formatLatency, formatPercent } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function AnalyticsPage() {
   const { activeTeam } = useAuth();
@@ -51,6 +53,7 @@ export function AnalyticsPage() {
   const availableChecks = checks.data?.filter(
     (check) => !isHealthCheckType(check.type) && (!resourceId || check.resourceId === resourceId)
   );
+  const resourceNames = resourceOptionLabels(resources.data ?? []);
 
   if (resources.isLoading || checks.isLoading || report.isLoading) return <LoadingState />;
   if (resources.isError || checks.isError || report.isError || !report.data) {
@@ -64,30 +67,66 @@ export function AnalyticsPage() {
 
       <Card data-guide-page="reports-filters" className="p-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-          <Select
-            value={resourceId}
-            onChange={(event) => {
-              setResourceId(event.target.value);
-              setCheckId("");
-            }}
-          >
-            <option value="">All resources</option>
-            {resources.data?.map((resource) => (
-              <option key={resource.id} value={resource.id}>
-                {resource.name}
-              </option>
-            ))}
-          </Select>
-          <Select value={checkId} onChange={(event) => setCheckId(event.target.value)}>
-            <option value="">All checks</option>
-            {availableChecks?.map((check) => (
-              <option key={check.id} value={check.id}>
-                {check.name}
-              </option>
-            ))}
-          </Select>
+          <Field>
+            <FieldLabel htmlFor="report-from">From</FieldLabel>
+            <Input
+              id="report-from"
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="report-to">To</FieldLabel>
+            <Input
+              id="report-to"
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="report-resource">Resource</FieldLabel>
+            <Select
+              id="report-resource"
+              value={resourceId}
+              onChange={(event) => {
+                setResourceId(event.target.value);
+                setCheckId("");
+              }}
+            >
+              <option value="">All resources</option>
+              {resources.data?.map((resource) => (
+                <option key={resource.id} value={resource.id}>
+                  {resourceNames.get(resource.id)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="report-check">Check</FieldLabel>
+            <Select
+              id="report-check"
+              value={checkId}
+              onChange={(event) => {
+                const selectedCheckId = event.target.value;
+                setCheckId(selectedCheckId);
+                if (!selectedCheckId) return;
+                const selectedCheck = availableChecks?.find(
+                  (check) => check.id === selectedCheckId
+                );
+                if (!selectedCheck) throw new Error("Check is unavailable");
+                setResourceId(selectedCheck.resourceId);
+              }}
+            >
+              <option value="">All checks</option>
+              {availableChecks?.map((check) => (
+                <option key={check.id} value={check.id}>
+                  {checkOptionLabel(check, resourceNames, Boolean(resourceId))}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </Card>
 
@@ -210,6 +249,17 @@ function Detail({ label, value }: { label: string; value: string }) {
       <p className="mt-2 font-display text-xl font-bold">{value}</p>
     </Card>
   );
+}
+
+function checkOptionLabel(
+  check: Pick<CheckSummary, "name" | "resourceId">,
+  resourceNames: ReadonlyMap<string, string>,
+  resourceSelected: boolean
+): string {
+  if (resourceSelected) return check.name;
+  const resourceName = resourceNames.get(check.resourceId);
+  if (!resourceName) throw new Error("Check resource is unavailable");
+  return `${check.name} · ${resourceName}`;
 }
 
 function dateRange(days: number): { from: string; to: string } {

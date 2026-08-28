@@ -30,6 +30,7 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { checkPassingLabel } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function ChecksPage() {
   const { activeTeam } = useAuth();
@@ -38,6 +39,7 @@ export function ChecksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(20);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState<CheckSummary | null>(null);
   const [detailsCheck, setDetailsCheck] = useState<CheckSummary | null>(null);
@@ -94,10 +96,7 @@ export function ChecksPage() {
     onSettled: () => setDeleteCheck(null),
   });
 
-  const resourceNames = useMemo(
-    () => new Map(resources.data?.map((resource) => [resource.id, resource.name])),
-    [resources.data]
-  );
+  const resourceNames = useMemo(() => resourceOptionLabels(resources.data ?? []), [resources.data]);
   const filtered = useMemo(
     () =>
       checks.data?.filter(
@@ -110,6 +109,8 @@ export function ChecksPage() {
       ) ?? [],
     [checks.data, resourceId, resourceNames, search, status]
   );
+  const hasFilters = Boolean(search.trim()) || Boolean(resourceId) || status !== "all";
+  const visibleChecks = filtered.slice(0, visibleCount);
 
   if (checks.isLoading || resources.isLoading) return <LoadingState />;
   if (checks.isError || resources.isError)
@@ -130,8 +131,10 @@ export function ChecksPage() {
       >
         <div className="flex flex-1 flex-wrap gap-2">
           <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <Input
+              type="search"
+              aria-label="Search checks"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search checks"
@@ -152,7 +155,7 @@ export function ChecksPage() {
             <option value="">All resources</option>
             {resources.data?.map((resource) => (
               <option key={resource.id} value={resource.id}>
-                {resource.name}
+                {resourceNames.get(resource.id)}
               </option>
             ))}
           </Select>
@@ -172,6 +175,9 @@ export function ChecksPage() {
             <option value="paused">Paused</option>
             <option value="pending">Pending</option>
           </Select>
+          <p className="w-full self-center text-sm text-muted sm:w-auto">
+            {filtered.length.toLocaleString()} {filtered.length === 1 ? "check" : "checks"}
+          </p>
         </div>
         <Button
           variant="coral"
@@ -188,10 +194,10 @@ export function ChecksPage() {
       {filtered.length ? (
         <Card data-guide-page="checks-list">
           <CardContent className="divide-y divide-line p-0">
-            {filtered.map((check) => (
+            {visibleChecks.map((check) => (
               <article
                 key={check.id}
-                className="grid gap-4 px-5 py-4 transition-colors hover:bg-ink/[.018] lg:grid-cols-[minmax(240px,1fr)_minmax(210px,.8fr)_110px_135px_auto] lg:items-center"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-4 px-4 py-4 transition-colors hover:bg-ink/[.018] sm:px-5 lg:grid-cols-[minmax(240px,1fr)_minmax(210px,.8fr)_110px_135px_auto] lg:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
@@ -207,37 +213,77 @@ export function ChecksPage() {
                     </p>
                   </div>
                 </div>
-                <CheckHealthSummary check={check} />
+                <CheckHealthSummary check={check} className="col-span-2 min-w-0 lg:col-span-1" />
                 <CheckStat
                   label={`${checkPassingLabel(check.type)} · 24h`}
                   value={formatPercent(check.passing24h)}
                 />
                 <CheckStat label="Last run" value={formatRelative(check.lastCheckedAt)} />
-                <CheckActions
-                  check={check}
-                  onDetails={() => setDetailsCheck(check)}
-                  onRun={() => run.mutate(check.id)}
-                  onEdit={() => {
-                    setSelected(check);
-                    setDialogOpen(true);
-                  }}
-                  onToggle={() => toggle.mutate({ id: check.id, enabled: !check.enabled })}
-                  onDelete={() => setDeleteCheck(check)}
-                />
+                <div className="col-start-2 row-start-1 self-start justify-self-end lg:col-auto lg:row-auto">
+                  <CheckActions
+                    check={check}
+                    onDetails={() => setDetailsCheck(check)}
+                    onRun={() => run.mutate(check.id)}
+                    onEdit={() => {
+                      setSelected(check);
+                      setDialogOpen(true);
+                    }}
+                    onToggle={() => toggle.mutate({ id: check.id, enabled: !check.enabled })}
+                    onDelete={() => setDeleteCheck(check)}
+                  />
+                </div>
               </article>
             ))}
+            {visibleChecks.length < filtered.length ? (
+              <div className="flex justify-center p-4">
+                <Button variant="outline" onClick={() => setVisibleCount((count) => count + 20)}>
+                  Load more
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : (
         <EmptyState
-          title={resources.data?.length ? "No matching checks" : "Add a resource first"}
-          illustration={resources.data?.length ? undefined : "empty"}
+          title={
+            !resources.data?.length
+              ? "Add a resource first"
+              : hasFilters
+                ? "No matching checks"
+                : "No checks yet"
+          }
+          illustration={!resources.data?.length || !checks.data?.length ? "empty" : undefined}
           action={
             !resources.data?.length ? (
               <Button asChild variant="coral" size="sm">
                 <Link to={appRoutes.newResource}>Add resource</Link>
               </Button>
-            ) : undefined
+            ) : hasFilters ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setStatus("all");
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("resourceId");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : (
+              <Button
+                variant="coral"
+                size="sm"
+                onClick={() => {
+                  setSelected(null);
+                  setDialogOpen(true);
+                }}
+              >
+                <Plus /> Add check
+              </Button>
+            )
           }
         />
       )}

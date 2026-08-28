@@ -4,7 +4,7 @@ import { cn } from "../../lib/cn";
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-2xl border border-line bg-surface shadow-card", className)}
+      className={cn("min-w-0 rounded-2xl border border-line bg-surface shadow-card", className)}
       {...props}
     />
   );
@@ -12,7 +12,10 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 p-5 pb-3", className)} {...props} />
+    <div
+      className={cn("flex flex-wrap items-start justify-between gap-4 p-5 pb-3", className)}
+      {...props}
+    />
   );
 }
 

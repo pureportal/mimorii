@@ -38,7 +38,7 @@ import {
 } from "../lib/app-navigation";
 import { cn } from "../lib/cn";
 import { Brand } from "./brand";
-import { BrowserNotificationPrompt } from "./browser-notification-prompt";
+import { DeviceNotificationPrompt } from "./device-notification-prompt";
 import { ProductGuide } from "./guide/product-guide";
 import { SponsorFavicon } from "./sponsor-favicon";
 import { TeamPicker } from "./team-picker";
@@ -98,7 +98,7 @@ export function ProtectedLayout() {
             platformAdministration ? "max-w-[1500px]" : "max-w-2xl"
           )}
         >
-          <BrowserNotificationPrompt />
+          <DeviceNotificationPrompt />
           <Outlet />
         </main>
         <ProductGuide
@@ -202,7 +202,7 @@ export function ProtectedLayout() {
           data-guide="page-content"
           className="safe-app-content mx-auto w-full max-w-[1500px] px-4 pt-6 sm:px-6 lg:px-8 lg:pt-8"
         >
-          <BrowserNotificationPrompt />
+          <DeviceNotificationPrompt />
           <Outlet />
         </main>
       </div>

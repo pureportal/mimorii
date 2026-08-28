@@ -18,6 +18,7 @@ describe("MCP documentation", () => {
     expect(
       screen.getByText("Every request uses your current Mimorii team permissions.")
     ).toBeVisible();
+    expect(screen.getByText("Team health dashboard in supported clients")).toBeVisible();
     expect(
       screen.getByText("Write access is optional and your Mimorii role must allow the action.")
     ).toBeVisible();

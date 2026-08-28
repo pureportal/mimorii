@@ -21,6 +21,7 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import { formatLatency, formatPercent } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function OverviewPage() {
   const { activeTeam } = useAuth();
@@ -36,10 +37,18 @@ export function OverviewPage() {
     refetchInterval: 30_000,
   });
 
-  if (overview.isLoading) return <LoadingState />;
-  if (overview.isError || !overview.data)
-    return <ErrorState retry={() => void overview.refetch()} />;
+  if (overview.isLoading || resources.isLoading) return <LoadingState />;
+  if (overview.isError || resources.isError || !overview.data)
+    return (
+      <ErrorState
+        retry={() => {
+          void overview.refetch();
+          void resources.refetch();
+        }}
+      />
+    );
   const data = overview.data;
+  const resourceNames = resourceOptionLabels(resources.data ?? []);
   const attentionNeeded = data.warning + data.critical + data.down;
   const allGood = attentionNeeded === 0 && data.pending === 0;
 
@@ -208,7 +217,7 @@ export function OverviewPage() {
                   iconClassName="size-4"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{resource.name}</p>
+                  <p className="truncate text-sm font-semibold">{resourceNames.get(resource.id)}</p>
                   <p className="truncate text-xs capitalize text-muted">{resource.kind}</p>
                 </div>
                 <StatusBadge status={resource.status} />

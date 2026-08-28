@@ -46,7 +46,7 @@ export function DialogContent({
           ref={closeButtonRef}
           disabled={closeDisabled}
           className={cn(
-            "absolute grid size-9 place-items-center rounded-full text-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:ring-2 focus-visible:ring-coral/50 disabled:pointer-events-none disabled:opacity-45",
+            "absolute grid size-10 place-items-center rounded-full text-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:ring-2 focus-visible:ring-coral/50 disabled:pointer-events-none disabled:opacity-45",
             drawer
               ? "right-[calc(1rem+var(--safe-area-right))] top-[calc(0.75rem+var(--safe-area-top))]"
               : "right-4 top-4"

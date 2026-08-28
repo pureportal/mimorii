@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "../ui/card";
 import { api } from "../../lib/api";
 import { formatRelative } from "../../lib/format";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 20;
 
 export function AdminAudit() {
   const events = useInfiniteQuery({

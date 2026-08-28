@@ -3,28 +3,33 @@ import { BellRing } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
-import { devicePushState, enablePush } from "../lib/push-notifications";
-import { applicationRuntime } from "../lib/runtime";
+import { devicePushState, enablePush, type DevicePushState } from "../lib/push-notifications";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 
 const PROMPTED_KEY = "mimorii.notifications.prompted";
 
-export function BrowserNotificationPrompt() {
-  const [capabilities, setCapabilities] = useState<NotificationPushCapabilities | null>(null);
+interface NotificationPromptState {
+  capabilities: NotificationPushCapabilities;
+  platform: Exclude<DevicePushState["platform"], null>;
+}
+
+export function DeviceNotificationPrompt() {
+  const [prompt, setPrompt] = useState<NotificationPromptState | null>(null);
   const [enabling, setEnabling] = useState(false);
 
   useEffect(() => {
-    if (applicationRuntime !== "web" || sessionStorage.getItem(PROMPTED_KEY)) return undefined;
+    if (sessionStorage.getItem(PROMPTED_KEY)) return undefined;
     let active = true;
     void api<NotificationPushCapabilities>("/notifications/push")
-      .then(async (availableCapabilities) => ({
-        capabilities: availableCapabilities,
-        state: await devicePushState(availableCapabilities),
+      .then(async (capabilities) => ({
+        capabilities,
+        state: await devicePushState(capabilities),
       }))
-      .then(({ capabilities: availableCapabilities, state }) => {
+      .then(({ capabilities, state }) => {
         if (
           !active ||
+          !state.platform ||
           !state.available ||
           state.permission === "denied" ||
           state.permission === "unavailable" ||
@@ -32,7 +37,7 @@ export function BrowserNotificationPrompt() {
         )
           return;
         sessionStorage.setItem(PROMPTED_KEY, "true");
-        setCapabilities(availableCapabilities);
+        setPrompt({ capabilities, platform: state.platform });
       })
       .catch(() => undefined);
     return () => {
@@ -40,19 +45,18 @@ export function BrowserNotificationPrompt() {
     };
   }, []);
 
-  if (!capabilities) return null;
+  if (!prompt) return null;
 
   async function enable() {
-    const availableCapabilities = capabilities;
-    if (!availableCapabilities) return;
+    if (!prompt) return;
     setEnabling(true);
     try {
-      await enablePush(availableCapabilities);
+      await enablePush(prompt.capabilities);
       toast.success("Notifications enabled");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Notifications could not be enabled");
     } finally {
-      setCapabilities(null);
+      setPrompt(null);
       setEnabling(false);
     }
   }
@@ -60,12 +64,12 @@ export function BrowserNotificationPrompt() {
   return (
     <Card
       role="region"
-      aria-labelledby="browser-notification-prompt-title"
+      aria-labelledby="device-notification-prompt-title"
       className="mb-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center"
     >
       <BellRing className="size-5 shrink-0 text-violet-strong" />
-      <h2 id="browser-notification-prompt-title" className="min-w-0 flex-1 font-display font-bold">
-        Enable browser notifications?
+      <h2 id="device-notification-prompt-title" className="min-w-0 flex-1 font-display font-bold">
+        {prompt.platform === "web" ? "Enable browser notifications?" : "Enable notifications?"}
       </h2>
       <div className="flex gap-2">
         <Button type="button" variant="coral" size="sm" disabled={enabling} onClick={enable}>
@@ -76,7 +80,7 @@ export function BrowserNotificationPrompt() {
           variant="ghost"
           size="sm"
           disabled={enabling}
-          onClick={() => setCapabilities(null)}
+          onClick={() => setPrompt(null)}
         >
           Not now
         </Button>

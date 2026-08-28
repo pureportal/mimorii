@@ -83,6 +83,62 @@ describe("ResourcesPage add dialog", () => {
     expect(card).toHaveTextContent("Passing checks");
     expect(card).toHaveTextContent("0 / 1");
   });
+
+  it("filters resources by kind and state and can reset the filters", async () => {
+    const resources: ResourceSummary[] = [
+      {
+        id: "host-1",
+        teamId: "team-1",
+        name: "Database host",
+        kind: "host",
+        description: null,
+        tags: [],
+        agent: null,
+        status: "down",
+        checksPassing: 0,
+        checksTotal: 1,
+        lastCheckedAt: null,
+        inMaintenance: false,
+        imageUpdatedAt: null,
+        createdAt: "2026-08-25T11:00:00.000Z",
+      },
+      {
+        id: "service-1",
+        teamId: "team-1",
+        name: "Public API",
+        kind: "service",
+        description: null,
+        tags: [],
+        agent: null,
+        status: "up",
+        checksPassing: 1,
+        checksTotal: 1,
+        lastCheckedAt: null,
+        inMaintenance: false,
+        imageUpdatedAt: null,
+        createdAt: "2026-08-25T11:00:00.000Z",
+      },
+    ];
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/teams/team-1/resources") return Promise.resolve(resources);
+      if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage("/");
+    await screen.findByText("Database host");
+
+    fireEvent.change(screen.getByLabelText("Resource kind"), { target: { value: "service" } });
+    expect(screen.queryByText("Database host")).not.toBeInTheDocument();
+    expect(screen.getByText("Public API")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Resource state"), { target: { value: "down" } });
+    expect(screen.getByText("No matching resources")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("Database host")).toBeInTheDocument();
+    expect(screen.getByText("Public API")).toBeInTheDocument();
+  });
 });
 
 function renderPage(initialEntry = "/?new=1") {

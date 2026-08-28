@@ -7,6 +7,7 @@ import { Radio } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { api, jsonBody } from "../lib/api";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
@@ -29,6 +30,7 @@ export function HeartbeatDialog({
   teamId: string;
   onSaved: (created?: CreatedHeartbeatMonitor) => Promise<void>;
 }) {
+  const resourceLabels = resourceOptionLabels(resources);
   const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -93,7 +95,7 @@ export function HeartbeatDialog({
             >
               {resources.map((resource) => (
                 <option key={resource.id} value={resource.id}>
-                  {resource.name}
+                  {resourceLabels.get(resource.id)}
                 </option>
               ))}
             </Select>

@@ -10,7 +10,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
-import { formatPercent, formatRelative } from "../lib/format";
+import { formatCount, formatPercent, formatRelative } from "../lib/format";
 import { statusPagePath } from "../lib/status-page-links";
 
 export function PublicStatusPageView() {
@@ -18,6 +18,7 @@ export function PublicStatusPageView() {
   const location = useLocation();
   const navigate = useNavigate();
   const [subscribing, setSubscribing] = useState(false);
+  const [visibleIncidentCount, setVisibleIncidentCount] = useState(10);
   const page = useQuery({
     queryKey: ["public-status-page", id],
     queryFn: () =>
@@ -57,6 +58,12 @@ export function PublicStatusPageView() {
   if (page.isLoading) return <LoadingState />;
   if (page.isError || !page.data) return <ErrorState retry={() => void page.refetch()} />;
   const data = page.data;
+  const componentNames = duplicateComponentNames(data.components);
+  const orderedIncidents = data.incidents.toSorted(
+    (left, right) =>
+      Number(left.status === "resolved") - Number(right.status === "resolved") ||
+      right.startedAt.localeCompare(left.startedAt)
+  );
   const state = {
     operational: {
       title: "All systems operational",
@@ -118,7 +125,7 @@ export function PublicStatusPageView() {
         {data.components.map((component) => (
           <div key={component.id} className="p-5">
             <div className="flex items-center justify-between gap-4">
-              <h3 className="font-semibold">{component.name}</h3>
+              <h3 className="font-semibold">{componentNames.get(component.id)}</h3>
               <div className="flex items-center gap-3">
                 {data.showUptime ? (
                   <span className="text-xs font-semibold text-muted">
@@ -164,25 +171,53 @@ export function PublicStatusPageView() {
       {data.incidents.length ? (
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold">Incidents</h2>
-          {data.incidents.map((incident) => (
-            <Card key={incident.id} className="p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="mr-auto font-semibold">{incident.title}</h3>
-                <StatusBadge status={incident.status} />
-                <StatusBadge status={incident.impact} />
-              </div>
-              <div className="mt-4 grid gap-4 border-l border-line pl-4">
-                {incident.updates.toReversed().map((update) => (
-                  <div key={update.id}>
-                    <p className="text-sm leading-6">{update.message}</p>
+          {orderedIncidents.slice(0, visibleIncidentCount).map((incident) => {
+            const [latest, ...earlier] = incident.updates;
+            return (
+              <Card key={incident.id} className="p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="mr-auto font-semibold">{incident.title}</h3>
+                  <StatusBadge status={incident.status} />
+                  <StatusBadge status={incident.impact} />
+                </div>
+                {latest ? (
+                  <div className="mt-4 border-l border-line pl-4">
+                    <p className="text-sm leading-6">{latest.message}</p>
                     <p className="mt-1 text-xs text-muted">
-                      {update.status} · {formatRelative(update.createdAt)}
+                      {latest.status} · {formatRelative(latest.createdAt)}
                     </p>
                   </div>
-                ))}
-              </div>
-            </Card>
-          ))}
+                ) : null}
+                {earlier.length ? (
+                  <details className="mt-3">
+                    <summary className="text-xs font-semibold text-muted">
+                      {formatCount(earlier.length, "earlier update")}
+                    </summary>
+                    <div className="mt-3 grid gap-4 border-l border-line pl-4">
+                      {earlier.toReversed().map((update) => (
+                        <div key={update.id}>
+                          <p className="text-sm leading-6">{update.message}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {update.status} · {formatRelative(update.createdAt)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </Card>
+            );
+          })}
+          {visibleIncidentCount < orderedIncidents.length ? (
+            <div className="flex justify-center pt-1">
+              <Button
+                variant="outline"
+                onClick={() => setVisibleIncidentCount((count) => count + 10)}
+              >
+                Load more
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -213,5 +248,25 @@ export function PublicStatusPageView() {
         </Card>
       ) : null}
     </main>
+  );
+}
+
+function duplicateComponentNames(
+  components: PublicStatusPage["components"]
+): ReadonlyMap<string, string> {
+  const totals = new Map<string, number>();
+  for (const component of components) {
+    totals.set(component.name, (totals.get(component.name) ?? 0) + 1);
+  }
+
+  const positions = new Map<string, number>();
+  return new Map(
+    components.map((component) => {
+      const position = (positions.get(component.name) ?? 0) + 1;
+      positions.set(component.name, position);
+      const name =
+        (totals.get(component.name) ?? 0) > 1 ? `${component.name} ${position}` : component.name;
+      return [component.id, name];
+    })
   );
 }

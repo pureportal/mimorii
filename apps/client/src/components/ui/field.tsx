@@ -11,5 +11,9 @@ export function FieldLabel({ className, ...props }: LabelHTMLAttributes<HTMLLabe
 
 export function FieldError({ children }: { children?: ReactNode }) {
   if (!children) return null;
-  return <p className="text-xs font-medium text-danger">{children}</p>;
+  return (
+    <p aria-live="polite" className="text-xs font-medium text-danger">
+      {children}
+    </p>
+  );
 }

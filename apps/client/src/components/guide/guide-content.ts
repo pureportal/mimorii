@@ -317,7 +317,7 @@ export const guideTopics: readonly GuideTopic[] = [
         target: '[data-guide-page="heartbeats-list"]',
         title: "Deadlines and history",
         content:
-          "This table shows whether each job is reporting on time and gives access to its history and token controls.",
+          "This list shows whether each job is reporting on time and gives access to its history and token controls.",
       },
     ],
   },

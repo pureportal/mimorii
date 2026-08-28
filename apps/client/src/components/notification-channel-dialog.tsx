@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
-import { Input, Select, Textarea } from "./ui/input";
+import { Input, PasswordInput, Select, Textarea } from "./ui/input";
 
 export function NotificationChannelDialog({
   open,
@@ -136,10 +136,10 @@ export function NotificationChannelDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor="channel-webhook-secret">Signing secret</FieldLabel>
-                <Input
+                <PasswordInput
                   id="channel-webhook-secret"
                   name="webhookSecret"
-                  type="password"
+                  visibilityLabel="signing secret"
                   maxLength={200}
                 />
               </Field>

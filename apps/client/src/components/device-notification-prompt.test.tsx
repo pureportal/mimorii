@@ -17,18 +17,24 @@ vi.mock("../lib/push-notifications", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: mocks.success, error: mocks.error } }));
 
-import { BrowserNotificationPrompt } from "./browser-notification-prompt";
+import { DeviceNotificationPrompt } from "./device-notification-prompt";
 
-const capabilities: NotificationPushCapabilities = {
+const webCapabilities: NotificationPushCapabilities = {
   endpoints: [],
   web: { available: true, vapidPublicKey: "AQID" },
   android: { available: false },
 };
 
-describe("browser notification prompt", () => {
+const androidCapabilities: NotificationPushCapabilities = {
+  endpoints: [],
+  web: { available: false, vapidPublicKey: null },
+  android: { available: true },
+};
+
+describe("device notification prompt", () => {
   beforeEach(() => {
     sessionStorage.clear();
-    mocks.api.mockReset().mockResolvedValue(capabilities);
+    mocks.api.mockReset().mockResolvedValue(webCapabilities);
     mocks.devicePushState.mockReset().mockResolvedValue({
       platform: "web",
       supported: true,
@@ -44,24 +50,42 @@ describe("browser notification prompt", () => {
 
   afterEach(cleanup);
 
-  it("offers notifications once and remembers a session dismissal", async () => {
-    const first = render(<BrowserNotificationPrompt />);
+  it("offers browser notifications once and remembers a session dismissal", async () => {
+    const first = render(<DeviceNotificationPrompt />);
     fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
     expect(screen.queryByText("Enable browser notifications?")).not.toBeInTheDocument();
     first.unmount();
 
-    render(<BrowserNotificationPrompt />);
+    render(<DeviceNotificationPrompt />);
     await waitFor(() => expect(mocks.api).toHaveBeenCalledOnce());
     expect(screen.queryByText("Enable browser notifications?")).not.toBeInTheDocument();
   });
 
-  it("enables notifications only after the user accepts", async () => {
-    render(<BrowserNotificationPrompt />);
+  it("enables browser notifications only after the user accepts", async () => {
+    render(<DeviceNotificationPrompt />);
     fireEvent.click(await screen.findByRole("button", { name: "Enable" }));
 
-    await waitFor(() => expect(mocks.enablePush).toHaveBeenCalledWith(capabilities));
+    await waitFor(() => expect(mocks.enablePush).toHaveBeenCalledWith(webCapabilities));
     expect(mocks.success).toHaveBeenCalledWith("Notifications enabled");
     expect(screen.queryByText("Enable browser notifications?")).not.toBeInTheDocument();
+  });
+
+  it("offers Android notification registration after sign-in", async () => {
+    mocks.api.mockResolvedValue(androidCapabilities);
+    mocks.devicePushState.mockResolvedValue({
+      platform: "android",
+      supported: true,
+      available: true,
+      permission: "prompt",
+      registration: "missing",
+      enabled: false,
+    });
+
+    render(<DeviceNotificationPrompt />);
+    expect(await screen.findByText("Enable notifications?")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+
+    await waitFor(() => expect(mocks.enablePush).toHaveBeenCalledWith(androidCapabilities));
   });
 
   it("offers to repair a granted but inactive notification registration", async () => {
@@ -74,7 +98,7 @@ describe("browser notification prompt", () => {
       enabled: false,
     });
 
-    render(<BrowserNotificationPrompt />);
+    render(<DeviceNotificationPrompt />);
 
     expect(await screen.findByRole("button", { name: "Enable" })).toBeVisible();
   });
@@ -91,7 +115,7 @@ describe("browser notification prompt", () => {
         enabled: permission === "granted",
       });
 
-      render(<BrowserNotificationPrompt />);
+      render(<DeviceNotificationPrompt />);
       await waitFor(() => expect(mocks.devicePushState).toHaveBeenCalled());
       expect(screen.queryByText("Enable browser notifications?")).not.toBeInTheDocument();
     }

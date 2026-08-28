@@ -24,10 +24,11 @@ import {
   TcpCheckFields,
   WanCheckFields,
 } from "./check-form-fields";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { Field, FieldError, FieldLabel } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { Input, PasswordInput, Select } from "./ui/input";
 
 export interface CheckPayload {
   resourceId: string;
@@ -81,6 +82,7 @@ export function CheckDialog({
   defaultResourceId,
   onSubmit,
 }: CheckDialogProps) {
+  const resourceLabels = resourceOptionLabels(resources);
   const [resourceId, setResourceId] = useState("");
   const [name, setName] = useState("");
   const [type, setType] = useState<CheckType>("http");
@@ -181,7 +183,7 @@ export function CheckDialog({
                   )
                   .map((resource) => (
                     <option key={resource.id} value={resource.id}>
-                      {resource.name}
+                      {resourceLabels.get(resource.id)}
                     </option>
                   ))}
               </Select>
@@ -278,7 +280,7 @@ export function CheckDialog({
                     .filter((resource) => resource.agent?.kind === "desktop")
                     .map((resource) => (
                       <option key={resource.agent!.id} value={resource.agent!.id}>
-                        {resource.name}
+                        {resourceLabels.get(resource.id)}
                       </option>
                     ))}
                 </Select>
@@ -289,9 +291,9 @@ export function CheckDialog({
                 <FieldLabel htmlFor="check-secret">
                   {type === "database" ? "Password" : "Secret header value"}
                 </FieldLabel>
-                <Input
+                <PasswordInput
                   id="check-secret"
-                  type="password"
+                  visibilityLabel={type === "database" ? "password" : "secret header value"}
                   value={secret}
                   onChange={(event) => setSecret(event.target.value)}
                   autoComplete="new-password"

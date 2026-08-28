@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
-import { Input } from "../components/ui/input";
+import { Input, PasswordInput } from "../components/ui/input";
 import { useAuth } from "../lib/auth";
 import { getServerUrl, setServerUrl } from "../lib/api";
 import { cn } from "../lib/cn";
@@ -83,10 +83,9 @@ export function AuthPage({
             </Field>
             <Field>
               <FieldLabel htmlFor="password">Password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}

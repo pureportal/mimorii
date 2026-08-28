@@ -4,7 +4,7 @@ import { ConfirmationDialog } from "./components/ui/confirmation-dialog";
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
 import { Field, FieldError, FieldLabel } from "./components/ui/field";
-import { Input } from "./components/ui/input";
+import { Input, PasswordInput } from "./components/ui/input";
 import { parseAgentEnrollmentCode } from "./lib/agent-enrollment";
 import { cn } from "./lib/cn";
 import { scanEnrollmentCode } from "./lib/enrollment-scanner";
@@ -207,9 +207,9 @@ export function AgentApp() {
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="agent-key">Enrollment key</FieldLabel>
-                    <Input
+                    <PasswordInput
                       id="agent-key"
-                      type="password"
+                      visibilityLabel="enrollment key"
                       autoCapitalize="none"
                       autoCorrect="off"
                       value={enrollmentKey}
@@ -221,9 +221,9 @@ export function AgentApp() {
               ) : (
                 <Field>
                   <FieldLabel htmlFor="agent-code">Enrollment code</FieldLabel>
-                  <Input
+                  <PasswordInput
                     id="agent-code"
-                    type="password"
+                    visibilityLabel="enrollment code"
                     autoCapitalize="none"
                     autoCorrect="off"
                     value={enrollmentCode}

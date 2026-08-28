@@ -27,15 +27,16 @@ export function StateArtwork({
 
 export function LoadingState() {
   return (
-    <div className="grid min-h-48 place-items-center">
+    <div role="status" className="grid min-h-48 place-items-center">
       <div className="size-8 animate-spin rounded-full border-3 border-lavender-soft border-t-lavender" />
+      <span className="sr-only">Loading</span>
     </div>
   );
 }
 
 export function ErrorState({ retry }: { retry?: () => void }) {
   return (
-    <div className="grid min-h-48 place-items-center text-center">
+    <div role="alert" className="grid min-h-48 place-items-center text-center">
       <div>
         <AlertTriangle className="mx-auto mb-3 size-6 text-danger" />
         <p className="font-medium text-ink">Couldn&apos;t load this view</p>

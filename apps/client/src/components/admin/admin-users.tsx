@@ -14,7 +14,7 @@ import { api, jsonBody } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { formatCount, formatRelative } from "../../lib/format";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 export function AdminUsers() {
   const { session } = useAuth();
@@ -72,7 +72,10 @@ export function AdminUsers() {
           <h3 className="font-display font-bold">Users</h3>
           <p className="mt-1 text-xs text-muted">{formatCount(total, "account")}</p>
         </div>
-        <form className="flex w-full gap-2 sm:w-auto" onSubmit={submitSearch}>
+        <form
+          className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:w-auto"
+          onSubmit={submitSearch}
+        >
           <Input
             aria-label="Search users"
             value={draftSearch}
@@ -87,7 +90,7 @@ export function AdminUsers() {
             aria-label="Account status"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="w-36"
+            className="col-span-2 w-full sm:w-36"
           >
             <option value="all">All accounts</option>
             <option value="enabled">Enabled</option>
@@ -96,27 +99,18 @@ export function AdminUsers() {
           </Select>
         </form>
       </CardHeader>
-      <CardContent className="overflow-x-auto p-0 sm:p-5 sm:pt-2">
+      <CardContent className="p-0 xl:p-5 xl:pt-2">
         {rows.length ? (
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="px-5 pb-3 font-medium sm:px-0">User</th>
-                <th className="pb-3 font-medium">Access</th>
-                <th className="pb-3 font-medium">Teams</th>
-                <th className="pb-3 font-medium">Last sign-in</th>
-                <th className="pb-3" />
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="divide-y divide-line xl:hidden">
               {rows.map((user) => (
-                <tr key={user.id} className="border-t border-line">
-                  <td className="px-5 py-4 sm:px-0">
-                    <p className="font-semibold">{user.name}</p>
-                    <p className="mt-0.5 text-xs text-muted">{user.email}</p>
-                  </td>
-                  <td className="py-4">
-                    <div className="flex items-center gap-2">
+                <article key={user.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-semibold">{user.name}</h4>
+                      <p className="mt-1 break-all text-xs text-muted">{user.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 text-xs">
                       <span className={user.disabledAt ? "text-danger" : "text-success-strong"}>
                         {user.disabledAt ? "Disabled" : "Enabled"}
                       </span>
@@ -127,30 +121,89 @@ export function AdminUsers() {
                         />
                       ) : null}
                     </div>
-                  </td>
-                  <td className="py-4 text-muted">{user.teamCount.toLocaleString()}</td>
-                  <td className="py-4 text-muted">{formatRelative(user.lastSignedInAt)}</td>
-                  <td className="pr-5 text-right sm:pr-0">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setSelected(user)}>
-                        Manage
-                      </Button>
-                      {user.id !== session!.user.id ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Revoke sessions for ${user.name}`}
-                          onClick={() => setRevokeUser(user)}
-                        >
-                          <KeyRound />
-                        </Button>
-                      ) : null}
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm">
+                    <div>
+                      <dt className="text-[11px] text-muted">Teams</dt>
+                      <dd className="mt-1 font-medium">{user.teamCount.toLocaleString()}</dd>
                     </div>
-                  </td>
-                </tr>
+                    <div>
+                      <dt className="text-[11px] text-muted">Last sign-in</dt>
+                      <dd className="mt-1 font-medium">{formatRelative(user.lastSignedInAt)}</dd>
+                    </div>
+                  </dl>
+                  <div className="mt-3 flex justify-end gap-1">
+                    <Button variant="outline" size="sm" onClick={() => setSelected(user)}>
+                      Manage
+                    </Button>
+                    {user.id !== session!.user.id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Revoke sessions for ${user.name}`}
+                        onClick={() => setRevokeUser(user)}
+                      >
+                        <KeyRound />
+                      </Button>
+                    ) : null}
+                  </div>
+                </article>
               ))}
-            </tbody>
-          </table>
+            </div>
+            <table className="hidden w-full min-w-[900px] text-left text-sm xl:table">
+              <thead className="text-xs text-muted">
+                <tr>
+                  <th className="px-5 pb-3 font-medium sm:px-0">User</th>
+                  <th className="pb-3 font-medium">Access</th>
+                  <th className="pb-3 font-medium">Teams</th>
+                  <th className="pb-3 font-medium">Last sign-in</th>
+                  <th className="pb-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((user) => (
+                  <tr key={user.id} className="border-t border-line">
+                    <td className="px-5 py-4 sm:px-0">
+                      <p className="font-semibold">{user.name}</p>
+                      <p className="mt-0.5 text-xs text-muted">{user.email}</p>
+                    </td>
+                    <td className="py-4">
+                      <div className="flex items-center gap-2">
+                        <span className={user.disabledAt ? "text-danger" : "text-success-strong"}>
+                          {user.disabledAt ? "Disabled" : "Enabled"}
+                        </span>
+                        {user.isGlobalAdmin ? (
+                          <ShieldCheck
+                            className="size-4 text-violet-strong"
+                            aria-label="Global Administrator"
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="py-4 text-muted">{user.teamCount.toLocaleString()}</td>
+                    <td className="py-4 text-muted">{formatRelative(user.lastSignedInAt)}</td>
+                    <td className="pr-5 text-right sm:pr-0">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setSelected(user)}>
+                          Manage
+                        </Button>
+                        {user.id !== session!.user.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Revoke sessions for ${user.name}`}
+                            onClick={() => setRevokeUser(user)}
+                          >
+                            <KeyRound />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         ) : (
           <EmptyState title="No accounts" />
         )}

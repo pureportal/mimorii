@@ -22,6 +22,8 @@ export function ResourcesPage() {
   const teamId = activeTeam!.id;
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
+  const [kind, setKind] = useState("all");
+  const [status, setStatus] = useState("all");
   const queryClient = useQueryClient();
   const resources = useQuery({
     queryKey: ["resources", teamId],
@@ -32,15 +34,21 @@ export function ResourcesPage() {
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),
   });
   const open = searchParams.get("new") === "1";
-  const filtered = useMemo(
-    () =>
-      resources.data?.filter((resource) =>
-        `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      ) ?? [],
-    [resources.data, search]
-  );
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (
+      resources.data?.filter(
+        (resource) =>
+          (kind === "all" || resource.kind === kind) &&
+          (status === "all" ||
+            (status === "maintenance" ? resource.inMaintenance : resource.status === status)) &&
+          `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`
+            .toLowerCase()
+            .includes(query)
+      ) ?? []
+    );
+  }, [kind, resources.data, search, status]);
+  const hasFilters = Boolean(search.trim()) || kind !== "all" || status !== "all";
 
   const invalidate = async () => {
     await Promise.all([
@@ -59,14 +67,49 @@ export function ResourcesPage() {
         data-guide-page="resources-toolbar"
         className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
       >
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search resources"
-            className="pl-10"
-          />
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <Input
+              type="search"
+              aria-label="Search resources"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search resources"
+              className="pl-10"
+            />
+          </div>
+          <Select
+            aria-label="Resource kind"
+            value={kind}
+            onChange={(event) => setKind(event.target.value)}
+            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-36"
+          >
+            <option value="all">All kinds</option>
+            <option value="host">Hosts</option>
+            <option value="device">Devices</option>
+            <option value="service">Services</option>
+          </Select>
+          <Select
+            aria-label="Resource state"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-36"
+          >
+            <option value="all">All states</option>
+            <option value="up">Up</option>
+            <option value="degraded">Degraded</option>
+            <option value="okay">Okay</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+            <option value="down">Down</option>
+            <option value="paused">Paused</option>
+            <option value="pending">Pending</option>
+            <option value="maintenance">Maintenance</option>
+          </Select>
+          <p className="w-full text-sm text-muted sm:w-auto">
+            {filtered.length.toLocaleString()} {filtered.length === 1 ? "resource" : "resources"}
+          </p>
         </div>
         <Button variant="coral" onClick={() => setSearchParams({ new: "1" })}>
           <Plus /> Add resource
@@ -81,14 +124,26 @@ export function ResourcesPage() {
         </div>
       ) : (
         <EmptyState
-          title={search ? "No matching resources" : "No resources yet"}
-          illustration={search ? undefined : "empty"}
+          title={hasFilters ? "No matching resources" : "No resources yet"}
+          illustration={hasFilters ? undefined : "empty"}
           action={
-            !search ? (
+            hasFilters ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setKind("all");
+                  setStatus("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : (
               <Button variant="coral" size="sm" onClick={() => setSearchParams({ new: "1" })}>
                 <Plus /> Add resource
               </Button>
-            ) : undefined
+            )
           }
         />
       )}
@@ -109,7 +164,10 @@ export function ResourcesPage() {
 
 function ResourceCard({ resource }: { resource: ResourceSummary }) {
   return (
-    <Link to={appRoutes.resource(resource.id)}>
+    <Link
+      to={appRoutes.resource(resource.id)}
+      className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-coral-strong"
+    >
       <Card className="group h-full p-5 transition hover:-translate-y-0.5 hover:border-lavender hover:shadow-[0_18px_40px_-26px_rgba(68,54,128,.45)]">
         <div className="flex items-start gap-4">
           <ResourceImage resource={resource} className="size-11" />

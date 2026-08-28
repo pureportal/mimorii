@@ -8,7 +8,7 @@ import { PrivacySettingsButton } from "../components/privacy-controls";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
-import { Input } from "../components/ui/input";
+import { Input, PasswordInput } from "../components/ui/input";
 import { api, getServerUrl, jsonBody, setServerUrl } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -86,8 +86,8 @@ export function SettingsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel>Email</FieldLabel>
-              <Input value={session!.user.email} disabled />
+              <FieldLabel htmlFor="settings-email">Email</FieldLabel>
+              <Input id="settings-email" value={session!.user.email} disabled />
             </Field>
             <FieldError>{profileError}</FieldError>
             <Button type="submit" variant="coral" className="justify-self-end">
@@ -114,9 +114,8 @@ export function SettingsPage() {
           <form className="grid gap-4" onSubmit={changePassword}>
             <Field>
               <FieldLabel htmlFor="current-password">Current password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="current-password"
-                type="password"
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
@@ -125,9 +124,8 @@ export function SettingsPage() {
             </Field>
             <Field>
               <FieldLabel htmlFor="new-password">New password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}

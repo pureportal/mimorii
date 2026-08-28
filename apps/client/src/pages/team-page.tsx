@@ -146,7 +146,7 @@ function TeamDetailsPage() {
             {formatCount(members.data?.length ?? 0, "member")}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canManage ? (
             <Button variant="outline" onClick={() => setManageOpen(true)}>
               <Pencil /> Edit team
@@ -166,40 +166,35 @@ function TeamDetailsPage() {
         <CardHeader>
           <h3 className="font-display font-bold">Members</h3>
         </CardHeader>
-        <CardContent className="overflow-x-auto p-0 sm:p-5 sm:pt-2">
+        <CardContent className="p-0 md:p-5 md:pt-2">
           {members.data?.length ? (
-            <table className="w-full min-w-[620px] text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-5 pb-3 font-medium sm:px-0">Member</th>
-                  <th className="pb-3 font-medium">Email</th>
-                  <th className="pb-3 font-medium">Role</th>
-                  <th className="pb-3" />
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="divide-y divide-line md:hidden">
                 {members.data.map((member) => (
-                  <tr key={member.id} className="border-t border-line">
-                    <td className="px-5 py-4 sm:px-0">
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-9 place-items-center rounded-full bg-lavender-soft font-display text-xs font-black text-violet-strong">
-                          {member.name.slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="font-semibold">{member.name}</span>
-                        {member.role === "owner" ? (
-                          <Crown className="size-3.5 text-warning" />
-                        ) : null}
+                  <article key={member.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-lavender-soft font-display text-xs font-black text-violet-strong">
+                        {member.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="truncate font-semibold">{member.name}</h4>
+                          {member.role === "owner" ? (
+                            <Crown className="size-3.5 shrink-0 text-warning" />
+                          ) : null}
+                        </div>
+                        <p className="mt-1 break-all text-xs text-muted">{member.email}</p>
                       </div>
-                    </td>
-                    <td className="py-4 text-muted">{member.email}</td>
-                    <td className="py-4">
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
                       {canManage ? (
                         <Select
+                          aria-label={`Role for ${member.name}`}
                           value={member.role}
                           onChange={(event) =>
                             void updateRole(member, event.target.value as TeamRole)
                           }
-                          className="h-9 w-28 text-xs"
+                          className="h-10 w-32 text-xs"
                         >
                           <option value="owner">Owner</option>
                           <option value="admin">Admin</option>
@@ -207,25 +202,84 @@ function TeamDetailsPage() {
                           <option value="viewer">Viewer</option>
                         </Select>
                       ) : (
-                        <span className="capitalize text-muted">{member.role}</span>
+                        <span className="text-sm capitalize text-muted">{member.role}</span>
                       )}
-                    </td>
-                    <td className="pr-5 text-right sm:pr-0">
                       {canManage && member.id !== session?.user.id ? (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="text-danger"
+                          aria-label={`Remove ${member.name}`}
                           onClick={() => setConfirmation({ action: "remove-member", member })}
                         >
                           <Trash2 />
                         </Button>
                       ) : null}
-                    </td>
-                  </tr>
+                    </div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <table className="hidden w-full min-w-[620px] text-left text-sm md:table">
+                <thead className="text-xs text-muted">
+                  <tr>
+                    <th className="px-5 pb-3 font-medium sm:px-0">Member</th>
+                    <th className="pb-3 font-medium">Email</th>
+                    <th className="pb-3 font-medium">Role</th>
+                    <th className="pb-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.data.map((member) => (
+                    <tr key={member.id} className="border-t border-line">
+                      <td className="px-5 py-4 sm:px-0">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-9 place-items-center rounded-full bg-lavender-soft font-display text-xs font-black text-violet-strong">
+                            {member.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className="font-semibold">{member.name}</span>
+                          {member.role === "owner" ? (
+                            <Crown className="size-3.5 text-warning" />
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="py-4 text-muted">{member.email}</td>
+                      <td className="py-4">
+                        {canManage ? (
+                          <Select
+                            aria-label={`Role for ${member.name}`}
+                            value={member.role}
+                            onChange={(event) =>
+                              void updateRole(member, event.target.value as TeamRole)
+                            }
+                            className="h-9 w-28 text-xs"
+                          >
+                            <option value="owner">Owner</option>
+                            <option value="admin">Admin</option>
+                            <option value="member">Member</option>
+                            <option value="viewer">Viewer</option>
+                          </Select>
+                        ) : (
+                          <span className="capitalize text-muted">{member.role}</span>
+                        )}
+                      </td>
+                      <td className="pr-5 text-right sm:pr-0">
+                        {canManage && member.id !== session?.user.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-danger"
+                            aria-label={`Remove ${member.name}`}
+                            onClick={() => setConfirmation({ action: "remove-member", member })}
+                          >
+                            <Trash2 />
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           ) : (
             <EmptyState title="No members" />
           )}
@@ -236,24 +290,19 @@ function TeamDetailsPage() {
           <CardHeader>
             <h3 className="font-display font-bold">Invitations</h3>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent className="p-0 md:p-5 md:pt-2">
             {invitations.data?.length ? (
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="text-xs text-muted">
-                  <tr>
-                    <th className="pb-3 font-medium">Email</th>
-                    <th className="pb-3 font-medium">Role</th>
-                    <th className="pb-3 font-medium">Status</th>
-                    <th className="pb-3" />
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                <div className="divide-y divide-line md:hidden">
                   {invitations.data.map((invitation) => (
-                    <tr key={invitation.id} className="border-t border-line">
-                      <td className="py-3 font-semibold">{invitation.email}</td>
-                      <td className="py-3 capitalize text-muted">{invitation.role}</td>
-                      <td className="py-3 capitalize text-muted">{invitation.status}</td>
-                      <td className="py-3 text-right">
+                    <article key={invitation.id} className="p-4">
+                      <p className="break-all font-semibold">{invitation.email}</p>
+                      <div className="mt-2 flex items-center gap-2 text-xs capitalize text-muted">
+                        <span>{invitation.role}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{invitation.status}</span>
+                      </div>
+                      <div className="mt-3 flex justify-end">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -264,11 +313,42 @@ function TeamDetailsPage() {
                         >
                           <Trash2 /> Revoke
                         </Button>
-                      </td>
-                    </tr>
+                      </div>
+                    </article>
                   ))}
-                </tbody>
-              </table>
+                </div>
+                <table className="hidden w-full min-w-[560px] text-left text-sm md:table">
+                  <thead className="text-xs text-muted">
+                    <tr>
+                      <th className="pb-3 font-medium">Email</th>
+                      <th className="pb-3 font-medium">Role</th>
+                      <th className="pb-3 font-medium">Status</th>
+                      <th className="pb-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invitations.data.map((invitation) => (
+                      <tr key={invitation.id} className="border-t border-line">
+                        <td className="py-3 font-semibold">{invitation.email}</td>
+                        <td className="py-3 capitalize text-muted">{invitation.role}</td>
+                        <td className="py-3 capitalize text-muted">{invitation.status}</td>
+                        <td className="py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger"
+                            onClick={() =>
+                              setConfirmation({ action: "revoke-invitation", invitation })
+                            }
+                          >
+                            <Trash2 /> Revoke
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             ) : (
               <EmptyState title="No invitations" />
             )}

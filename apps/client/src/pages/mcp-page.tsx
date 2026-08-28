@@ -4,6 +4,7 @@ import { getServerUrl } from "../lib/api";
 
 const readCapabilities = [
   "Team health and resources",
+  "Team health dashboard in supported clients",
   "Checks and heartbeat history",
   "Incidents and maintenance",
   "Availability and service objectives",

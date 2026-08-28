@@ -25,6 +25,7 @@ import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatDuration, formatRelative } from "../lib/format";
+import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export type OperationsView = "incidents" | "maintenance";
 
@@ -102,6 +103,7 @@ export function OperationsPage({ view }: { view: OperationsView }) {
     incidents.data?.filter((incident) => incident.status !== "resolved").length ?? 0;
   const activeMaintenance =
     maintenance.data?.filter((window) => window.status === "active").length ?? 0;
+  const resourceNames = resourceOptionLabels(resources.data ?? []);
 
   return (
     <div className="space-y-6">
@@ -156,6 +158,7 @@ export function OperationsPage({ view }: { view: OperationsView }) {
         {view === "incidents" ? (
           <IncidentList
             incidents={incidents.data ?? []}
+            resourceNames={resourceNames}
             canManage={canManage}
             onEdit={(incident) => {
               setEditingIncident(incident);
@@ -166,6 +169,7 @@ export function OperationsPage({ view }: { view: OperationsView }) {
         ) : (
           <MaintenanceList
             windows={maintenance.data ?? []}
+            resourceNames={resourceNames}
             canManage={canManage}
             canDelete={canDelete}
             onEdit={(window) => {
@@ -226,19 +230,29 @@ export function OperationsPage({ view }: { view: OperationsView }) {
 
 function IncidentList({
   incidents,
+  resourceNames,
   canManage,
   onEdit,
   onUpdate,
 }: {
   incidents: IncidentSummary[];
+  resourceNames: ReadonlyMap<string, string>;
   canManage: boolean;
   onEdit: (incident: IncidentSummary) => void;
   onUpdate: (incident: IncidentSummary) => void;
 }) {
+  const [visibleCount, setVisibleCount] = useState(20);
   if (!incidents.length) return <EmptyState title="No incidents" illustration="empty" />;
+  const visibleIncidents = incidents
+    .toSorted(
+      (left, right) =>
+        Number(left.status === "resolved") - Number(right.status === "resolved") ||
+        right.startedAt.localeCompare(left.startedAt)
+    )
+    .slice(0, visibleCount);
   return (
     <div className="grid gap-4">
-      {incidents.map((incident) => {
+      {visibleIncidents.map((incident) => {
         const latest = incident.updates[0];
         return (
           <Card key={incident.id}>
@@ -250,8 +264,11 @@ function IncidentList({
                   <StatusBadge status={incident.impact} />
                 </div>
                 <p className="mt-2 text-xs text-muted">
-                  {incident.resources.map((resource) => resource.name).join(", ")} ·{" "}
-                  {formatRelative(incident.startedAt)} · {formatDuration(incident.durationSeconds)}
+                  {incident.resources
+                    .map((resource) => resourceNames.get(resource.id) ?? resource.name)
+                    .join(", ")}{" "}
+                  · {formatRelative(incident.startedAt)} ·{" "}
+                  {formatDuration(incident.durationSeconds)}
                 </p>
               </div>
               {canManage ? (
@@ -298,12 +315,22 @@ function IncidentList({
           </Card>
         );
       })}
+      {visibleIncidents.length < incidents.length ? (
+        <Button
+          variant="outline"
+          className="justify-self-center"
+          onClick={() => setVisibleCount((count) => count + 20)}
+        >
+          Load more
+        </Button>
+      ) : null}
     </div>
   );
 }
 
 function MaintenanceList({
   windows,
+  resourceNames,
   canManage,
   canDelete,
   onEdit,
@@ -311,6 +338,7 @@ function MaintenanceList({
   onDelete,
 }: {
   windows: MaintenanceWindowSummary[];
+  resourceNames: ReadonlyMap<string, string>;
   canManage: boolean;
   canDelete: boolean;
   onEdit: (window: MaintenanceWindowSummary) => void;
@@ -318,9 +346,20 @@ function MaintenanceList({
   onDelete: (window: MaintenanceWindowSummary) => void;
 }) {
   if (!windows.length) return <EmptyState title="No maintenance windows" illustration="empty" />;
+  const statusOrder: Record<MaintenanceWindowSummary["status"], number> = {
+    active: 0,
+    scheduled: 1,
+    completed: 2,
+    cancelled: 3,
+  };
+  const orderedWindows = windows.toSorted(
+    (left, right) =>
+      statusOrder[left.status] - statusOrder[right.status] ||
+      (left.nextStartsAt ?? left.startsAt).localeCompare(right.nextStartsAt ?? right.startsAt)
+  );
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {windows.map((window) => (
+      {orderedWindows.map((window) => (
         <Card key={window.id} className="p-5">
           <div className="flex items-start gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
@@ -336,7 +375,9 @@ function MaintenanceList({
                 {new Date(window.nextEndsAt ?? window.endsAt).toLocaleString()}
               </p>
               <p className="mt-2 text-xs text-muted">
-                {window.resources.map((resource) => resource.name).join(", ")}
+                {window.resources
+                  .map((resource) => resourceNames.get(resource.id) ?? resource.name)
+                  .join(", ")}
                 {window.recurrence !== "none" ? ` · ${window.recurrence}` : ""}
               </p>
             </div>
