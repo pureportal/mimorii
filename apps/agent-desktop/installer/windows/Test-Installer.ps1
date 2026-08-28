@@ -182,7 +182,14 @@ try {
             $listener.Stop()
         }
     }
-    Start-Sleep -Milliseconds 500
+    Wait-For {
+        try {
+            $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 1
+            $response.StatusCode -eq 200
+        } catch {
+            $false
+        }
+    } "The test server did not start"
 
     $firstKey = "mim_agent_" + ("a" * 32)
     $secondKey = "mim_agent_" + ("b" * 32)
