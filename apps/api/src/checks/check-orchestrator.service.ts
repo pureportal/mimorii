@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import type { AgentTask, CheckConfig, AgentCapability, AgentKind } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
@@ -18,6 +18,7 @@ interface ScheduledCheckRow extends CheckRow {
 
 @Injectable()
 export class CheckOrchestratorService {
+  private readonly logger = new Logger(CheckOrchestratorService.name);
   private readonly running = new Set<string>();
   private schedulerBusy = false;
 
@@ -47,7 +48,14 @@ export class CheckOrchestratorService {
       for (const check of due) {
         if (check.agent_id && this.supportsAssignedCheck(check)) await this.queueAgentTask(check);
         else if (check.agent_id) await this.scheduleNext(check);
-        else if (this.running.size < 8) void this.executeDirect(check);
+        else if (this.running.size < 8) {
+          void this.executeDirect(check).catch((error: unknown) => {
+            this.logger.error(
+              `Scheduled check ${check.id} failed`,
+              error instanceof Error ? error.stack : undefined
+            );
+          });
+        }
       }
     } finally {
       this.schedulerBusy = false;
@@ -82,13 +90,26 @@ export class CheckOrchestratorService {
     this.running.add(check.id);
     await this.scheduleNext(check);
     try {
+      let secret: string | null = null;
+      if (check.encrypted_secret) {
+        try {
+          secret = decryptConfiguration<string>(check.encrypted_secret);
+        } catch {
+          return this.results.record(check.id, {
+            status: "down",
+            latencyMs: null,
+            statusCode: null,
+            message: "Saved check credentials are unavailable. Re-enter the secret.",
+            metrics: {},
+            checkedAt: new Date().toISOString(),
+          });
+        }
+      }
       const result = await this.runner.run({
         id: check.id,
         type: check.type,
         config: JSON.parse(check.config_json) as CheckConfig,
-        secret: check.encrypted_secret
-          ? decryptConfiguration<string>(check.encrypted_secret)
-          : null,
+        secret,
         timeoutMs: check.timeout_ms,
       });
       return this.results.record(check.id, result);
