@@ -44,6 +44,9 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "sponsors",
           "sponsorship_applications",
           "platform_settings",
+          "oauth_authorization_codes",
+          "oauth_access_tokens",
+          "oauth_refresh_tokens",
         ])
       );
 
@@ -238,7 +241,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260901000000");
+      expect(migration?.name).toBe("Migration20260902000000");
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
