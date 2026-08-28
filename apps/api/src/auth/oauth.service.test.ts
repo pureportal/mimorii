@@ -33,7 +33,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("OAuth service", () => {
   it("validates the resource, redirect URI, and least-privilege scope set", async () => {
-    const fixture = serviceFixture();
+    const fixture = serviceFixture({ redirectUris: ["http://127.0.0.1/callback"] });
 
     await expect(fixture.service.authorizationRequest(authorizationRequest)).resolves.toEqual({
       clientName: "Operations assistant",
@@ -49,6 +49,12 @@ describe("OAuth service", () => {
       fixture.service.authorizationRequest({
         ...authorizationRequest,
         redirect_uri: "http://127.0.0.1:9212/callback",
+      })
+    ).resolves.toMatchObject({ clientName: "Operations assistant" });
+    await expect(
+      fixture.service.authorizationRequest({
+        ...authorizationRequest,
+        redirect_uri: "http://localhost:9212/callback",
       })
     ).rejects.toMatchObject({ code: "invalid_request" });
     await expect(

@@ -20,11 +20,9 @@ export class McpAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const response = context.switchToHttp().getResponse<Response>();
     const token = readBearerToken(request);
-    const requiredScopes =
-      header(request, "mcp-method") === "tools/call" &&
-      requiresMcpWriteScope(header(request, "mcp-name"))
-        ? ["mcp:read", "mcp:write"]
-        : ["mcp:read"];
+    const requiredScopes = requestRequiresWriteScope(request)
+      ? ["mcp:read", "mcp:write"]
+      : ["mcp:read"];
 
     if (!token?.startsWith("mim_oat_")) {
       this.reject(response, "MCP OAuth access token required", requiredScopes);
@@ -69,4 +67,25 @@ function bearerChallenge(scopes: string[], error?: "invalid_token" | "insufficie
 function header(request: AuthenticatedRequest, name: string): string | undefined {
   const value = request.headers[name];
   return Array.isArray(value) ? undefined : value;
+}
+
+function requestRequiresWriteScope(request: AuthenticatedRequest): boolean {
+  if (
+    header(request, "mcp-method") === "tools/call" &&
+    requiresMcpWriteScope(header(request, "mcp-name"))
+  ) {
+    return true;
+  }
+  const messages = Array.isArray(request.body) ? request.body : [request.body];
+  return messages.some((message) => {
+    if (!isRecord(message) || message.method !== "tools/call" || !isRecord(message.params)) {
+      return false;
+    }
+    const toolName = message.params.name;
+    return typeof toolName === "string" && requiresMcpWriteScope(toolName);
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

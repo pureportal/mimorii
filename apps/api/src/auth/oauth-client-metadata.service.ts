@@ -232,6 +232,26 @@ export function validRedirectUri(value: string): boolean {
   }
 }
 
+export function redirectUriMatches(registeredUri: string, requestedUri: string): boolean {
+  if (!validRedirectUri(registeredUri) || !validRedirectUri(requestedUri)) return false;
+  if (registeredUri === requestedUri) return true;
+
+  const registered = new URL(registeredUri);
+  const requested = new URL(requestedUri);
+  if (
+    registered.protocol !== "http:" ||
+    requested.protocol !== "http:" ||
+    registered.hostname !== requested.hostname ||
+    !isLoopbackHostname(registered.hostname)
+  ) {
+    return false;
+  }
+
+  registered.port = "";
+  requested.port = "";
+  return registered.href === requested.href;
+}
+
 export function isLoopbackHostname(hostname: string): boolean {
   return ["localhost", "127.0.0.1", "[::1]"].includes(hostname.toLowerCase());
 }
@@ -241,35 +261,66 @@ export function clientMetadataCacheDuration(
   now = Date.now()
 ): number {
   const cacheControl = headerValue(headers["cache-control"]);
-  if (cacheControl) {
-    const directives = cacheControl
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
-    if (
-      directives.some(
-        (value) => value === "no-store" || value === "no-cache" || value.startsWith("no-cache=")
-      )
-    ) {
-      return 0;
-    }
-    const maxAgeDirective = directives.find((value) => /^max-age\s*=/.test(value));
-    if (maxAgeDirective) {
-      const match = /^max-age\s*=\s*(?:"(\d+)"|(\d+))$/.exec(maxAgeDirective);
-      if (!match) return 0;
-      const maxAge = Number(match[1] ?? match[2]);
-      if (!Number.isSafeInteger(maxAge)) return 0;
-      const ageValue = headerValue(headers.age) ?? "0";
-      const age = /^\d+$/.test(ageValue) ? Number(ageValue) : 0;
-      const remainingSeconds = Math.max(0, maxAge - (Number.isSafeInteger(age) ? age : 0));
-      return Math.min(cacheDurationMs, remainingSeconds * 1_000);
-    }
+  const vary = headerValue(headers.vary);
+  const directives = (cacheControl ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  if (
+    directives.some((value) =>
+      ["no-store", "no-cache", "private"].includes(cacheDirectiveName(value))
+    )
+  ) {
+    return 0;
   }
-  const expiresAt = Date.parse(headerValue(headers.expires) ?? "");
-  if (Number.isFinite(expiresAt)) {
-    return Math.min(cacheDurationMs, Math.max(0, expiresAt - now));
+  if (vary?.split(",").some((value) => value.trim() === "*")) return 0;
+
+  const currentAge = currentAgeSeconds(headers, now);
+  if (currentAge === undefined) return 0;
+  const sharedMaxAge = cacheDirectiveSeconds(directives, "s-maxage");
+  if (sharedMaxAge !== undefined) return boundedCacheDuration(sharedMaxAge - currentAge);
+  const maxAge = cacheDirectiveSeconds(directives, "max-age");
+  if (maxAge !== undefined) return boundedCacheDuration(maxAge - currentAge);
+
+  const expiresValue = headerValue(headers.expires);
+  if (expiresValue !== undefined) {
+    const expiresAt = Date.parse(expiresValue);
+    if (!Number.isFinite(expiresAt)) return 0;
+    const responseDate = Date.parse(headerValue(headers.date) ?? "");
+    const freshnessLifetime =
+      (expiresAt - (Number.isFinite(responseDate) ? responseDate : now)) / 1_000;
+    return boundedCacheDuration(freshnessLifetime - currentAge);
   }
   return cacheDurationMs;
+}
+
+function cacheDirectiveName(value: string): string {
+  const separator = value.indexOf("=");
+  return (separator < 0 ? value : value.slice(0, separator)).trim();
+}
+
+function cacheDirectiveSeconds(directives: string[], name: string): number | undefined {
+  const matching = directives.filter((value) => cacheDirectiveName(value) === name);
+  if (matching.length === 0) return undefined;
+  if (matching.length !== 1) return 0;
+  const match = new RegExp(`^${name}\\s*=\\s*(?:"(\\d+)"|(\\d+))$`).exec(matching[0]!);
+  if (!match) return 0;
+  const seconds = Number(match[1] ?? match[2]);
+  return Number.isSafeInteger(seconds) ? seconds : 0;
+}
+
+function currentAgeSeconds(headers: IncomingHttpHeaders, now: number): number | undefined {
+  const ageValue = headerValue(headers.age);
+  if (ageValue !== undefined && !/^\d+$/.test(ageValue)) return undefined;
+  const age = Number(ageValue ?? 0);
+  if (!Number.isSafeInteger(age)) return undefined;
+  const responseDate = Date.parse(headerValue(headers.date) ?? "");
+  const apparentAge = Number.isFinite(responseDate) ? Math.max(0, (now - responseDate) / 1_000) : 0;
+  return Math.max(age, apparentAge);
+}
+
+function boundedCacheDuration(remainingSeconds: number): number {
+  return Math.min(cacheDurationMs, Math.max(0, remainingSeconds * 1_000));
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

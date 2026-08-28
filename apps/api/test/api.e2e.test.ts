@@ -1513,9 +1513,16 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/analytics/report`)
       .set("authorization", authorization)
       .expect(200)
-      .expect(({ body }) =>
-        expect(body).toMatchObject({ totalResults: 1, availabilityPercent: 100 })
-      );
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ totalResults: 1, availabilityPercent: 100 });
+        expect(body.daily).toHaveLength(1);
+        expect(body.daily[0]).toMatchObject({
+          up: 1,
+          degraded: 0,
+          down: 0,
+          availabilityPercent: 100,
+        });
+      });
 
     await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/resources/${resource.body.id}/technologies`)

@@ -16,7 +16,8 @@ describe("OAuth controller", () => {
       resource: "https://mimorii.example/api/mcp",
       authorization_servers: ["https://mimorii.example"],
       bearer_methods_supported: ["header"],
-      scopes_supported: ["mcp:read"],
+      scopes_supported: ["mcp:read", "mcp:write"],
+      resource_documentation: "https://mimorii.example/mcp",
     });
     expect(controller.authorizationServerMetadata(serverResponse.response)).toMatchObject({
       issuer: "https://mimorii.example",

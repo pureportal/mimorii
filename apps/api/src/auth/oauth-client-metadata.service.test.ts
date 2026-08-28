@@ -6,6 +6,7 @@ import {
   clientMetadataCacheDuration,
   OAuthClientMetadataService,
   parseClientMetadata,
+  redirectUriMatches,
   validRedirectUri,
   validateClientIdUrl,
 } from "./oauth-client-metadata.service.js";
@@ -102,12 +103,37 @@ describe("OAuth client metadata", () => {
     }
   });
 
-  it("allows HTTPS and exact loopback callbacks but no other HTTP or fragment URI", () => {
+  it("allows HTTPS and loopback callbacks but no other HTTP or fragment URI", () => {
     expect(validRedirectUri("https://client.example/callback?channel=mcp")).toBe(true);
     expect(validRedirectUri("http://localhost:4312/callback")).toBe(true);
     expect(validRedirectUri("http://[::1]:4312/callback")).toBe(true);
     expect(validRedirectUri("http://192.168.1.2/callback")).toBe(false);
     expect(validRedirectUri("https://client.example/callback#")).toBe(false);
+  });
+
+  it("ignores only the port when matching loopback callbacks", () => {
+    expect(redirectUriMatches("http://127.0.0.1/callback", "http://127.0.0.1:49152/callback")).toBe(
+      true
+    );
+    expect(
+      redirectUriMatches("http://localhost:4312/callback", "http://localhost:49152/callback")
+    ).toBe(true);
+    expect(redirectUriMatches("http://[::1]/callback", "http://[::1]:49152/callback")).toBe(true);
+    expect(
+      redirectUriMatches("https://client.example/callback", "https://client.example:49152/callback")
+    ).toBe(false);
+    expect(redirectUriMatches("http://localhost/callback", "http://127.0.0.1:49152/callback")).toBe(
+      false
+    );
+    expect(redirectUriMatches("http://localhost/callback", "http://localhost:49152/other")).toBe(
+      false
+    );
+    expect(
+      redirectUriMatches(
+        "http://localhost/callback?channel=mcp",
+        "http://localhost:49152/callback?channel=other"
+      )
+    ).toBe(false);
   });
 
   it("uses strict public DNS resolution before any metadata request", async () => {
@@ -122,19 +148,35 @@ describe("OAuth client metadata", () => {
     expect(resolveStrictPublicHost).toHaveBeenCalledWith("client.example");
   });
 
-  it("honors metadata cache directives within the local cache cap", () => {
+  it("honors shared metadata cache directives within the local cache cap", () => {
     expect(clientMetadataCacheDuration({ "cache-control": "no-store" })).toBe(0);
     expect(clientMetadataCacheDuration({ "cache-control": "no-cache, max-age=600" })).toBe(0);
+    expect(clientMetadataCacheDuration({ "cache-control": "private, max-age=600" })).toBe(0);
+    expect(clientMetadataCacheDuration({ "cache-control": 'private="set-cookie"' })).toBe(0);
+    expect(
+      clientMetadataCacheDuration({
+        "cache-control": "public, max-age=120, s-maxage=30",
+        age: "5",
+      })
+    ).toBe(25_000);
     expect(clientMetadataCacheDuration({ "cache-control": "public, max-age=120", age: "20" })).toBe(
       100_000
     );
     expect(clientMetadataCacheDuration({ "cache-control": "max-age=86400" })).toBe(600_000);
     expect(clientMetadataCacheDuration({ "cache-control": "max-age=invalid" })).toBe(0);
+    expect(clientMetadataCacheDuration({ "cache-control": "max-age=120", age: "invalid" })).toBe(0);
+    expect(clientMetadataCacheDuration({ "cache-control": "max-age=120", vary: "*" })).toBe(0);
+    expect(clientMetadataCacheDuration({ "cache-control": "max-age=120, max-age=60" })).toBe(0);
+    expect(clientMetadataCacheDuration({ expires: "invalid" })).toBe(0);
     expect(
       clientMetadataCacheDuration(
-        { expires: "2026-08-28T00:05:00.000Z" },
+        {
+          age: "20",
+          date: "2026-08-28T00:00:00.000Z",
+          expires: "2026-08-28T00:05:00.000Z",
+        },
         Date.parse("2026-08-28T00:00:00.000Z")
       )
-    ).toBe(300_000);
+    ).toBe(280_000);
   });
 });

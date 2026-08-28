@@ -17,6 +17,7 @@ import type { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { ObjectivesService } from "../objectives/objectives.service.js";
 import type { ResourcesService } from "../resources/resources.service.js";
 import type { TeamsService } from "../teams/teams.service.js";
+import { teamOverviewAppMetadata } from "./mcp-app.js";
 
 export interface McpToolServices {
   teams: Pick<TeamsService, "list">;
@@ -92,7 +93,9 @@ export function registerMcpTools(
   server.registerTool(
     "list_teams",
     {
-      description: "List teams available to the authenticated user.",
+      title: "List teams",
+      description:
+        "Discover monitoring teams available to the authenticated user. Call this before team-scoped tools.",
       inputSchema: z.object({ offset: offsetSchema, limit: limitSchema }).strict(),
       annotations: readOnlyAnnotations,
     },
@@ -103,9 +106,12 @@ export function registerMcpTools(
   server.registerTool(
     "get_team_overview",
     {
-      description: "Get current monitoring health and recent incidents for a team.",
+      title: "Get team overview",
+      description:
+        "Get current aggregate resource, check, heartbeat, incident, and maintenance status for a team.",
       inputSchema: z.object({ teamId: identifier }).strict(),
       annotations: readOnlyAnnotations,
+      _meta: teamOverviewAppMetadata,
     },
     ({ teamId }) =>
       executeTool(async () => {
@@ -117,6 +123,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_availability_report",
     {
+      title: "Get availability report",
       description:
         "Get availability, latency, and recovery metrics for a team, resource, or check.",
       inputSchema: availabilityReportInputSchema,
@@ -131,6 +138,7 @@ export function registerMcpTools(
   server.registerTool(
     "list_service_objectives",
     {
+      title: "List service objectives",
       description: "List service-level objectives and error-budget status for a team.",
       inputSchema: z
         .object({ teamId: identifier, offset: offsetSchema, limit: limitSchema })
@@ -144,7 +152,8 @@ export function registerMcpTools(
   server.registerTool(
     "list_resources",
     {
-      description: "List resources in a team.",
+      title: "List resources",
+      description: "List monitored resources and their current status in a team.",
       inputSchema: z
         .object({ teamId: identifier, offset: offsetSchema, limit: limitSchema })
         .strict(),
@@ -157,6 +166,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_resource",
     {
+      title: "Get resource",
       description: "Get one resource.",
       inputSchema: z.object({ teamId: identifier, resourceId: identifier }).strict(),
       annotations: readOnlyAnnotations,
@@ -168,6 +178,7 @@ export function registerMcpTools(
   server.registerTool(
     "update_resource",
     {
+      title: "Update resource",
       description: "Update a resource's name, kind, description, or tags.",
       inputSchema: z
         .object({
@@ -203,7 +214,8 @@ export function registerMcpTools(
   server.registerTool(
     "list_checks",
     {
-      description: "List check status without check configuration.",
+      title: "List checks",
+      description: "List current monitor check status without check configuration.",
       inputSchema: z
         .object({
           teamId: identifier,
@@ -224,6 +236,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_check",
     {
+      title: "Get check",
       description: "Get check status without its configuration.",
       inputSchema: z.object({ teamId: identifier, checkId: identifier }).strict(),
       annotations: readOnlyAnnotations,
@@ -237,6 +250,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_check_history",
     {
+      title: "Get check history",
       description: "Get recent results for a check.",
       inputSchema: checkHistoryInputSchema,
       annotations: readOnlyAnnotations,
@@ -250,6 +264,7 @@ export function registerMcpTools(
   server.registerTool(
     "list_heartbeats",
     {
+      title: "List heartbeats",
       description: "List heartbeat monitor status.",
       inputSchema: z
         .object({
@@ -270,6 +285,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_heartbeat",
     {
+      title: "Get heartbeat",
       description: "Get one heartbeat monitor's status.",
       inputSchema: z.object({ teamId: identifier, heartbeatId: identifier }).strict(),
       annotations: readOnlyAnnotations,
@@ -281,6 +297,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_heartbeat_history",
     {
+      title: "Get heartbeat history",
       description: "Get recent events for a heartbeat monitor.",
       inputSchema: z
         .object({
@@ -300,6 +317,7 @@ export function registerMcpTools(
   server.registerTool(
     "list_incidents",
     {
+      title: "List incidents",
       description: "List incidents in a team.",
       inputSchema: z
         .object({
@@ -321,6 +339,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_incident",
     {
+      title: "Get incident",
       description: "Get one incident and its recent updates.",
       inputSchema: z
         .object({
@@ -340,6 +359,7 @@ export function registerMcpTools(
   server.registerTool(
     "create_incident",
     {
+      title: "Create incident",
       description: "Create a manual incident and publish its initial update.",
       inputSchema: z
         .object({
@@ -363,6 +383,7 @@ export function registerMcpTools(
   server.registerTool(
     "add_incident_update",
     {
+      title: "Add incident update",
       description: "Publish an incident update and change its status.",
       inputSchema: z
         .object({
@@ -386,6 +407,7 @@ export function registerMcpTools(
   server.registerTool(
     "list_maintenance",
     {
+      title: "List maintenance windows",
       description: "List maintenance windows in a team.",
       inputSchema: z
         .object({ teamId: identifier, offset: offsetSchema, limit: limitSchema })
@@ -399,6 +421,7 @@ export function registerMcpTools(
   server.registerTool(
     "get_maintenance",
     {
+      title: "Get maintenance window",
       description: "Get one maintenance window.",
       inputSchema: z.object({ teamId: identifier, maintenanceId: identifier }).strict(),
       annotations: readOnlyAnnotations,

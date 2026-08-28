@@ -1,4 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
+import { Script } from "node:vm";
 import type {
   AnalyticsReport,
   CheckSummary,
@@ -11,6 +12,7 @@ import type {
 import type { AuthInfo, McpHttpHandler } from "@modelcontextprotocol/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { McpToolServices } from "./mcp-tools.js";
+import { mcpAppMimeType, mcpAppsExtensionId, teamOverviewAppUri } from "./mcp-app.js";
 import { createMimoriiMcpHandler } from "./mcp.service.js";
 
 const protocolVersion = "2026-07-28";
@@ -32,6 +34,7 @@ describe("Mimorii MCP handler", () => {
 
     expect(response.status).toBe(200);
     const body = await json(response);
+    const discoveryBody = await json(discovery);
     const tools = body.result!.tools!;
     expect(tools.map((tool) => tool.name)).toEqual([
       "list_teams",
@@ -55,10 +58,28 @@ describe("Mimorii MCP handler", () => {
       "get_maintenance",
     ]);
     expect(body.result).toMatchObject({ ttlMs: 300_000, cacheScope: "public" });
-    expect((await json(discovery)).result).toMatchObject({
+    expect(discoveryBody.result).toMatchObject({
+      instructions: expect.stringContaining("Call list_teams"),
       ttlMs: 300_000,
       cacheScope: "public",
     });
+    expect(discoveryBody.result!.instructions).toContain("get_team_overview");
+    expect(discoveryBody.result!.instructions).toContain("list_resources");
+    expect(discoveryBody.result!.instructions).toContain("list_checks");
+    expect(tools.find((tool) => tool.name === "list_resources")!.description).toContain(
+      "current status"
+    );
+    expect(tools.find((tool) => tool.name === "list_checks")!.description).toContain(
+      "current monitor check status"
+    );
+    for (const tool of tools) expect(tool.title).toBeTruthy();
+    const overviewTool = tools.find((tool) => tool.name === "get_team_overview")!;
+    const overviewMetadata = mcpMetadata(overviewTool);
+    expect(overviewMetadata).toEqual({
+      ui: { resourceUri: teamOverviewAppUri, visibility: ["model", "app"] },
+    });
+    expect(JSON.stringify(overviewMetadata)).not.toContain("openai/");
+    expect(JSON.stringify(overviewMetadata)).not.toContain("ui/resourceUri");
     for (const tool of tools.filter(
       (item) => !item.name.includes("update") && item.name !== "create_incident"
     )) {
@@ -79,6 +100,64 @@ describe("Mimorii MCP handler", () => {
       destructiveHint: false,
       openWorldHint: true,
     });
+  });
+
+  it("publishes the MCP Apps extension and sandboxed team health resource", async () => {
+    const handler = createHandler();
+    const discovery = await json(await send(handler, auth("user-1"), "server/discover", {}));
+    const listed = await json(await send(handler, auth("user-1"), "resources/list", {}));
+    const appResource = listed.result!.resources!.find((item) => item.uri === teamOverviewAppUri)!;
+    const appResourceMetadata = mcpMetadata(appResource);
+
+    expect(discovery.result!.capabilities!.extensions).toEqual({
+      [mcpAppsExtensionId]: { mimeTypes: [mcpAppMimeType] },
+    });
+    expect(appResource).toMatchObject({
+      name: "team_health_dashboard",
+      title: "Team health dashboard",
+      mimeType: mcpAppMimeType,
+      _meta: {
+        ui: {
+          csp: {
+            connectDomains: [],
+            resourceDomains: [],
+            frameDomains: [],
+            baseUriDomains: [],
+          },
+          prefersBorder: true,
+        },
+      },
+    });
+
+    const read = await json(
+      await send(
+        handler,
+        auth("user-1"),
+        "resources/read",
+        { uri: teamOverviewAppUri },
+        teamOverviewAppUri
+      )
+    );
+    expect(read.error).toBeUndefined();
+    const content = read.result!.contents![0]!;
+    expect(content).toMatchObject({
+      uri: teamOverviewAppUri,
+      mimeType: mcpAppMimeType,
+      _meta: appResourceMetadata,
+    });
+    expect(content.text).toContain("<!doctype html>");
+    expect(content.text).toContain('sendRequest("ui/initialize"');
+    expect(content.text).toContain('sendNotification("ui/notifications/initialized"');
+    expect(content.text).toContain('sendRequest("tools/call"');
+    expect(content.text).toContain('message.method === "ui/notifications/tool-result"');
+    expect(content.text).toContain("structuredContent");
+    expect(content.text).toContain("ResizeObserver");
+    expect(content.text).not.toMatch(/https?:\/\//);
+    expect(content.text).not.toContain("fetch(");
+    const moduleSource = content.text!.match(/<script type="module">([\s\S]+)<\/script>/)?.[1];
+    expect(moduleSource).toBeTruthy();
+    if (!moduleSource) throw new Error("MCP App module script is missing");
+    expect(() => new Script(moduleSource)).not.toThrow();
   });
 
   it("binds calls to the authenticated user and bounds structured list results", async () => {
@@ -472,9 +551,9 @@ describe("Mimorii MCP handler", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("rejects legacy initialize traffic", async () => {
+  it("supports stateless 2025-era Streamable HTTP clients", async () => {
     const handler = createHandler();
-    const request = new Request("https://mimorii.example/api/mcp", {
+    const initializeRequest = new Request("https://mimorii.example/api/mcp", {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
@@ -492,9 +571,60 @@ describe("Mimorii MCP handler", () => {
       }),
     });
 
-    const response = await handler.fetch(request, { authInfo: auth("user-1") });
-    expect(response.status).toBe(400);
-    expect((await json(response)).error).toBeDefined();
+    const initializeResponse = await handler.fetch(initializeRequest, {
+      authInfo: auth("user-1"),
+    });
+    expect(initializeResponse.status).toBe(200);
+    const initialized = await json(initializeResponse);
+    expect(initialized.result).toMatchObject({
+      protocolVersion: "2025-11-25",
+      serverInfo: { name: "mimorii" },
+      capabilities: {
+        tools: {},
+        resources: {},
+        extensions: {
+          [mcpAppsExtensionId]: { mimeTypes: [mcpAppMimeType] },
+        },
+      },
+    });
+
+    const listRequest = new Request("https://mimorii.example/api/mcp", {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+    });
+    const listResponse = await handler.fetch(listRequest, { authInfo: auth("user-1") });
+    expect(listResponse.status).toBe(200);
+    const legacyTools = (await json(listResponse)).result!.tools!;
+    expect(legacyTools).toHaveLength(19);
+    expect(mcpMetadata(legacyTools.find((tool) => tool.name === "get_team_overview")!)).toEqual({
+      ui: { resourceUri: teamOverviewAppUri, visibility: ["model", "app"] },
+    });
+
+    const resourceRequest = new Request("https://mimorii.example/api/mcp", {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/read",
+        params: { uri: teamOverviewAppUri },
+      }),
+    });
+    const resourceResponse = await handler.fetch(resourceRequest, { authInfo: auth("user-1") });
+    expect(resourceResponse.status).toBe(200);
+    expect((await json(resourceResponse)).result!.contents![0]).toMatchObject({
+      uri: teamOverviewAppUri,
+      mimeType: mcpAppMimeType,
+    });
   });
 });
 
@@ -586,7 +716,31 @@ function send(
 
 interface TestResponseBody {
   result?: {
-    tools?: Array<{ name: string; annotations: Record<string, boolean> }>;
+    tools?: Array<{
+      name: string;
+      title?: string;
+      description?: string;
+      annotations: Record<string, boolean>;
+    }>;
+    resources?: Array<{
+      uri: string;
+      name: string;
+      title?: string;
+      mimeType?: string;
+    }>;
+    contents?: Array<{
+      uri: string;
+      mimeType?: string;
+      text?: string;
+    }>;
+    capabilities?: {
+      tools?: Record<string, unknown>;
+      resources?: Record<string, unknown>;
+      extensions?: Record<string, unknown>;
+    };
+    protocolVersion?: string;
+    serverInfo?: { name: string };
+    instructions?: string;
     content?: Array<{ text: string }>;
     structuredContent?: Record<string, unknown>;
     isError?: boolean;
@@ -597,7 +751,26 @@ interface TestResponseBody {
 }
 
 async function json(response: Response): Promise<TestResponseBody> {
-  return (await response.json()) as TestResponseBody;
+  const text = await response.text();
+  if (response.headers.get("content-type")?.startsWith("text/event-stream")) {
+    const data = text
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => line.slice(6))
+      .at(-1);
+    if (!data) throw new Error("MCP event stream did not contain a data frame");
+    return JSON.parse(data) as TestResponseBody;
+  }
+  return JSON.parse(text) as TestResponseBody;
+}
+
+function mcpMetadata(value: object): Record<string, unknown> | undefined {
+  const metadata: unknown = Reflect.get(value, "_meta");
+  return isRecord(metadata) ? metadata : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function toolResult<T>(body: TestResponseBody): T {

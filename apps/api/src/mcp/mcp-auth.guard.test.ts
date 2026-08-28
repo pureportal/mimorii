@@ -71,6 +71,47 @@ describe("MCP authentication guard", () => {
     );
   });
 
+  it("returns a step-up challenge for clients without MCP routing headers", async () => {
+    const oauth = oauthService(oauthAuthentication(["mcp:read"]));
+    const fixture = requestContext(
+      "Bearer mim_oat_read",
+      {},
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "create_incident", arguments: {} },
+      }
+    );
+    const guard = new McpAuthGuard(oauth.service);
+
+    await expect(guard.canActivate(fixture.context)).rejects.toThrow(ForbiddenException);
+    expect(fixture.setHeader).toHaveBeenCalledWith(
+      "WWW-Authenticate",
+      expect.stringMatching(/error="insufficient_scope".*scope="mcp:read mcp:write"/)
+    );
+  });
+
+  it("detects write tools in a JSON-RPC batch", async () => {
+    const oauth = oauthService(null);
+    const fixture = requestContext(undefined, {}, [
+      { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "update_resource", arguments: {} },
+      },
+    ]);
+    const guard = new McpAuthGuard(oauth.service);
+
+    await expect(guard.canActivate(fixture.context)).rejects.toThrow(UnauthorizedException);
+    expect(fixture.setHeader).toHaveBeenCalledWith(
+      "WWW-Authenticate",
+      expect.stringContaining('scope="mcp:read mcp:write"')
+    );
+  });
+
   it("advertises the write scope on an unauthenticated direct mutation call", async () => {
     const oauth = oauthService(null);
     const fixture = requestContext(undefined, {
@@ -138,7 +179,11 @@ function oauthAuthentication(scopes: Array<"mcp:read" | "mcp:write">) {
   } satisfies OAuthAccessTokenAuthentication;
 }
 
-function requestContext(authorization?: string, additionalHeaders: Record<string, string> = {}) {
+function requestContext(
+  authorization?: string,
+  additionalHeaders: Record<string, string> = {},
+  body?: unknown
+) {
   const request: Record<string, unknown> & {
     headers: Record<string, string>;
   } = {
@@ -146,6 +191,7 @@ function requestContext(authorization?: string, additionalHeaders: Record<string
       ...(authorization ? { authorization } : {}),
       ...additionalHeaders,
     },
+    body,
   };
   const setHeader = vi.fn();
   const context = {

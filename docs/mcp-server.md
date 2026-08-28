@@ -1,6 +1,8 @@
 # MCP server integration
 
-Mimorii exposes a stateless MCP `2026-07-28` Streamable HTTP endpoint at `POST /api/mcp`. It uses version 2 of the official TypeScript SDK and rejects older MCP protocol revisions and transports.
+Mimorii exposes a stateless Streamable HTTP endpoint at `POST /api/mcp`. It serves MCP `2026-07-28` and the stateless 2025-era protocol used by current OpenAI and Claude clients. Sessionful Streamable HTTP, HTTP+SSE, and stdio are not exposed.
+
+See [MCP client compatibility](mcp-client-compatibility.md) for the current Claude, Gemini, Ollama, VS Code, and Cursor assessment.
 
 ## Authorization
 
@@ -11,7 +13,7 @@ Discovery is available at:
 - `/.well-known/oauth-protected-resource/api/mcp`
 - `/.well-known/oauth-authorization-server`
 
-Mimorii supports OAuth Client ID Metadata Documents. The `client_id` must be a public HTTPS URL with a non-root path. Mimorii retrieves that document without redirects, pins the request to a publicly resolved address, enforces TLS hostname verification, and limits response size and duration. Successful metadata responses are cached according to `Cache-Control`, `Age`, and `Expires`, capped at ten minutes; errors and `no-store` responses are not cached. Dynamic Client Registration is not supported because MCP `2026-07-28` deprecates it in favor of Client ID Metadata Documents.
+Mimorii supports OAuth Client ID Metadata Documents. The `client_id` must be a public HTTPS URL with a non-root path. Mimorii retrieves that document without redirects, pins the request to a publicly resolved address, enforces TLS hostname verification, and limits response size and duration. Successful metadata responses are cached according to `Cache-Control`, `Age`, and `Expires`, capped at ten minutes; errors and `no-store` responses are not cached. Dynamic Client Registration is not supported.
 
 A compatible public client document includes `none` in its supported token endpoint authentication
 methods:
@@ -27,7 +29,7 @@ methods:
 }
 ```
 
-HTTPS redirects and exact HTTP loopback redirects are accepted. Redirect URIs are matched exactly. Authorization and token requests must use the canonical resource URL derived from `MIMORII_PUBLIC_URL`:
+HTTPS redirects are matched exactly. HTTP loopback redirects require the registered scheme, host, path, and query, while the port is ignored for ephemeral native-client callbacks. Authorization and token requests must use the canonical resource URL derived from `MIMORII_PUBLIC_URL`:
 
 ```text
 https://mimorii.example/api/mcp
@@ -64,16 +66,24 @@ MCP hosts should show tool activity and require human confirmation before mutati
 
 Check configuration is omitted from MCP output because it can contain targets, request headers, bodies, and other operationally sensitive values. List and history inputs are bounded, identifiers are UUIDs, timestamps are validated, and unknown tool arguments are rejected.
 
+## MCP Apps
+
+Mimorii implements the stable MCP Apps `2026-01-26` extension and advertises `io.modelcontextprotocol/ui` with the `text/html;profile=mcp-app` media type.
+
+`get_team_overview` references the predeclared `ui://mimorii/team-health-v1` resource through `_meta.ui.resourceUri`. Apps-capable hosts can render its current team health, monitor counts, availability, incidents, maintenance, and service-objective state as an interactive dashboard. The view can refresh through the standard `tools/call` bridge.
+
+The tool still returns meaningful text content and `structuredContent`, so classic MCP hosts receive the same result without rendering the app. The view makes no direct network requests and declares empty connect, resource, frame, and base-URI domain lists. Refreshes pass through the host and the same OAuth, scope, and team-role checks as model-initiated calls.
+
 ## Request security
 
 The MCP boundary applies these controls:
 
-- A new `McpServer` is created for every stateless request, preventing cross-client state and response routing.
+- A new `McpServer` is created for every stateless modern or 2025-era request, preventing cross-client state and response routing.
 - `Host` must match `MIMORII_PUBLIC_URL`, localhost, or an explicitly configured `MIMORII_MCP_ALLOWED_HOSTS` entry.
 - A present `Origin` must exactly match the public origin or an allowed CORS origin.
-- `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` must agree with the JSON-RPC body.
-- `server/discover` and `tools/list` use five-minute public protocol cache hints because their definitions are identical for every user; tool data is not protocol-cacheable.
-- Write requests receive an OAuth `insufficient_scope` challenge before tool execution when `mcp:write` is absent. Tool handlers check the scope again as defense in depth.
+- Modern routing headers must agree with the JSON-RPC body. Stateless 2025-era clients can use the classic body-only request format.
+- `server/discover`, `tools/list`, and `resources/list` use five-minute public protocol cache hints because their definitions are identical for every user. The static app resource carries a one-hour public hint; tool data is not protocol-cacheable.
+- Write requests receive an OAuth `insufficient_scope` challenge before tool execution when `mcp:write` is absent. Scope detection covers both modern routing headers and classic JSON-RPC bodies. Tool handlers check the scope again as defense in depth.
 - MCP responses use `Cache-Control: no-store`, and bearer tokens remain in the `Authorization` header.
 - The API body limit and global rate limiter apply to MCP and OAuth endpoints.
 
@@ -93,6 +103,11 @@ Use `MIMORII_MCP_ALLOWED_HOSTS` only when a trusted proxy sends a different `Hos
 
 Primary references:
 
+- [MCP Apps `2026-01-26`](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx)
+- [OpenAI MCP server and UI quickstart](https://developers.openai.com/plugins/build/app-quickstart)
+- [OpenAI authentication](https://developers.openai.com/plugins/build/auth)
+- [Claude custom connector requirements](https://claude.com/docs/connectors/building)
+- [Claude connector authentication](https://claude.com/docs/connectors/building/authentication)
 - [MCP 2026-07-28 authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
 - [MCP 2026-07-28 Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
 - [MCP authorization security considerations](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations)
@@ -102,4 +117,5 @@ Primary references:
 - [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728)
 - [OAuth 2.0 Authorization Server Metadata (RFC 8414)](https://www.rfc-editor.org/rfc/rfc8414)
 - [OAuth 2.0 Authorization Server Issuer Identification (RFC 9207)](https://www.rfc-editor.org/rfc/rfc9207)
+- [OAuth 2.0 for Native Apps (RFC 8252)](https://www.rfc-editor.org/rfc/rfc8252)
 - [OAuth 2.0 Security Best Current Practice (RFC 9700)](https://www.rfc-editor.org/rfc/rfc9700)

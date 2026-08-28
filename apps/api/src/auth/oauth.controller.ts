@@ -47,7 +47,8 @@ export class OAuthController {
       resource: mcpResourceUrl().href,
       authorization_servers: [oauthIssuer()],
       bearer_methods_supported: ["header"],
-      scopes_supported: ["mcp:read"],
+      scopes_supported: [...mcpScopes],
+      resource_documentation: new URL("/mcp", publicOrigin()).href,
     };
   }
 

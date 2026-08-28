@@ -8,7 +8,11 @@ import { AuditService } from "../common/audit.service.js";
 import { createSecret, hashSecret } from "../common/crypto.js";
 import type { AuthenticatedUser, UserRow } from "../common/rows.js";
 import { DatabaseService } from "../database/database.service.js";
-import { isLoopbackHostname, OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
+import {
+  isLoopbackHostname,
+  OAuthClientMetadataService,
+  redirectUriMatches,
+} from "./oauth-client-metadata.service.js";
 import { mcpResourceUrl, mcpScopes, oauthIssuer, type McpScope } from "./oauth-config.js";
 import { OAuthException } from "./oauth-error.js";
 import type {
@@ -252,7 +256,11 @@ export class OAuthService {
     canonicalMcpResource(input.resource);
     const scopes = requestedScopes(input.scope);
     const client = await this.clients.resolve(input.client_id);
-    if (!client.redirectUris.includes(input.redirect_uri)) {
+    if (
+      !client.redirectUris.some((redirectUri) =>
+        redirectUriMatches(redirectUri, input.redirect_uri)
+      )
+    ) {
       throw new OAuthException("invalid_request", "OAuth redirect URI is not registered");
     }
     const redirect = new URL(input.redirect_uri);

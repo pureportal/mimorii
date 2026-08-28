@@ -20,6 +20,7 @@ import { ObjectivesService } from "../objectives/objectives.service.js";
 import { ResourcesService } from "../resources/resources.service.js";
 import { TeamsService } from "../teams/teams.service.js";
 import { applicationVersion } from "../version.js";
+import { mcpAppsCapability, registerMcpAppResources } from "./mcp-app.js";
 import { registerMcpTools, type McpToolServices } from "./mcp-tools.js";
 
 interface McpNodeRequest extends AuthenticatedRequest {
@@ -27,6 +28,11 @@ interface McpNodeRequest extends AuthenticatedRequest {
 }
 
 const capabilityCacheHint = { ttlMs: 5 * 60_000, cacheScope: "public" } as const;
+const monitoringInstructions =
+  "Use Mimorii tools for questions about current service and infrastructure status. " +
+  "Call list_teams before concluding that no monitoring data is available. " +
+  "For each relevant team, call get_team_overview; use list_resources and list_checks for resource and check details. " +
+  "Treat returned status values and timestamps as the current monitoring state.";
 
 @Injectable()
 export class McpService implements OnApplicationShutdown {
@@ -97,7 +103,7 @@ export function createMimoriiMcpHandler(
   onerror?: (error: Error) => void
 ): McpHttpHandler {
   return createMcpHandler((context) => createServer(context, services), {
-    legacy: "reject",
+    legacy: "stateless",
     maxSubscriptions: 0,
     onerror,
   });
@@ -111,12 +117,18 @@ function createServer(context: McpRequestContext, services: McpToolServices): Mc
   const server = new McpServer(
     { name: "mimorii", version: applicationVersion },
     {
+      capabilities: {
+        extensions: mcpAppsCapability,
+      },
+      instructions: monitoringInstructions,
       cacheHints: {
         "server/discover": capabilityCacheHint,
         "tools/list": capabilityCacheHint,
+        "resources/list": capabilityCacheHint,
       },
     }
   );
+  registerMcpAppResources(server);
   registerMcpTools(server, userId, context.authInfo?.scopes ?? [], services);
   return server;
 }
