@@ -4,6 +4,7 @@ import { encryptConfiguration } from "../common/crypto.js";
 import { CheckOrchestratorService } from "./check-orchestrator.service.js";
 
 const originalJwtSecret = process.env.MIMORII_JWT_SECRET;
+const originalSchedulerSetting = process.env.MIMORII_SCHEDULER_ENABLED;
 
 function scheduledCheck(encryptedSecret: string) {
   const timestamp = "2026-08-28T12:00:00.000Z";
@@ -40,13 +41,15 @@ function scheduledCheck(encryptedSecret: string) {
   };
 }
 
-function restoreJwtSecret(): void {
+function restoreEnvironment(): void {
   if (originalJwtSecret === undefined) delete process.env.MIMORII_JWT_SECRET;
   else process.env.MIMORII_JWT_SECRET = originalJwtSecret;
+  if (originalSchedulerSetting === undefined) delete process.env.MIMORII_SCHEDULER_ENABLED;
+  else process.env.MIMORII_SCHEDULER_ENABLED = originalSchedulerSetting;
 }
 
 afterEach(() => {
-  restoreJwtSecret();
+  restoreEnvironment();
   vi.restoreAllMocks();
 });
 
@@ -120,6 +123,7 @@ describe("check orchestrator", () => {
 
   it("contains scheduled execution failures", async () => {
     process.env.MIMORII_JWT_SECRET = "active-test-key-with-at-least-thirty-two-characters";
+    process.env.MIMORII_SCHEDULER_ENABLED = "true";
     const check = scheduledCheck(encryptConfiguration("Bearer monitor-token"));
     const database = {
       all: vi
