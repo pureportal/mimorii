@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import { IncidentsService } from "./incidents.service.js";
 
 const initialSchedulerSetting = process.env.MIMORII_SCHEDULER_ENABLED;
@@ -26,7 +27,7 @@ describe("incident maintenance suppression", () => {
     run: vi.fn().mockResolvedValue({ changes: 1 }),
     transaction: vi.fn(async (action: () => Promise<void>) => action()),
   };
-  const maintenance = { suppressesNotifications: vi.fn() };
+  const maintenance = { suppressesAnyNotifications: vi.fn() };
   const notifications = { enqueue: vi.fn().mockResolvedValue([]) };
 
   beforeEach(() => {
@@ -38,7 +39,7 @@ describe("incident maintenance suppression", () => {
     database.get.mockResolvedValueOnce(incident).mockResolvedValueOnce({ type: "host" });
     database.run.mockResolvedValue({ changes: 1 });
     database.transaction.mockImplementation(async (action: () => Promise<void>) => action());
-    maintenance.suppressesNotifications.mockResolvedValue(false);
+    maintenance.suppressesAnyNotifications.mockResolvedValue(false);
     notifications.enqueue.mockResolvedValue([]);
   });
 
@@ -78,8 +79,44 @@ describe("incident maintenance suppression", () => {
     );
   });
 
+  it("checks multi-resource maintenance with one database lookup", async () => {
+    database.all
+      .mockReset()
+      .mockResolvedValueOnce([{ id: incident.id }])
+      .mockResolvedValueOnce([
+        { id: "resource-1", name: "Database" },
+        { id: "resource-2", name: "API" },
+        { id: "resource-3", name: "Worker" },
+      ])
+      .mockResolvedValueOnce([]);
+    const maintenanceService = new MaintenanceService(
+      database as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+    const service = new IncidentsService(
+      database as never,
+      {} as never,
+      maintenanceService,
+      notifications as never,
+      {} as never
+    );
+
+    await service.releaseEndedMaintenanceSuppressions();
+
+    expect(database.all).toHaveBeenCalledTimes(3);
+    expect(database.all).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("mr.resource_id IN (?,?,?)"),
+      "resource-1",
+      "resource-2",
+      "resource-3"
+    );
+  });
+
   it("keeps the incident suppressed while maintenance is active", async () => {
-    maintenance.suppressesNotifications.mockResolvedValue(true);
+    maintenance.suppressesAnyNotifications.mockResolvedValue(true);
     const service = new IncidentsService(
       database as never,
       {} as never,

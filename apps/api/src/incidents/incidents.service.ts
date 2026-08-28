@@ -490,13 +490,10 @@ export class IncidentsService {
       );
       if (!incident) return;
       const resourceIds = (await this.resources(id)).map((resource) => resource.id);
-      const stillSuppressed = (
-        await Promise.all(
-          resourceIds.map((resourceId) =>
-            this.maintenance.suppressesNotifications(resourceId, new Date())
-          )
-        )
-      ).some(Boolean);
+      const stillSuppressed = await this.maintenance.suppressesAnyNotifications(
+        resourceIds,
+        new Date()
+      );
       if (stillSuppressed) return;
       const occurredAt = new Date().toISOString();
       const source = incident.check_id ? "check" : incident.heartbeat_id ? "heartbeat" : "manual";

@@ -187,11 +187,18 @@ export class MaintenanceService {
   }
 
   async suppressesNotifications(resourceId: string, at = new Date()): Promise<boolean> {
+    return this.suppressesAnyNotifications([resourceId], at);
+  }
+
+  async suppressesAnyNotifications(resourceIds: string[], at = new Date()): Promise<boolean> {
+    if (resourceIds.length === 0) return false;
+    const placeholders = resourceIds.map(() => "?").join(",");
     const rows = await this.database.all<MaintenanceRow>(
       `SELECT mw.* FROM maintenance_windows mw
          JOIN maintenance_resources mr ON mr.maintenance_id = mw.id
-         WHERE mr.resource_id = ? AND mw.cancelled_at IS NULL AND mw.suppress_notifications = 1`,
-      resourceId
+         WHERE mr.resource_id IN (${placeholders})
+           AND mw.cancelled_at IS NULL AND mw.suppress_notifications = 1`,
+      ...resourceIds
     );
     return rows.some((row) => Boolean(this.currentOccurrence(row, at)));
   }
