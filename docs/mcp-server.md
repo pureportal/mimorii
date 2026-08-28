@@ -13,7 +13,8 @@ Discovery is available at:
 
 Mimorii supports OAuth Client ID Metadata Documents. The `client_id` must be a public HTTPS URL with a non-root path. Mimorii retrieves that document without redirects, pins the request to a publicly resolved address, enforces TLS hostname verification, and limits response size and duration. Successful metadata responses are cached according to `Cache-Control`, `Age`, and `Expires`, capped at ten minutes; errors and `no-store` responses are not cached. Dynamic Client Registration is not supported because MCP `2026-07-28` deprecates it in favor of Client ID Metadata Documents.
 
-A compatible public client document includes:
+A compatible public client document includes `none` in its supported token endpoint authentication
+methods:
 
 ```json
 {
@@ -22,7 +23,7 @@ A compatible public client document includes:
   "redirect_uris": ["https://client.example/oauth/callback"],
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
-  "token_endpoint_auth_method": "none"
+  "token_endpoint_auth_methods_supported": ["none"]
 }
 ```
 

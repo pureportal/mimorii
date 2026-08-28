@@ -13,7 +13,7 @@ import {
 const clientId = "https://client.example/oauth/mimorii.json";
 
 describe("OAuth client metadata", () => {
-  it("accepts public clients and records declared refresh-token support", () => {
+  it("accepts a supported public method over a different legacy preference", () => {
     expect(
       parseClientMetadata(
         JSON.stringify({
@@ -26,7 +26,8 @@ describe("OAuth client metadata", () => {
           ],
           grant_types: ["authorization_code", "refresh_token", "custom_grant"],
           response_types: ["code", "custom_response"],
-          token_endpoint_auth_method: "none",
+          token_endpoint_auth_method: "private_key_jwt",
+          token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
         }),
         clientId
       )
@@ -51,7 +52,7 @@ describe("OAuth client metadata", () => {
     ).toBe(false);
   });
 
-  it("rejects mismatched identities, confidential clients, and unsafe redirects", () => {
+  it("rejects mismatched identities, clients without public auth, and unsafe redirects", () => {
     const base = {
       client_id: clientId,
       client_name: "Client",
@@ -64,6 +65,16 @@ describe("OAuth client metadata", () => {
     expect(() =>
       parseClientMetadata(
         JSON.stringify({ ...base, token_endpoint_auth_method: "client_secret_basic" }),
+        clientId
+      )
+    ).toThrow(OAuthException);
+    expect(() =>
+      parseClientMetadata(
+        JSON.stringify({
+          ...base,
+          token_endpoint_auth_method: "none",
+          token_endpoint_auth_methods_supported: ["private_key_jwt"],
+        }),
         clientId
       )
     ).toThrow(OAuthException);

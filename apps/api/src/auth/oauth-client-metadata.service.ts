@@ -9,6 +9,7 @@ const maximumMetadataBytes = 5 * 1_024;
 const retrievalTimeoutMs = 5_000;
 const cacheDurationMs = 10 * 60_000;
 const maximumCacheEntries = 500;
+const tokenEndpointAuthMethodSchema = z.string().min(1).max(256);
 
 const metadataSchema = z.object({
   client_id: z.string().min(1).max(2_048),
@@ -21,7 +22,12 @@ const metadataSchema = z.object({
   redirect_uris: z.array(z.string().min(1).max(2_048)).min(1).max(20),
   grant_types: z.array(z.string().min(1).max(256)).max(10).optional(),
   response_types: z.array(z.string().min(1).max(256)).max(10).optional(),
-  token_endpoint_auth_method: z.literal("none").optional(),
+  token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
+  token_endpoint_auth_methods_supported: z
+    .array(tokenEndpointAuthMethodSchema)
+    .min(1)
+    .max(10)
+    .optional(),
 });
 
 export interface OAuthClientMetadata {
@@ -192,6 +198,15 @@ export function parseClientMetadata(body: string, clientId: string): OAuthClient
     throw new OAuthException("invalid_client", "OAuth client metadata is invalid");
   }
   if (parsed.data.response_types && !parsed.data.response_types.includes("code")) {
+    throw new OAuthException("invalid_client", "OAuth client metadata is invalid");
+  }
+  const supportedAuthMethods = parsed.data.token_endpoint_auth_methods_supported;
+  if (
+    (supportedAuthMethods && !supportedAuthMethods.includes("none")) ||
+    (!supportedAuthMethods &&
+      parsed.data.token_endpoint_auth_method !== undefined &&
+      parsed.data.token_endpoint_auth_method !== "none")
+  ) {
     throw new OAuthException("invalid_client", "OAuth client metadata is invalid");
   }
   const redirectUris = [...new Set(parsed.data.redirect_uris)];
