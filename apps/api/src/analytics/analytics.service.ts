@@ -192,8 +192,8 @@ export class AnalyticsService {
        SUM(CASE WHEN o.status = 'up' THEN 1 ELSE 0 END) AS up,
        SUM(CASE WHEN o.status = 'degraded' THEN 1 ELSE 0 END) AS degraded,
        SUM(CASE WHEN o.status = 'down' THEN 1 ELSE 0 END) AS down,
-       AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS availabilityPercent,
-       AVG(CASE WHEN o.status != 'down' THEN o.latency_ms END) AS averageLatencyMs
+       AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS "availabilityPercent",
+       AVG(CASE WHEN o.status != 'down' THEN o.latency_ms END) AS "averageLatencyMs"
        FROM observations o
        WHERE o.team_id = ? AND o.category = 'availability'
        AND o.observed_at >= ? AND o.observed_at <= ? ${scope.sql}

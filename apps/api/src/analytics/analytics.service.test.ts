@@ -60,3 +60,46 @@ describe("AnalyticsService overview", () => {
     });
   });
 });
+
+describe("AnalyticsService reports", () => {
+  it("preserves the daily report field names returned to clients", async () => {
+    const daily = {
+      date: "2026-08-28",
+      up: 1,
+      degraded: 0,
+      down: 0,
+      availabilityPercent: 100,
+      averageLatencyMs: 42,
+    };
+    const database = {
+      get: vi.fn(async (sql: string) => {
+        if (sql.includes("COUNT(*) AS total")) {
+          return { total: 1, availability: 100, degraded: 0 };
+        }
+        if (sql.includes("COUNT(DISTINCT i.id)")) return { count: 0, mttr: null };
+        if (sql.includes("WITH failures AS")) return { mtbf: null };
+        if (sql.includes(", ordered AS")) return { latency: 42 };
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      all: vi.fn(async (sql: string) => {
+        expect(sql).toContain('AS "availabilityPercent"');
+        expect(sql).toContain('AS "averageLatencyMs"');
+        return [daily];
+      }),
+    };
+    const service = new AnalyticsService(
+      database as never,
+      { require: vi.fn(async () => undefined) } as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+
+    await expect(
+      service.report("user-1", "team-1", {
+        from: "2026-08-28T00:00:00.000Z",
+        to: "2026-08-29T00:00:00.000Z",
+      })
+    ).resolves.toMatchObject({ daily: [daily] });
+  });
+});
