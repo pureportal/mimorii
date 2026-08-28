@@ -23,6 +23,8 @@ export const oauthAuthorizationRequestSchema = z
   })
   .strict();
 
+export const oauthAuthorizationEndpointRequestSchema = oauthAuthorizationRequestSchema.strip();
+
 export const oauthAuthorizationDecisionSchema = oauthAuthorizationRequestSchema.extend({
   decision: z.enum(["approve", "deny"]),
 });

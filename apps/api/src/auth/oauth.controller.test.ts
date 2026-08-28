@@ -37,11 +37,14 @@ describe("OAuth controller", () => {
     );
   });
 
-  it("moves syntactically valid authorization requests to the local consent page", () => {
+  it("ignores authorization extensions and moves the request to the local consent page", () => {
     const controller = new OAuthController({} as OAuthService);
     const fixture = responseFixture();
 
-    controller.authorize(authorizationRequest(), fixture.response);
+    controller.authorize(
+      { ...authorizationRequest(), ui_locales: "en-US", prompt: "consent" },
+      fixture.response
+    );
 
     expect(fixture.redirect).toHaveBeenCalledWith(
       303,
@@ -54,6 +57,8 @@ describe("OAuth controller", () => {
     const target = new URL(fixture.redirect.mock.calls[0]![1]);
     expect(target.searchParams.get("client_id")).toBe("https://client.example/oauth/metadata.json");
     expect(target.searchParams.get("state")).toBe("state-value");
+    expect(target.searchParams.has("ui_locales")).toBe(false);
+    expect(target.searchParams.has("prompt")).toBe(false);
   });
 
   it("uses the OAuth-specific error for unsupported authorization response types", () => {
@@ -71,6 +76,36 @@ describe("OAuth controller", () => {
       "Cache-Control": "no-store",
       Pragma: "no-cache",
     });
+  });
+
+  it("rejects malformed canonical authorization parameters", () => {
+    const controller = new OAuthController({} as OAuthService);
+    const fixture = responseFixture();
+
+    for (const query of [
+      { ...authorizationRequest(), state: "a".repeat(513) },
+      { ...authorizationRequest(), client_id: ["first", "second"] },
+    ]) {
+      expect(() => controller.authorize(query, fixture.response)).toThrow(
+        expect.objectContaining({ code: "invalid_request" })
+      );
+    }
+  });
+
+  it("keeps the authenticated consent request strict", () => {
+    const authorizationRequestHandler = vi.fn();
+    const controller = new OAuthController({
+      authorizationRequest: authorizationRequestHandler,
+    } as unknown as OAuthService);
+    const fixture = responseFixture();
+
+    expect(() =>
+      controller.authorizationRequest(
+        { ...authorizationRequest(), ui_locales: "en-US" },
+        fixture.response
+      )
+    ).toThrow(expect.objectContaining({ code: "invalid_request" }));
+    expect(authorizationRequestHandler).not.toHaveBeenCalled();
   });
 
   it("requires exact form media types and strict token parameters", async () => {

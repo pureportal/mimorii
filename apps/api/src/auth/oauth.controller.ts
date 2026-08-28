@@ -27,6 +27,7 @@ import {
 import { OAuthException } from "./oauth-error.js";
 import {
   oauthAuthorizationDecisionSchema,
+  oauthAuthorizationEndpointRequestSchema,
   oauthAuthorizationRequestSchema,
   oauthRevocationRequestSchema,
   oauthTokenRequestSchema,
@@ -77,7 +78,7 @@ export class OAuthController {
     if (typeof query.response_type === "string" && query.response_type !== "code") {
       throw new OAuthException("unsupported_response_type", "OAuth response type is not supported");
     }
-    const input = parseOAuthInput(oauthAuthorizationRequestSchema, query);
+    const input = parseOAuthInput(oauthAuthorizationEndpointRequestSchema, query);
     const target = new URL("/oauth/authorize", publicOrigin());
     for (const [name, value] of Object.entries(input)) {
       if (value !== undefined) target.searchParams.set(name, value);

@@ -2334,11 +2334,14 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       };
       await request(app.getHttpServer())
         .get("/api/oauth/authorize")
-        .query(parameters)
+        .query({ ...parameters, ui_locales: "en-US" })
         .expect(303)
-        .expect(({ headers }) =>
-          expect(headers.location).toMatch(/^http:\/\/localhost:4310\/oauth\/authorize\?/)
-        );
+        .expect(({ headers }) => {
+          const location = headers.location;
+          if (!location) throw new Error("OAuth authorization redirect is missing");
+          expect(location).toMatch(/^http:\/\/localhost:4310\/oauth\/authorize\?/);
+          expect(new URL(location).searchParams.has("ui_locales")).toBe(false);
+        });
       await request(app.getHttpServer())
         .get("/api/oauth/authorization-request")
         .set("authorization", authorization)
