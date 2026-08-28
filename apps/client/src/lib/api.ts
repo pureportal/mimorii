@@ -145,9 +145,13 @@ function isInternalTauriUrl(value: string): boolean {
 async function apiError(response: Response, token: string | null): Promise<ApiError> {
   let message = response.status === 401 ? "Sign in required" : "Request failed";
   try {
-    const body = (await response.json()) as { message?: string | string[] };
+    const body = (await response.json()) as {
+      message?: string | string[];
+      error_description?: string;
+    };
     if (Array.isArray(body.message)) message = body.message[0] ?? message;
     else if (body.message) message = body.message;
+    else if (body.error_description) message = body.error_description;
   } catch {
     message = response.statusText || message;
   }

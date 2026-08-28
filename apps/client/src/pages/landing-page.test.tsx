@@ -30,3 +30,21 @@ describe("landing page downloads", () => {
     );
   });
 });
+
+describe("landing page MCP section", () => {
+  afterEach(cleanup);
+
+  it("links to the MCP documentation", () => {
+    render(
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("heading", { name: "Use Mimorii from your AI client." })).toBeVisible();
+    expect(screen.getByRole("link", { name: /learn how mcp works/i })).toHaveAttribute(
+      "href",
+      "/mcp"
+    );
+  });
+});

@@ -38,7 +38,12 @@ describe("PublicLayout", () => {
     const footer = screen.getByRole("contentinfo");
 
     expect(within(header).getByRole("link", { name: "mimorii" })).toHaveAttribute("href", "/");
-    expect(within(header).getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
+    const primaryNavigation = within(header).getByRole("navigation", { name: "Primary" });
+    expect(primaryNavigation).toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole("link", { name: "MCP" })).toHaveAttribute(
+      "href",
+      "/mcp"
+    );
     expect(within(footer).getByRole("navigation", { name: "Footer" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Public content" })).toBeInTheDocument();
     expect(screen.getByTestId("sponsor-favicon")).toBeInTheDocument();

@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   BarChart3,
+  Bot,
   Database,
   Download,
   Gauge,
@@ -42,6 +43,24 @@ const monitoringDetails = [
     icon: BarChart3,
     title: "History",
     description: "See uptime, response times, and incident duration together.",
+  },
+];
+
+const mcpHighlights = [
+  {
+    icon: Bot,
+    title: "Monitoring context",
+    description: "Teams, resources, checks, heartbeats, incidents, and maintenance.",
+  },
+  {
+    icon: BarChart3,
+    title: "Reliability reports",
+    description: "Availability, response times, and service objectives.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Permission-aware actions",
+    description: "Mimorii applies your approved access and current team role.",
   },
 ];
 
@@ -180,6 +199,49 @@ export function LandingPage() {
         <Reveal className="lg:order-1" delay={0.08}>
           <AgentTopology />
         </Reveal>
+      </section>
+
+      <section id="mcp" className="scroll-mt-20 bg-night text-white">
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 py-24 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+          <Reveal>
+            <p className="text-sm font-bold uppercase tracking-[.18em] text-coral">
+              MCP integration
+            </p>
+            <h2 className="mt-3 font-display text-4xl font-black tracking-tight sm:text-5xl">
+              Use Mimorii from your AI client.
+            </h2>
+            <p className="mt-5 max-w-xl text-lg leading-8 text-white/68">
+              Connect an MCP-compatible client to investigate service health and use approved
+              Mimorii actions.
+            </p>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="mt-8 border-white/15 bg-white/8 text-white hover:border-white/25 hover:bg-white/12"
+            >
+              <Link to="/mcp">
+                Learn how MCP works <ArrowRight />
+              </Link>
+            </Button>
+          </Reveal>
+          <Reveal className="grid gap-3" delay={0.08}>
+            {mcpHighlights.map(({ icon: Icon, title, description }) => (
+              <div
+                key={title}
+                className="flex gap-4 rounded-2xl border border-white/10 bg-white/6 p-5"
+              >
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-coral/14 text-coral">
+                  <Icon className="size-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="font-display text-lg font-bold">{title}</h3>
+                  <p className="mt-1 leading-7 text-white/62">{description}</p>
+                </div>
+              </div>
+            ))}
+          </Reveal>
+        </div>
       </section>
 
       <section id="download" className="scroll-mt-20 border-y border-line bg-surface/72">

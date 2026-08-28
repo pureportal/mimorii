@@ -30,6 +30,9 @@ const InvitePage = lazy(() =>
 const LandingPage = lazy(() =>
   import("./pages/landing-page").then((module) => ({ default: module.LandingPage }))
 );
+const McpPage = lazy(() =>
+  import("./pages/mcp-page").then((module) => ({ default: module.McpPage }))
+);
 const OverviewPage = lazy(() =>
   import("./pages/overview-page").then((module) => ({ default: module.OverviewPage }))
 );
@@ -41,6 +44,11 @@ const AnalyticsPage = lazy(() =>
 );
 const ObjectivesPage = lazy(() =>
   import("./pages/objectives-page").then((module) => ({ default: module.ObjectivesPage }))
+);
+const OAuthAuthorizePage = lazy(() =>
+  import("./pages/oauth-authorize-page").then((module) => ({
+    default: module.OAuthAuthorizePage,
+  }))
 );
 const NotificationsPage = lazy(() =>
   import("./pages/notifications-page").then((module) => ({ default: module.NotificationsPage }))
@@ -100,6 +108,7 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
   return (
     <Suspense fallback={<LoadingState />}>
       <Routes>
+        <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
         <Route element={androidClient ? <AndroidClientLayout /> : <PublicLayout />}>
           <Route
             path="/"
@@ -107,6 +116,7 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           />
           <Route path="/login" element={<AuthPage mode="login" compact={androidClient} />} />
           <Route path="/register" element={<AuthPage mode="register" compact={androidClient} />} />
+          <Route path="/mcp" element={<McpPage />} />
           <Route path="/sponsors" element={<SponsorsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />

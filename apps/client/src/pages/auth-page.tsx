@@ -28,7 +28,8 @@ export function AuthPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (session) return <Navigate to="/app" replace />;
+  const returnPath = authReturnPath(location.state);
+  if (session) return <Navigate to={returnPath} replace />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -38,8 +39,7 @@ export function AuthPage({
       setServerUrl(server);
       if (mode === "login") await login(email, password);
       else await register(name, email, password, acceptedTerms);
-      const from = (location.state as { from?: string } | null)?.from ?? "/app";
-      void navigate(from, { replace: true });
+      void navigate(returnPath, { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Request failed");
     } finally {
@@ -155,11 +155,15 @@ export function AuthPage({
               <ServerCog className="size-4" /> Server
             </button>
             {mode === "login" ? (
-              <Link to="/register" className="font-semibold text-violet-strong">
+              <Link
+                to="/register"
+                state={location.state}
+                className="font-semibold text-violet-strong"
+              >
                 Create account
               </Link>
             ) : (
-              <Link to="/login" className="font-semibold text-violet-strong">
+              <Link to="/login" state={location.state} className="font-semibold text-violet-strong">
                 Sign in
               </Link>
             )}
@@ -191,4 +195,23 @@ export function AuthPage({
       )}
     </main>
   );
+}
+
+export function authReturnPath(state: unknown): string {
+  if (
+    typeof state === "object" &&
+    state !== null &&
+    "from" in state &&
+    typeof state.from === "string" &&
+    state.from.startsWith("/") &&
+    !state.from.startsWith("//") &&
+    !state.from.includes("\\") &&
+    !state.from.split("").some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    })
+  ) {
+    return state.from;
+  }
+  return "/app";
 }
