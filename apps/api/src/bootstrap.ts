@@ -1,5 +1,5 @@
 import "./env.js";
-import { ValidationPipe, type INestApplication } from "@nestjs/common";
+import { RequestMethod, ValidationPipe, type INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -14,12 +14,19 @@ import {
   type Response,
 } from "express";
 import { AppModule } from "./app.module.js";
+import { publicOrigin } from "./auth/oauth-config.js";
 import { allowedCorsMethods, configuredCorsOrigins } from "./cors.js";
 import { setupSwagger } from "./openapi/swagger.js";
 
 export async function createApplication(): Promise<INestApplication> {
+  publicOrigin();
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  app.setGlobalPrefix("api");
+  app.setGlobalPrefix("api", {
+    exclude: [
+      { path: ".well-known/oauth-protected-resource/api/mcp", method: RequestMethod.GET },
+      { path: ".well-known/oauth-authorization-server", method: RequestMethod.GET },
+    ],
+  });
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use("/api/agent/heartbeat", json({ limit: "32mb" }));
   app.use(json({ limit: "256kb" }));
@@ -36,7 +43,15 @@ export async function createApplication(): Promise<INestApplication> {
   app.enableCors({
     origin: configuredCorsOrigins(),
     methods: allowedCorsMethods,
-    allowedHeaders: ["Authorization", "Content-Type", "X-Dashboard-Key"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "MCP-Protocol-Version",
+      "Mcp-Method",
+      "Mcp-Name",
+      "X-Dashboard-Key",
+    ],
+    exposedHeaders: ["WWW-Authenticate"],
     maxAge: 86_400,
   });
   setupSwagger(app);
@@ -76,7 +91,11 @@ function configureClientApplication(app: INestApplication): void {
   app.use(serveStatic(clientRoot, { index: false }));
   const expressApplication: Express = app.getHttpAdapter().getInstance();
   expressApplication.get("/{*path}", (request: Request, response: Response, next: NextFunction) => {
-    if (request.path.startsWith("/api") || request.path.startsWith("/docs")) {
+    if (
+      request.path.startsWith("/api") ||
+      request.path.startsWith("/docs") ||
+      request.path.startsWith("/.well-known/oauth-")
+    ) {
       next();
       return;
     }

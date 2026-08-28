@@ -1,11 +1,12 @@
 import type { INestApplication } from "@nestjs/common";
 import { termsVersion } from "@mimorii/contracts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import sharp from "sharp";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { OAuthClientMetadataService } from "../src/auth/oauth-client-metadata.service.js";
 import { hashPassword } from "../src/common/crypto.js";
 import { DatabaseService } from "../src/database/database.service.js";
 import { seedGlobalAdministrator } from "../src/database/seed/global-admin.js";
@@ -16,6 +17,25 @@ interface Registration {
   accessToken: string;
   user: { id: string; email: string; name: string };
   teams: Array<{ id: string; name: string; role: string }>;
+}
+
+function mcpRequest(method: string, parameters: Record<string, unknown>, name?: string) {
+  return {
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        ...parameters,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": { name: "e2e-client", version: "1.0.0" },
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    },
+    name,
+  };
 }
 
 const seededUser = {
@@ -46,6 +66,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     process.env.MIMORII_SCHEDULER_ENABLED = "false";
     process.env.MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS = "true";
     process.env.MIMORII_RATE_LIMIT = "10000";
+    process.env.MIMORII_PUBLIC_URL = "http://localhost:4310";
     const { createApplication } = await import("../src/bootstrap.js");
     app = await createApplication();
     await app.init();
@@ -2208,6 +2229,41 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       token: expect.stringMatching(/^mim_pat_/),
     });
     const apiAuthorization = `Bearer ${created.body.token}`;
+    const toolsListRequest = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+      params: {
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": { name: "e2e-client", version: "1.0.0" },
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    };
+    await request(app.getHttpServer())
+      .post("/api/mcp")
+      .set("host", "localhost:4310")
+      .set("authorization", authorization)
+      .set("accept", "application/json, text/event-stream")
+      .set("mcp-protocol-version", "2026-07-28")
+      .set("mcp-method", "tools/list")
+      .send(toolsListRequest)
+      .expect(401)
+      .expect(({ headers }) =>
+        expect(headers["www-authenticate"]).toContain(
+          'resource_metadata="http://localhost:4310/.well-known/oauth-protected-resource/api/mcp"'
+        )
+      );
+    await request(app.getHttpServer())
+      .post("/api/mcp")
+      .set("host", "localhost:4310")
+      .set("authorization", apiAuthorization)
+      .set("accept", "application/json, text/event-stream")
+      .set("mcp-protocol-version", "2026-07-28")
+      .set("mcp-method", "tools/list")
+      .send(toolsListRequest)
+      .expect(401);
     await request(app.getHttpServer())
       .get("/api/auth/me")
       .set("authorization", apiAuthorization)
@@ -2231,6 +2287,214 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get("/api/auth/me")
       .set("authorization", apiAuthorization)
       .expect(401);
+  });
+
+  it("authorizes remote MCP clients with resource-bound OAuth tokens", async () => {
+    const account = await register("mcp-oauth@example.com", "MCP operator");
+    const authorization = `Bearer ${account.accessToken}`;
+    const teamId = account.teams[0]!.id;
+    const createdResource = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", authorization)
+      .send({ name: "OAuth target", kind: "service" })
+      .expect(201);
+    const clientId = "https://client.example/oauth/mimorii.json";
+    const redirectUri = "http://127.0.0.1:9211/callback";
+    const resource = "http://localhost:4310/api/mcp";
+    const verifier = "e".repeat(64);
+    const codeChallenge = createHash("sha256").update(verifier).digest("base64url");
+    const clients = app.get(OAuthClientMetadataService);
+    const metadata = vi.spyOn(clients, "resolve").mockResolvedValue({
+      clientId,
+      clientName: "MCP test client",
+      redirectUris: [redirectUri],
+      allowRefresh: true,
+    });
+    const callMcp = (accessToken: string, requestBody: ReturnType<typeof mcpRequest>) => {
+      const pending = request(app.getHttpServer())
+        .post("/api/mcp")
+        .set("host", "localhost:4310")
+        .set("authorization", `Bearer ${accessToken}`)
+        .set("accept", "application/json, text/event-stream")
+        .set("mcp-protocol-version", "2026-07-28")
+        .set("mcp-method", requestBody.body.method);
+      if (requestBody.name) pending.set("mcp-name", requestBody.name);
+      return pending.send(requestBody.body);
+    };
+    const authorize = async (scope: string, state: string) => {
+      const parameters = {
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        resource,
+      };
+      await request(app.getHttpServer())
+        .get("/api/oauth/authorize")
+        .query(parameters)
+        .expect(303)
+        .expect(({ headers }) =>
+          expect(headers.location).toMatch(/^http:\/\/localhost:4310\/oauth\/authorize\?/)
+        );
+      await request(app.getHttpServer())
+        .get("/api/oauth/authorization-request")
+        .set("authorization", authorization)
+        .query(parameters)
+        .expect(200)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            clientName: "MCP test client",
+            clientHost: "client.example",
+            redirectHost: "127.0.0.1:9211",
+            redirectIsLoopback: true,
+            refreshAccess: true,
+          })
+        );
+      const decision = await request(app.getHttpServer())
+        .post("/api/oauth/authorization")
+        .set("authorization", authorization)
+        .send({ ...parameters, decision: "approve" })
+        .expect(200);
+      const redirect = new URL(decision.body.redirectUri);
+      expect(redirect.searchParams.get("state")).toBe(state);
+      expect(redirect.searchParams.get("iss")).toBe("http://localhost:4310");
+      return request(app.getHttpServer())
+        .post("/api/oauth/token")
+        .type("form")
+        .send({
+          grant_type: "authorization_code",
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          code: redirect.searchParams.get("code"),
+          code_verifier: verifier,
+          resource,
+        })
+        .expect(200);
+    };
+
+    try {
+      await request(app.getHttpServer())
+        .get("/.well-known/oauth-protected-resource/api/mcp")
+        .expect(200)
+        .expect(({ body }) =>
+          expect(body).toEqual({
+            resource,
+            authorization_servers: ["http://localhost:4310"],
+            bearer_methods_supported: ["header"],
+            scopes_supported: ["mcp:read"],
+          })
+        );
+      await request(app.getHttpServer())
+        .get("/.well-known/oauth-authorization-server")
+        .expect(200)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            issuer: "http://localhost:4310",
+            client_id_metadata_document_supported: true,
+            code_challenge_methods_supported: ["S256"],
+          })
+        );
+
+      const readTokens = await authorize("mcp:read", "read-state");
+      expect(readTokens.body).toMatchObject({
+        access_token: expect.stringMatching(/^mim_oat_/),
+        refresh_token: expect.stringMatching(/^mim_ort_/),
+        scope: "mcp:read",
+      });
+      await callMcp(readTokens.body.access_token, mcpRequest("tools/list", {}))
+        .expect(200)
+        .expect("cache-control", "no-store")
+        .expect(({ body }) => {
+          expect(body.result).toMatchObject({ ttlMs: 300_000, cacheScope: "public" });
+          expect(body.result.tools.map((tool: { name: string }) => tool.name)).toContain(
+            "get_team_overview"
+          );
+        });
+      await callMcp(
+        readTokens.body.access_token,
+        mcpRequest(
+          "tools/call",
+          { name: "get_team_overview", arguments: { teamId } },
+          "get_team_overview"
+        )
+      )
+        .expect(200)
+        .expect(({ body }) =>
+          expect(JSON.parse(body.result.content[0].text)).toMatchObject({ resources: 1 })
+        );
+      await request(app.getHttpServer())
+        .get("/api/auth/me")
+        .set("authorization", `Bearer ${readTokens.body.access_token}`)
+        .expect(401);
+      await callMcp(
+        readTokens.body.access_token,
+        mcpRequest(
+          "tools/call",
+          {
+            name: "update_resource",
+            arguments: { teamId, resourceId: createdResource.body.id, name: "Denied" },
+          },
+          "update_resource"
+        )
+      )
+        .expect(403)
+        .expect(({ headers }) =>
+          expect(headers["www-authenticate"]).toContain('scope="mcp:read mcp:write"')
+        );
+
+      const writeTokens = await authorize("mcp:read mcp:write", "write-state");
+      await callMcp(
+        writeTokens.body.access_token,
+        mcpRequest(
+          "tools/call",
+          {
+            name: "update_resource",
+            arguments: {
+              teamId,
+              resourceId: createdResource.body.id,
+              name: "Updated through MCP",
+            },
+          },
+          "update_resource"
+        )
+      )
+        .expect(200)
+        .expect(({ body }) =>
+          expect(JSON.parse(body.result.content[0].text)).toMatchObject({
+            id: createdResource.body.id,
+            name: "Updated through MCP",
+          })
+        );
+
+      const rotated = await request(app.getHttpServer())
+        .post("/api/oauth/token")
+        .type("form")
+        .send({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          refresh_token: readTokens.body.refresh_token,
+          resource,
+        })
+        .expect(200);
+      expect(rotated.body.refresh_token).not.toBe(readTokens.body.refresh_token);
+      await request(app.getHttpServer())
+        .post("/api/oauth/token")
+        .type("form")
+        .send({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          refresh_token: readTokens.body.refresh_token,
+          resource,
+        })
+        .expect(400)
+        .expect(({ body }) => expect(body.error).toBe("invalid_grant"));
+      await callMcp(rotated.body.access_token, mcpRequest("tools/list", {})).expect(401);
+    } finally {
+      metadata.mockRestore();
+    }
   });
 
   it("manages team invitations and team settings", async () => {

@@ -33,6 +33,6 @@ import { ResultsService } from "./results.service.js";
     ChecksService,
     ResultsService,
   ],
-  exports: [CheckConfigService, CheckOrchestratorService, ResultsService],
+  exports: [CheckConfigService, CheckOrchestratorService, ChecksService, ResultsService],
 })
 export class ChecksModule {}

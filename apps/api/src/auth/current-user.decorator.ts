@@ -4,6 +4,14 @@ import type { AuthenticatedUser } from "../common/rows.js";
 
 export interface AuthenticatedRequest extends Request {
   user: AuthenticatedUser;
+  authCredential?: {
+    type: "apiToken" | "oauth";
+    id: string;
+    expiresAt: string | null;
+    clientId?: string;
+    scopes: string[];
+    resource?: string;
+  };
 }
 
 export interface OptionallyAuthenticatedRequest extends Request {

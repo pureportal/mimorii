@@ -11,5 +11,6 @@ import { AnalyticsService } from "./analytics.service.js";
   imports: [AuthModule, TeamsModule, IncidentsModule, MaintenanceModule, ObjectivesModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

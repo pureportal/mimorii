@@ -6,6 +6,9 @@ import { AuthController } from "./auth.controller.js";
 import { AuthGuard } from "./auth.guard.js";
 import { AuthService } from "./auth.service.js";
 import { OptionalAuthGuard } from "./optional-auth.guard.js";
+import { OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
+import { OAuthController } from "./oauth.controller.js";
+import { OAuthService } from "./oauth.service.js";
 
 function jwtSecret(): string {
   const configured = process.env.MIMORII_JWT_SECRET;
@@ -25,8 +28,15 @@ function jwtSecret(): string {
       verifyOptions: { issuer: "mimorii", audience: "mimorii-web" },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, AuthGuard, OptionalAuthGuard, ApiTokensService],
-  exports: [AuthService, AuthGuard, OptionalAuthGuard, JwtModule],
+  controllers: [AuthController, OAuthController],
+  providers: [
+    AuthService,
+    AuthGuard,
+    OptionalAuthGuard,
+    ApiTokensService,
+    OAuthClientMetadataService,
+    OAuthService,
+  ],
+  exports: [AuthService, AuthGuard, OptionalAuthGuard, OAuthService, JwtModule],
 })
 export class AuthModule {}

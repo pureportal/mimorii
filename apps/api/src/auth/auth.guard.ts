@@ -5,6 +5,7 @@ import type { AuthenticatedUser, UserRow } from "../common/rows.js";
 import { hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
 import type { AuthenticatedRequest } from "./current-user.decorator.js";
+import { readBearerToken } from "./bearer-token.js";
 
 interface TokenPayload {
   sub: string;
@@ -13,6 +14,7 @@ interface TokenPayload {
 
 interface ApiTokenUserRow extends UserRow {
   api_token_id: string;
+  expires_at: string | null;
   last_used_at: string | null;
 }
 
@@ -25,13 +27,16 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const token = this.readToken(request);
+    const token = readBearerToken(request);
     if (!token) throw new UnauthorizedException("Sign in required");
+    if (token.startsWith("mim_oat_")) {
+      throw new UnauthorizedException("MCP OAuth tokens cannot access the REST API");
+    }
 
     if (token.startsWith("mim_pat_")) {
       const now = new Date().toISOString();
       const user = await this.database.get<ApiTokenUserRow>(
-        `SELECT u.*, at.id AS api_token_id, at.last_used_at FROM api_tokens at
+        `SELECT u.*, at.id AS api_token_id, at.expires_at, at.last_used_at FROM api_tokens at
          JOIN users u ON u.id = at.user_id
          WHERE at.token_hash = ?
          AND u.disabled_at IS NULL
@@ -47,7 +52,14 @@ export class AuthGuard implements CanActivate {
           user.api_token_id
         );
       }
-      (request as AuthenticatedRequest).user = this.authenticatedUser(user, "apiToken");
+      const authenticatedRequest = request as AuthenticatedRequest;
+      authenticatedRequest.user = this.authenticatedUser(user, "apiToken");
+      authenticatedRequest.authCredential = {
+        type: "apiToken",
+        id: user.api_token_id,
+        expiresAt: user.expires_at,
+        scopes: [],
+      };
       return true;
     }
 
@@ -78,11 +90,5 @@ export class AuthGuard implements CanActivate {
       isGlobalAdmin: user.is_global_admin,
       authMethod,
     };
-  }
-
-  private readToken(request: Request): string | undefined {
-    const authorization = request.headers.authorization;
-    if (!authorization?.startsWith("Bearer ")) return undefined;
-    return authorization.slice(7).trim() || undefined;
   }
 }

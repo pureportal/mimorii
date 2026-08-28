@@ -1211,6 +1211,19 @@ export interface CreatedApiToken {
   token: string;
 }
 
+export interface OAuthAuthorizationRequestSummary {
+  clientName: string;
+  clientHost: string;
+  redirectHost: string;
+  redirectIsLoopback: boolean;
+  refreshAccess: boolean;
+  scopes: Array<"mcp:read" | "mcp:write">;
+}
+
+export interface OAuthAuthorizationDecisionResult {
+  redirectUri: string;
+}
+
 export interface OverviewAnalytics {
   resources: number;
   checks: number;

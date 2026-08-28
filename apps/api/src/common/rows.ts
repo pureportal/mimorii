@@ -25,5 +25,5 @@ export interface AuthenticatedUser {
   name: string;
   tokenVersion: number;
   isGlobalAdmin: boolean;
-  authMethod: "session" | "apiToken";
+  authMethod: "session" | "apiToken" | "oauth";
 }

@@ -17,6 +17,7 @@ import { HealthModule } from "./health/health.module.js";
 import { HeartbeatsModule } from "./heartbeats/heartbeats.module.js";
 import { IncidentsModule } from "./incidents/incidents.module.js";
 import { MaintenanceModule } from "./maintenance/maintenance.module.js";
+import { McpModule } from "./mcp/mcp.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { ObjectivesModule } from "./objectives/objectives.module.js";
 import { PlatformSettingsModule } from "./platform-settings/platform-settings.module.js";
@@ -56,6 +57,7 @@ import { TeamsModule } from "./teams/teams.module.js";
     AgentsModule,
     IncidentsModule,
     MaintenanceModule,
+    McpModule,
     NotificationsModule,
     ObjectivesModule,
     StatusPagesModule,

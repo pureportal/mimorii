@@ -31,6 +31,8 @@
     "@mikro-orm/nestjs": "6.1.1",
     "@mikro-orm/postgresql": "6.6.14",
     "@mimorii/contracts": "workspace:*",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@nestjs/common": "^11.1.21",
     "@nestjs/core": "^11.1.21",
     "@nestjs/jwt": "^11.0.2",
@@ -54,7 +56,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.35.3",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@mikro-orm/cli": "6.6.14",
