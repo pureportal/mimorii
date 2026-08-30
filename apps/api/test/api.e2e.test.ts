@@ -2394,7 +2394,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
             resource,
             authorization_servers: ["http://localhost:4310"],
             bearer_methods_supported: ["header"],
-            scopes_supported: ["mcp:read"],
+            scopes_supported: ["mcp:read", "mcp:write"],
+            resource_documentation: "http://localhost:4310/mcp",
           })
         );
       await request(app.getHttpServer())
