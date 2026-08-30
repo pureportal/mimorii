@@ -18,9 +18,13 @@ const androidAgentConfig = readJson("apps/client/src-tauri/tauri.android-agent.c
 const androidAssetLinks = readJson("apps/client/public/.well-known/assetlinks.json");
 const openApi = readJson("apps/api/openapi/mimorii.openapi.json");
 const clientCargo = readFile("apps/client/src-tauri/Cargo.toml");
+const clientCargoLock = readFile("apps/client/src-tauri/Cargo.lock");
 const agentCargo = readFile("apps/agent-desktop/Cargo.toml");
+const agentCargoLock = readFile("apps/agent-desktop/Cargo.lock");
 const agentUiCargo = readFile("apps/agent-desktop-ui/Cargo.toml");
+const agentUiCargoLock = readFile("apps/agent-desktop-ui/Cargo.lock");
 const mobileAgentCargo = readFile("apps/agent-mobile/Cargo.toml");
+const mobileAgentCargoLock = readFile("apps/agent-mobile/Cargo.lock");
 const pushCargo = readFile("apps/client/src-tauri/plugins/push/Cargo.toml");
 const tauriEntryPoint = readFile("apps/client/src-tauri/src/lib.rs");
 const clientEntryPoint = readFile("apps/client/src/main.tsx");
@@ -39,10 +43,34 @@ const versions = new Map([
   ["apps/client/package.json", clientPackage.version],
   ["packages/contracts/package.json", readJson("packages/contracts/package.json").version],
   ["apps/agent-desktop/Cargo.toml", cargoPackageValue(agentCargo, "version")],
+  [
+    "apps/agent-desktop/Cargo.lock#mimorii-agent-desktop",
+    cargoLockPackageVersion(agentCargoLock, "mimorii-agent-desktop"),
+  ],
   ["apps/agent-desktop-ui/Cargo.toml", cargoPackageValue(agentUiCargo, "version")],
+  [
+    "apps/agent-desktop-ui/Cargo.lock#mimorii-agent-desktop-ui",
+    cargoLockPackageVersion(agentUiCargoLock, "mimorii-agent-desktop-ui"),
+  ],
   ["apps/agent-mobile/Cargo.toml", cargoPackageValue(mobileAgentCargo, "version")],
+  [
+    "apps/agent-mobile/Cargo.lock#tauri-plugin-agent-mobile",
+    cargoLockPackageVersion(mobileAgentCargoLock, "tauri-plugin-agent-mobile"),
+  ],
   ["apps/client/src-tauri/Cargo.toml", cargoPackageValue(clientCargo, "version")],
+  [
+    "apps/client/src-tauri/Cargo.lock#mimorii-client",
+    cargoLockPackageVersion(clientCargoLock, "mimorii-client"),
+  ],
+  [
+    "apps/client/src-tauri/Cargo.lock#tauri-plugin-agent-mobile",
+    cargoLockPackageVersion(clientCargoLock, "tauri-plugin-agent-mobile"),
+  ],
   ["apps/client/src-tauri/plugins/push/Cargo.toml", cargoPackageValue(pushCargo, "version")],
+  [
+    "apps/client/src-tauri/Cargo.lock#tauri-plugin-push",
+    cargoLockPackageVersion(clientCargoLock, "tauri-plugin-push"),
+  ],
   ["apps/client/src-tauri/tauri.conf.json", tauriConfig.version],
   ["apps/api/openapi/mimorii.openapi.json", openApi.info?.version],
 ]);
@@ -423,6 +451,16 @@ function cargoPackageValue(manifest, name) {
   const value = packageSection.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, "m"))?.[1];
   if (!value) throw new Error(`Cargo package field is missing: ${name}`);
   return value;
+}
+
+function cargoLockPackageVersion(lockFile, packageName) {
+  const packageSection = lockFile
+    .split(/^\[\[package\]\]\s*$/m)
+    .find((section) => section.match(/^name\s*=\s*"([^"]+)"/m)?.[1] === packageName);
+  if (!packageSection) throw new Error(`Cargo lock package is missing: ${packageName}`);
+  const packageVersion = packageSection.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+  if (!packageVersion) throw new Error(`Cargo lock package version is missing: ${packageName}`);
+  return packageVersion;
 }
 
 function parseSemver(value) {
