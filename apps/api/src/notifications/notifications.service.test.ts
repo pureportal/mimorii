@@ -47,4 +47,23 @@ describe("notification occurrence queue", () => {
     expect(database.run.mock.calls[0]![6]).toMatch(/^[a-f0-9]{64}$/);
     expect(database.run.mock.calls[1]![6]).toBe(database.run.mock.calls[0]![6]);
   });
+
+  it("does not delete All rules when a channel is removed", async () => {
+    const run = vi.fn(async (..._parameters: unknown[]) => ({ changes: 1 }));
+    const service = new NotificationsService(
+      {
+        run,
+        transaction: vi.fn(async (action: () => Promise<unknown>) => action()),
+      } as never,
+      { require: vi.fn(async () => ({ role: "owner" })) } as never,
+      { record: vi.fn(async () => undefined) } as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+
+    await service.remove("user-1", "team-1", "channel-1");
+
+    expect(run.mock.calls[1]?.[0]).toContain("all_channels = 0");
+  });
 });

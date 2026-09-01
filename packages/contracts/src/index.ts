@@ -599,6 +599,7 @@ export interface NotificationPolicySummary {
   name: string;
   events: NotificationEvent[];
   condition: NotificationConditionGroup;
+  allChannels: boolean;
   channelIds: string[];
   channelNames: string[];
   enabled: boolean;

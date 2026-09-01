@@ -19,14 +19,7 @@ import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
-const defaultEvents: NotificationEvent[] = [
-  "incident.opened",
-  "incident.resolved",
-  "check.degraded",
-  "check.recovered",
-  "resource.alert.triggered",
-  "resource.alert.recovered",
-];
+const defaultEvents: NotificationEvent[] = [...notificationEvents];
 
 const fields = [
   "severity",
@@ -80,17 +73,17 @@ export function NotificationPolicyDialog({
   const [condition, setCondition] = useState<NotificationConditionGroup>(
     policy?.condition ?? emptyGroup()
   );
-  const [channelIds, setChannelIds] = useState<string[]>(
-    policy?.channelIds ?? channels.map((channel) => channel.id)
-  );
+  const [channelIds, setChannelIds] = useState<string[]>(policy?.channelIds ?? []);
+  const [allChannels, setAllChannels] = useState(policy?.allChannels ?? true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setEvents(policy?.events ?? defaultEvents);
     setCondition(policy?.condition ?? emptyGroup());
-    setChannelIds(policy?.channelIds ?? channels.map((channel) => channel.id));
-  }, [channels, open, policy]);
+    setChannelIds(policy?.channelIds ?? []);
+    setAllChannels(policy?.allChannels ?? true);
+  }, [open, policy]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,7 +91,7 @@ export function NotificationPolicyDialog({
       toast.error("Select at least one event");
       return;
     }
-    if (!channelIds.length) {
+    if (!allChannels && !channelIds.length) {
       toast.error("Select at least one channel");
       return;
     }
@@ -111,7 +104,8 @@ export function NotificationPolicyDialog({
           name: form.get("name"),
           events,
           condition,
-          channelIds,
+          allChannels,
+          ...(allChannels ? {} : { channelIds }),
           enabled: form.get("enabled") === "on",
         }),
       });
@@ -169,18 +163,22 @@ export function NotificationPolicyDialog({
           <Field>
             <FieldLabel>Channels</FieldLabel>
             <div className="grid gap-2 rounded-xl border border-line p-3 sm:grid-cols-2">
+              <Checkbox label="All" checked={allChannels} onChange={setAllChannels} />
               {channels.map((channel) => (
                 <Checkbox
                   key={channel.id}
                   label={channel.name}
-                  checked={channelIds.includes(channel.id)}
-                  onChange={(checked) =>
+                  checked={!allChannels && channelIds.includes(channel.id)}
+                  onChange={(checked) => {
+                    setAllChannels(false);
                     setChannelIds(
                       checked
-                        ? [...channelIds, channel.id]
+                        ? allChannels
+                          ? [channel.id]
+                          : [...channelIds, channel.id]
                         : channelIds.filter((value) => value !== channel.id)
-                    )
-                  }
+                    );
+                  }}
                 />
               ))}
             </div>

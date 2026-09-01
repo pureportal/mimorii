@@ -16,6 +16,7 @@ import { AuditService } from "../common/audit.service.js";
 import { hashPassword, verifyPassword } from "../common/crypto.js";
 import type { AuthenticatedUser, UserRow } from "../common/rows.js";
 import { DatabaseService } from "../database/database.service.js";
+import { createDefaultNotificationPolicy } from "../notifications/default-notification-policy.js";
 import { PlatformSettingsService } from "../platform-settings/platform-settings.service.js";
 import type { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from "./auth.dto.js";
 
@@ -87,6 +88,7 @@ export class AuthService {
         userId,
         now
       );
+      await createDefaultNotificationPolicy(this.database, userId, teamId, now);
     });
 
     await this.audit.record({

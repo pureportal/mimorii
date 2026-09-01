@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditService } from "../common/audit.service.js";
 import type { DatabaseService } from "../database/database.service.js";
+import { defaultNotificationPolicyName } from "../notifications/default-notification-policy.js";
 import type { TeamAccessService } from "./team-access.service.js";
 import type { TeamLogosService } from "./team-logos.service.js";
 import { TeamsService } from "./teams.service.js";
@@ -9,7 +10,7 @@ function setup() {
   const database = {
     all: vi.fn(),
     get: vi.fn(),
-    run: vi.fn(async () => ({ changes: 1 })),
+    run: vi.fn(async (..._parameters: unknown[]) => ({ changes: 1 })),
     transaction: vi.fn(async (action: () => Promise<unknown>) => action()),
   };
   const access = { require: vi.fn(async () => ({ role: "owner" })) };
@@ -79,6 +80,10 @@ describe("TeamsService", () => {
     expect(logos.prepare).toHaveBeenCalledWith(input);
     expect(logos.store).toHaveBeenCalledWith(expect.any(String), Buffer.from("prepared:logo"));
     expect(database.transaction).toHaveBeenCalledOnce();
+    const defaultRule = database.run.mock.calls.find(([sql]) =>
+      String(sql).includes("INSERT INTO notification_policies")
+    );
+    expect(defaultRule?.[3]).toBe(defaultNotificationPolicyName);
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "team.created" }));
   });
 

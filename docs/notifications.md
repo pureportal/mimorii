@@ -110,7 +110,7 @@ For a locally signed APK, add the SHA-1 fingerprint of the local signing certifi
 1. Sign in on the browser or Android Client.
 2. Open **Account** and enable **This device**. Accept the notification permission prompt.
 3. As a team owner or admin, open **Alerting**, then **Channels**, add **Browser and Android**, and select the users.
-4. Open **Routing rules** and route the required events to that channel. Include **Check degraded** for threshold failures and **Incident opened** for outages.
+4. Open **Routing rules** and review **Notify All Everywhere**, which sends every event to all enabled channels. Edit it if the team needs narrower routing.
 5. Use **Test** on the channel. Delivery results appear in **Delivery history**.
 
 Disabling **This device** or signing out unregisters that browser subscription or Android installation and removes it from the account. Provider responses for expired or revoked registrations also invalidate them automatically without interrupting monitoring.

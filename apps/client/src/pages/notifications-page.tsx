@@ -156,7 +156,6 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
         ) : section === "rules" ? (
           <Button
             variant="coral"
-            disabled={!channels.data?.length}
             onClick={() => {
               setSelectedPolicy(null);
               setPolicyDialogOpen(true);
@@ -254,7 +253,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                             {policy.enabled ? "Enabled" : "Disabled"}
                           </StatusBadge>
                         </div>
-                        <p className="mt-1 text-sm text-muted">{policy.channelNames.join(", ")}</p>
+                        <p className="mt-1 text-sm text-muted">
+                          {policy.allChannels ? "All" : policy.channelNames.join(", ")}
+                        </p>
                         <p className="mt-2 text-xs text-muted">
                           {formatCount(policy.events.length, "event")}
                           {conditionCount(policy.condition)

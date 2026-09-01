@@ -5661,6 +5661,10 @@
               }
             ]
           },
+          "allChannels": {
+            "type": "boolean",
+            "default": false
+          },
           "channelIds": {
             "maxItems": 20,
             "type": "array",
@@ -5677,8 +5681,7 @@
         "required": [
           "name",
           "events",
-          "condition",
-          "channelIds"
+          "condition"
         ]
       },
       "UpdateNotificationPolicyDto": {
@@ -5713,6 +5716,10 @@
                 "$ref": "#/components/schemas/NotificationConditionGroupDto"
               }
             ]
+          },
+          "allChannels": {
+            "type": "boolean",
+            "default": false
           },
           "channelIds": {
             "maxItems": 20,

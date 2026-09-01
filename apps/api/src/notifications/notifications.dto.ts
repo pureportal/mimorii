@@ -144,13 +144,18 @@ export class CreateNotificationPolicyDto {
   @IsObject()
   condition!: NotificationConditionGroupContract;
 
-  @ApiProperty({ type: [String], format: "uuid", maxItems: 20 })
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  allChannels?: boolean;
+
+  @ApiPropertyOptional({ type: [String], format: "uuid", maxItems: 20 })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(20)
   @ArrayUnique()
   @IsUUID(undefined, { each: true })
-  channelIds!: string[];
+  channelIds?: string[];
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()

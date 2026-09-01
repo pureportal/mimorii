@@ -218,7 +218,8 @@ export class NotificationsService {
       );
       if (deleted.changes > 0) {
         await this.database.run(
-          `DELETE FROM notification_policies WHERE team_id = ? AND NOT EXISTS (
+          `DELETE FROM notification_policies WHERE team_id = ? AND all_channels = 0
+           AND NOT EXISTS (
              SELECT 1 FROM notification_policy_channels npc
              WHERE npc.policy_id = notification_policies.id
            )`,

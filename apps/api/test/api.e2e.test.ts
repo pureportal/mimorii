@@ -1,5 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
-import { termsVersion } from "@mimorii/contracts";
+import { notificationEvents, termsVersion } from "@mimorii/contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -143,6 +143,86 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(openapi.body.paths["/api/teams/{teamId}/notifications/policies"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/resources/{id}/metrics"]).toBeDefined();
     expect(openapi.body.paths["/api/teams/{teamId}/resources/{resourceId}/alerts"]).toBeDefined();
+  });
+
+  it("creates the notification default only for newly created teams", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const account = await register(`notification-default-${suffix}@example.com`, "Rule owner");
+    const teamId = account.teams[0]!.id;
+    const authorization = `Bearer ${account.accessToken}`;
+    const expectedDefault = {
+      name: "Notify All Everywhere",
+      events: notificationEvents,
+      condition: { kind: "group", operator: "and", conditions: [] },
+      allChannels: true,
+      channelIds: [],
+      channelNames: [],
+      enabled: true,
+    };
+
+    const initialRules = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/notifications/policies`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(initialRules.body).toHaveLength(1);
+    expect(initialRules.body[0]).toMatchObject(expectedDefault);
+
+    const channel = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/notifications/channels`)
+      .set("authorization", authorization)
+      .send({
+        name: "Selected email",
+        type: "email",
+        emailRecipients: ["alerts@example.com"],
+        enabled: true,
+      })
+      .expect(201);
+    await expect(
+      app.get(NotificationsService).enqueue(teamId, "incident.opened", {
+        title: "Default routing check",
+        message: "The default rule routes to a channel added after team creation.",
+        dedupeKey: `default-routing:${suffix}`,
+        occurredAt: new Date().toISOString(),
+      })
+    ).resolves.toHaveLength(1);
+    const existingRule = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/notifications/policies`)
+      .set("authorization", authorization)
+      .send({
+        name: "Selected recoveries",
+        events: ["incident.resolved"],
+        condition: { kind: "group", operator: "and", conditions: [] },
+        allChannels: false,
+        channelIds: [channel.body.id],
+        enabled: false,
+      })
+      .expect(201);
+
+    const nextTeam = await request(app.getHttpServer())
+      .post("/api/teams")
+      .set("authorization", authorization)
+      .send({ name: "Second team" })
+      .expect(201);
+    const nextTeamRules = await request(app.getHttpServer())
+      .get(`/api/teams/${nextTeam.body.id}/notifications/policies`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(nextTeamRules.body).toHaveLength(1);
+    expect(nextTeamRules.body[0]).toMatchObject(expectedDefault);
+
+    const originalRules = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/notifications/policies`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(originalRules.body).toHaveLength(2);
+    expect(
+      originalRules.body.find((rule: { id: string }) => rule.id === existingRule.body.id)
+    ).toMatchObject({
+      events: ["incident.resolved"],
+      allChannels: false,
+      channelIds: [channel.body.id],
+      enabled: false,
+    });
   });
 
   it("lists published sponsors and accepts validated sponsorship applications", async () => {
@@ -1990,7 +2070,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .get(`/api/teams/${teamId}/notifications/deliveries`)
       .set("authorization", authorization)
       .expect(200);
-    expect(beforeMajor.body).toHaveLength(1);
+    expect(beforeMajor.body).toHaveLength(2);
 
     await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/incidents`)

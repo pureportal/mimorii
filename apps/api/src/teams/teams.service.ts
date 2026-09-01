@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
 import { createSecret, hashSecret } from "../common/crypto.js";
 import { DatabaseService } from "../database/database.service.js";
+import { createDefaultNotificationPolicy } from "../notifications/default-notification-policy.js";
 import type {
   CreateTeamDto,
   DeleteTeamDto,
@@ -87,6 +88,7 @@ export class TeamsService {
         userId,
         now
       );
+      await createDefaultNotificationPolicy(this.database, userId, id, now);
       if (logo) logoUpdatedAt = await this.logos.store(id, logo);
     });
     await this.audit.record({

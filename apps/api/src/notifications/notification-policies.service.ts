@@ -23,6 +23,7 @@ interface PolicyRow {
   name: string;
   events_json: string;
   condition_json: string;
+  all_channels: number;
   enabled: number;
   created_at: string;
 }
@@ -62,19 +63,22 @@ export class NotificationPoliciesService {
     ))!.count;
     if (count >= 500) throw new BadRequestException("Notification policy limit reached");
     const condition = this.validCondition(input.condition);
-    const channelIds = await this.validateChannels(teamId, input.channelIds);
+    const allChannels = input.allChannels === true;
+    const channelIds = await this.resolveChannels(teamId, allChannels, input.channelIds);
     const id = randomUUID();
     const now = new Date().toISOString();
     await this.database.transaction(async () => {
       await this.database.run(
         `INSERT INTO notification_policies
-         (id, team_id, name, events_json, condition_json, enabled, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, team_id, name, events_json, condition_json, all_channels, enabled, created_by,
+          created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         teamId,
         name,
         JSON.stringify([...new Set(input.events)]),
         JSON.stringify(condition),
+        allChannels ? 1 : 0,
         input.enabled === false ? 0 : 1,
         userId,
         now,
@@ -105,16 +109,25 @@ export class NotificationPoliciesService {
     const condition = input.condition
       ? this.validCondition(input.condition)
       : this.parseCondition(current);
-    const channelIds = input.channelIds
-      ? await this.validateChannels(teamId, input.channelIds)
-      : (await this.channels(id)).map((channel) => channel.id);
+    const allChannels = input.allChannels ?? Boolean(current.all_channels);
+    let channelIds: string[];
+    if (allChannels) {
+      channelIds = await this.resolveChannels(teamId, true, input.channelIds);
+    } else if (input.channelIds) {
+      channelIds = await this.resolveChannels(teamId, false, input.channelIds);
+    } else if (current.all_channels) {
+      channelIds = await this.resolveChannels(teamId, false, []);
+    } else {
+      channelIds = (await this.channels(id)).map((channel) => channel.id);
+    }
     await this.database.transaction(async () => {
       await this.database.run(
         `UPDATE notification_policies SET name = ?, events_json = ?, condition_json = ?,
-         enabled = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
+         all_channels = ?, enabled = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
         name,
         JSON.stringify(input.events ?? (JSON.parse(current.events_json) as NotificationEvent[])),
         JSON.stringify(condition),
+        allChannels ? 1 : 0,
         (input.enabled ?? Boolean(current.enabled)) ? 1 : 0,
         new Date().toISOString(),
         id,
@@ -168,6 +181,13 @@ export class NotificationPoliciesService {
         );
       }
     }
+    if (matches.some((policy) => Boolean(policy.all_channels))) {
+      const channels = await this.database.all<{ id: string }>(
+        "SELECT id FROM notification_channels WHERE team_id = ?",
+        teamId
+      );
+      return new Set(channels.map((channel) => channel.id));
+    }
     const channels = await Promise.all(matches.map((policy) => this.channels(policy.id)));
     return new Set(channels.flat().map((channel) => channel.id));
   }
@@ -212,6 +232,20 @@ export class NotificationPoliciesService {
       throw new BadRequestException("A notification channel is unavailable");
     }
     return ids;
+  }
+
+  private async resolveChannels(
+    teamId: string,
+    allChannels: boolean,
+    channelIds: string[] | undefined
+  ): Promise<string[]> {
+    if (allChannels) {
+      if (channelIds?.length) {
+        throw new BadRequestException("Choose all channels or individual channels");
+      }
+      return [];
+    }
+    return this.validateChannels(teamId, channelIds ?? []);
   }
 
   private async replaceChannels(policyId: string, channelIds: string[]): Promise<void> {
@@ -280,6 +314,7 @@ export class NotificationPoliciesService {
       name: row.name,
       events: JSON.parse(row.events_json) as NotificationEvent[],
       condition: this.parseCondition(row),
+      allChannels: Boolean(row.all_channels),
       channelIds: channels.map((channel) => channel.id),
       channelNames: channels.map((channel) => channel.name),
       enabled: Boolean(row.enabled),

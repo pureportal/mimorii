@@ -63,11 +63,14 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         `SELECT table_name, column_name FROM information_schema.columns
          WHERE table_schema = 'public'
          AND ((table_name = 'notification_policies'
-           AND column_name IN ('condition_json', 'minimum_impact', 'resource_tags_json'))
+           AND column_name IN (
+             'all_channels', 'condition_json', 'minimum_impact', 'resource_tags_json'
+           ))
           OR (table_name = 'notification_deliveries' AND column_name = 'claimed_at'))`
       );
       expect(notificationRuleColumns).toEqual(
         expect.arrayContaining([
+          { table_name: "notification_policies", column_name: "all_channels" },
           { table_name: "notification_policies", column_name: "condition_json" },
           { table_name: "notification_deliveries", column_name: "claimed_at" },
         ])
@@ -241,7 +244,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20260902000000");
+      expect(migration?.name).toBe("Migration20260903000000");
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
