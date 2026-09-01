@@ -19,8 +19,8 @@ import { toast } from "sonner";
 import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckDialog, type CheckPayload } from "../components/check-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
+import { CheckStatusIndicator } from "../components/check-status-indicator";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
-import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
@@ -197,29 +197,38 @@ export function ChecksPage() {
             {visibleChecks.map((check) => (
               <article
                 key={check.id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-4 px-4 py-4 transition-colors hover:bg-ink/[.018] sm:px-5 lg:grid-cols-[minmax(240px,1fr)_minmax(210px,.8fr)_110px_135px_auto] lg:items-center"
+                className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.5rem] gap-x-3 gap-y-4 px-4 py-4 transition-colors hover:bg-ink/[.018] sm:px-5 lg:grid-cols-[minmax(240px,1fr)_2.75rem_minmax(210px,.8fr)_110px_135px_2.5rem] lg:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
                     <Activity className="size-4" />
                   </span>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate font-semibold">{check.name}</p>
-                      <StatusBadge status={check.status} />
-                    </div>
+                    <p className="truncate font-semibold">{check.name}</p>
                     <p className="mt-1 truncate text-xs text-muted">
                       {resourceNames.get(check.resourceId)} · {checkTypeLabel(check.type)}
                     </p>
                   </div>
                 </div>
-                <CheckHealthSummary check={check} className="col-span-2 min-w-0 lg:col-span-1" />
-                <CheckStat
-                  label={`${checkPassingLabel(check.type)} · 24h`}
-                  value={formatPercent(check.passing24h)}
-                />
-                <CheckStat label="Last run" value={formatRelative(check.lastCheckedAt)} />
-                <div className="col-start-2 row-start-1 self-start justify-self-end lg:col-auto lg:row-auto">
+                <div
+                  data-check-status-column
+                  className="col-start-2 row-start-1 grid place-items-center self-center"
+                >
+                  <CheckStatusIndicator
+                    checkName={check.name}
+                    status={check.status}
+                    type={check.type}
+                  />
+                </div>
+                <CheckHealthSummary check={check} className="col-span-3 min-w-0 lg:col-span-1" />
+                <div className="col-span-3 grid grid-cols-2 gap-3 lg:contents">
+                  <CheckStat
+                    label={`${checkPassingLabel(check.type)} · 24h`}
+                    value={formatPercent(check.passing24h)}
+                  />
+                  <CheckStat label="Last run" value={formatRelative(check.lastCheckedAt)} />
+                </div>
+                <div className="col-start-3 row-start-1 self-start justify-self-end lg:col-auto lg:row-auto">
                   <CheckActions
                     check={check}
                     onDetails={() => setDetailsCheck(check)}

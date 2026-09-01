@@ -39,6 +39,7 @@ const pausedCheck = createCheck("check-paused", "Certificate", false);
 const healthCheck: CheckSummary = {
   ...createCheck("check-health", "Health", true),
   type: "host",
+  status: "okay",
   config: {
     cpuWarningPercent: 80,
     cpuCriticalPercent: 95,
@@ -174,17 +175,48 @@ describe("ChecksPage actions", () => {
     );
   });
 
-  it("shows evaluated health separately from a stale reporter", async () => {
+  it("keeps each icon-only status in the same dedicated column", async () => {
     renderPage();
 
-    const okayRow = (await screen.findByText("Availability")).closest("article");
+    await screen.findByText("Availability");
+    const rows = screen.getAllByRole("article");
+    const columns = rows.map((row) => row.querySelector("[data-check-status-column]"));
+
+    expect(rows[0]).toHaveClass(
+      "lg:grid-cols-[minmax(240px,1fr)_2.75rem_minmax(210px,.8fr)_110px_135px_2.5rem]"
+    );
+    expect(new Set(columns.map((column) => column?.className)).size).toBe(1);
+    for (const [index, column] of columns.entries()) {
+      expect(column).toBe(rows[index]?.children[1]);
+      expect(column?.textContent).toBe("");
+      expect(column).toBeInstanceOf(HTMLElement);
+      if (column instanceof HTMLElement) {
+        expect(within(column).getByRole("img")).toBeInTheDocument();
+      }
+    }
+  });
+
+  it("shows evaluated health separately from a stale reporter in status tooltips", async () => {
+    renderPage();
+
+    const upRow = (await screen.findByText("Availability")).closest("article");
     const criticalRow = screen.getByText("Disk usage").closest("article");
     const downRow = screen.getByText("Offline host").closest("article");
 
-    expect(within(okayRow!).getByText("up")).toBeInTheDocument();
-    expect(within(criticalRow!).getByText("critical")).toBeInTheDocument();
-    expect(within(criticalRow!).queryByText("down")).not.toBeInTheDocument();
-    expect(within(downRow!).getByText("down")).toBeInTheDocument();
+    expect(
+      within(upRow!).getByRole("img", { name: "Availability status: Up" })
+    ).toBeInTheDocument();
+    expect(within(criticalRow!).queryByText("critical")).not.toBeInTheDocument();
+    expect(within(downRow!).queryByText("down")).not.toBeInTheDocument();
+
+    fireEvent.focus(within(criticalRow!).getByRole("img", { name: "Disk usage status: Critical" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "A health metric reached its critical threshold."
+    );
+
+    fireEvent.blur(within(criticalRow!).getByRole("img", { name: "Disk usage status: Critical" }));
+    fireEvent.focus(within(downRow!).getByRole("img", { name: "Offline host status: Down" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("The reporter is offline.");
   });
 
   it("opens check details with CPU and memory history", async () => {
