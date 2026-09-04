@@ -210,3 +210,79 @@ describe("incident updates", () => {
     });
   });
 });
+
+describe("incident list hydration", () => {
+  it("loads related resources and updates in two batch queries", async () => {
+    const secondIncident = {
+      ...incident,
+      id: "incident-2",
+      title: "API unavailable",
+      check_id: "check-2",
+    };
+    const database = {
+      all: vi.fn(async (sql: string) => {
+        if (sql.includes("FROM incidents WHERE")) return [incident, secondIncident];
+        if (sql.includes("FROM resources r")) {
+          return [
+            { incident_id: incident.id, id: "resource-1", name: "Database" },
+            { incident_id: secondIncident.id, id: "resource-2", name: "API" },
+          ];
+        }
+        if (sql.includes("FROM incident_updates iu")) {
+          return [
+            {
+              id: "update-1",
+              incident_id: incident.id,
+              status: "investigating",
+              message: "Investigating",
+              created_by_name: "Operator",
+              created_at: incident.started_at,
+            },
+            {
+              id: "update-2",
+              incident_id: secondIncident.id,
+              status: "investigating",
+              message: "Investigating",
+              created_by_name: null,
+              created_at: secondIncident.started_at,
+            },
+          ];
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+    };
+    const service = new IncidentsService(
+      database as never,
+      { require: vi.fn().mockResolvedValue(undefined) } as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+
+    const result = await service.list("user-1", "team-1");
+
+    expect(database.all).toHaveBeenCalledTimes(3);
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: incident.id,
+        resources: [{ id: "resource-1", name: "Database" }],
+        updates: [expect.objectContaining({ id: "update-1", createdByName: "Operator" })],
+      }),
+      expect.objectContaining({
+        id: secondIncident.id,
+        resources: [{ id: "resource-2", name: "API" }],
+        updates: [expect.objectContaining({ id: "update-2", createdByName: null })],
+      }),
+    ]);
+    expect(database.all).toHaveBeenCalledWith(
+      expect.stringContaining("ir.incident_id IN (?,?)"),
+      incident.id,
+      secondIncident.id
+    );
+    expect(database.all).toHaveBeenCalledWith(
+      expect.stringContaining("iu.incident_id IN (?,?)"),
+      incident.id,
+      secondIncident.id
+    );
+  });
+});

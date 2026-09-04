@@ -45,6 +45,10 @@ interface IncidentUpdateRow {
   created_by_name: string | null;
 }
 
+interface IncidentResourceRow extends IncidentResource {
+  incident_id: string;
+}
+
 interface CheckContext {
   id: string;
   team_id: string;
@@ -117,7 +121,7 @@ export class IncidentsService {
       teamId,
       Math.min(Math.max(options.limit ?? 100, 1), 500)
     );
-    return Promise.all(rows.map((row) => this.map(row)));
+    return this.mapRows(rows);
   }
 
   async get(userId: string, teamId: string, id: string): Promise<IncidentSummary> {
@@ -545,7 +549,7 @@ export class IncidentsService {
       ...resourceIds,
       resolvedSince
     );
-    return Promise.all(rows.map((row) => this.map(row)));
+    return this.mapRows(rows);
   }
 
   private async checkContext(checkId: string): Promise<CheckContext> {
@@ -639,18 +643,56 @@ export class IncidentsService {
          ORDER BY iu.created_at DESC`,
         id
       )
-    ).map((row) => ({
-      id: row.id,
-      incidentId: row.incident_id,
-      status: row.status,
-      message: row.message,
-      createdByName: row.created_by_name,
-      createdAt: row.created_at,
-    }));
+    ).map((row) => this.mapUpdate(row));
   }
 
   private async map(row: IncidentRow): Promise<IncidentSummary> {
-    const end = row.resolved_at ? new Date(row.resolved_at).getTime() : Date.now();
+    const mappedAt = Date.now();
+    const [resources, updates] = await Promise.all([this.resources(row.id), this.updates(row.id)]);
+    return this.mapSummary(row, resources, updates, mappedAt);
+  }
+
+  private async mapRows(rows: IncidentRow[]): Promise<IncidentSummary[]> {
+    if (rows.length === 0) return [];
+    const mappedAt = Date.now();
+    const ids = rows.map((row) => row.id);
+    const placeholders = ids.map(() => "?").join(",");
+    const [resourceRows, updateRows] = await Promise.all([
+      this.database.all<IncidentResourceRow>(
+        `SELECT ir.incident_id, r.id, r.name FROM resources r
+         JOIN incident_resources ir ON ir.resource_id = r.id
+         WHERE ir.incident_id IN (${placeholders})
+         ORDER BY ir.incident_id, LOWER(r.name)`,
+        ...ids
+      ),
+      this.database.all<IncidentUpdateRow>(
+        `SELECT iu.*, u.name AS created_by_name FROM incident_updates iu
+         LEFT JOIN users u ON u.id = iu.created_by
+         WHERE iu.incident_id IN (${placeholders})
+         ORDER BY iu.incident_id, iu.created_at DESC`,
+        ...ids
+      ),
+    ]);
+    const resources = new Map<string, IncidentResource[]>(ids.map((id) => [id, []]));
+    const updates = new Map<string, IncidentUpdate[]>(ids.map((id) => [id, []]));
+    for (const resource of resourceRows) {
+      resources.get(resource.incident_id)?.push({ id: resource.id, name: resource.name });
+    }
+    for (const update of updateRows) {
+      updates.get(update.incident_id)?.push(this.mapUpdate(update));
+    }
+    return rows.map((row) =>
+      this.mapSummary(row, resources.get(row.id) ?? [], updates.get(row.id) ?? [], mappedAt)
+    );
+  }
+
+  private mapSummary(
+    row: IncidentRow,
+    resources: IncidentResource[],
+    updates: IncidentUpdate[],
+    mappedAt: number
+  ): IncidentSummary {
+    const end = row.resolved_at ? new Date(row.resolved_at).getTime() : mappedAt;
     return {
       id: row.id,
       teamId: row.team_id,
@@ -664,8 +706,19 @@ export class IncidentsService {
       acknowledgedAt: row.acknowledged_at,
       resolvedAt: row.resolved_at,
       durationSeconds: Math.max(0, Math.floor((end - new Date(row.started_at).getTime()) / 1_000)),
-      resources: await this.resources(row.id),
-      updates: await this.updates(row.id),
+      resources,
+      updates,
+    };
+  }
+
+  private mapUpdate(row: IncidentUpdateRow): IncidentUpdate {
+    return {
+      id: row.id,
+      incidentId: row.incident_id,
+      status: row.status,
+      message: row.message,
+      createdByName: row.created_by_name,
+      createdAt: row.created_at,
     };
   }
 }
