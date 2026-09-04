@@ -25,6 +25,14 @@ interface ObjectiveRow {
   check_name: string | null;
 }
 
+interface ObjectiveStatistics {
+  observation_total: number;
+  availability: number | null;
+  latency_p95: number | null;
+}
+
+interface ObjectiveSummaryRow extends ObjectiveRow, ObjectiveStatistics {}
+
 @Injectable()
 export class ObjectivesService {
   private evaluating = false;
@@ -38,8 +46,8 @@ export class ObjectivesService {
 
   async list(userId: string, teamId: string): Promise<ServiceLevelObjectiveSummary[]> {
     await this.access.require(userId, teamId, "viewer");
-    const rows = await this.rows("slo.team_id = ?", teamId);
-    return Promise.all(rows.map((row) => this.calculate(row)));
+    const rows = await this.rowsWithStatistics(teamId, new Date().toISOString());
+    return rows.map((row) => this.summary(row, row));
   }
 
   async create(
@@ -240,45 +248,58 @@ export class ObjectivesService {
     const from = new Date(Date.now() - row.window_days * 86_400_000).toISOString();
     const scope = row.check_id ? "o.check_id = ?" : "o.resource_id = ?";
     const scopeId = row.check_id ?? row.resource_id!;
-    const availability = (await this.database.get<{
-      total: number;
-      availability: number | null;
-      down: number;
-    }>(
-      `${MONITOR_OBSERVATIONS_CTE} SELECT COUNT(*) AS total,
+    const statistics = (await this.database.get<ObjectiveStatistics>(
+      `${MONITOR_OBSERVATIONS_CTE} SELECT COUNT(*) AS observation_total,
        AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END) AS availability,
-       SUM(CASE WHEN o.status = 'down' THEN 1 ELSE 0 END) AS down
+       PERCENTILE_DISC(0.95) WITHIN GROUP (ORDER BY o.latency_ms)
+         FILTER (WHERE o.latency_ms IS NOT NULL AND o.status != 'down') AS latency_p95
        FROM observations o WHERE ${scope} AND o.category = 'availability' AND o.observed_at >= ?`,
       scopeId,
       from
     ))!;
-    const latencyP95 = (
-      await this.database.get<{ latency: number }>(
-        `${MONITOR_OBSERVATIONS_CTE}, ordered AS (
-         SELECT o.latency_ms AS latency,
-          ROW_NUMBER() OVER (ORDER BY o.latency_ms) AS position,
-          COUNT(*) OVER () AS total
-         FROM observations o
-         WHERE ${scope} AND o.category = 'availability'
-         AND o.observed_at >= ? AND o.latency_ms IS NOT NULL AND o.status != 'down'
-       ) SELECT latency FROM ordered WHERE position >= total * 0.95 ORDER BY position LIMIT 1`,
-        scopeId,
-        from
-      )
-    )?.latency;
+    return this.summary(row, statistics);
+  }
+
+  private rowsWithStatistics(teamId: string, evaluatedAt: string): Promise<ObjectiveSummaryRow[]> {
+    return this.database.all<ObjectiveSummaryRow>(
+      `${MONITOR_OBSERVATIONS_CTE} SELECT slo.*, r.name AS resource_name, c.name AS check_name,
+       COUNT(o.observed_at) AS observation_total,
+       AVG(CASE WHEN o.status = 'down' THEN 0.0 ELSE 100.0 END)
+         FILTER (WHERE o.observed_at IS NOT NULL) AS availability,
+       PERCENTILE_DISC(0.95) WITHIN GROUP (ORDER BY o.latency_ms)
+         FILTER (WHERE o.latency_ms IS NOT NULL AND o.status != 'down') AS latency_p95
+       FROM service_level_objectives slo
+       LEFT JOIN resources r ON r.id = slo.resource_id
+       LEFT JOIN checks c ON c.id = slo.check_id
+       LEFT JOIN observations o ON o.team_id = slo.team_id
+         AND o.category = 'availability'
+         AND o.observed_at >= ?::timestamptz - slo.window_days * INTERVAL '1 day'
+         AND ((slo.check_id IS NOT NULL AND o.check_id = slo.check_id)
+           OR (slo.check_id IS NULL AND o.resource_id = slo.resource_id))
+       WHERE slo.team_id = ?
+       GROUP BY slo.id, r.name, c.name
+       ORDER BY LOWER(slo.name)`,
+      evaluatedAt,
+      teamId
+    );
+  }
+
+  private summary(
+    row: ObjectiveRow,
+    statistics: ObjectiveStatistics
+  ): ServiceLevelObjectiveSummary {
+    const latencyP95 = statistics.latency_p95;
     const windowMinutes = row.window_days * 24 * 60;
     const errorBudgetMinutes = windowMinutes * (1 - row.target_percent / 100);
-    const availabilityPercent = availability.availability;
+    const availabilityPercent = statistics.availability;
     const consumedBudgetMinutes =
       availabilityPercent === null ? 0 : windowMinutes * (1 - availabilityPercent / 100);
     const remainingBudgetMinutes = errorBudgetMinutes - consumedBudgetMinutes;
     const burnRate = errorBudgetMinutes > 0 ? consumedBudgetMinutes / errorBudgetMinutes : 0;
     const latencyBreached =
-      row.latency_target_ms !== null &&
-      latencyP95 !== undefined &&
-      latencyP95 > row.latency_target_ms;
+      row.latency_target_ms !== null && latencyP95 !== null && latencyP95 > row.latency_target_ms;
     const status =
-      availability.total === 0
+      statistics.observation_total === 0
         ? "no-data"
         : remainingBudgetMinutes < 0 || latencyBreached
           ? "breached"
@@ -297,7 +318,7 @@ export class ObjectivesService {
       windowDays: row.window_days,
       latencyTargetMs: row.latency_target_ms,
       availabilityPercent,
-      latencyP95Ms: latencyP95 ?? null,
+      latencyP95Ms: latencyP95,
       errorBudgetMinutes,
       consumedBudgetMinutes,
       remainingBudgetMinutes,
