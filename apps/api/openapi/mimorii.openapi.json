@@ -4731,7 +4731,7 @@
   "info": {
     "title": "Mimorii API",
     "description": "Self-hosted uptime, server analytics, and relay-agent API.",
-    "version": "11.6.0",
+    "version": "11.7.0",
     "contact": {}
   },
   "tags": [
