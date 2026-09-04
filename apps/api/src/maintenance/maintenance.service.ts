@@ -31,6 +31,10 @@ interface Occurrence {
   endsAt: string;
 }
 
+interface MaintenanceResourceRow extends IncidentResource {
+  maintenance_id: string;
+}
+
 @Injectable()
 export class MaintenanceService {
   constructor(
@@ -43,12 +47,14 @@ export class MaintenanceService {
   async list(userId: string, teamId: string): Promise<MaintenanceWindowSummary[]> {
     await this.access.require(userId, teamId, "viewer");
     const rows = await this.rows(teamId);
-    return Promise.all(rows.map((row) => this.map(row)));
+    return this.mapRows(rows);
   }
 
   async get(userId: string, teamId: string, id: string): Promise<MaintenanceWindowSummary> {
     await this.access.require(userId, teamId, "viewer");
-    return this.map(await this.requireRow(teamId, id));
+    const row = await this.requireRow(teamId, id);
+    const at = new Date();
+    return this.map(row, await this.resources(row.id), at);
   }
 
   async create(
@@ -215,8 +221,9 @@ export class MaintenanceService {
        WHERE mr.resource_id IN (${placeholders}) AND mw.cancelled_at IS NULL`,
       ...resourceIds
     );
-    return Promise.all(
-      rows.filter((row) => this.currentOccurrence(row, at)).map((row) => this.map(row, at))
+    return this.mapRows(
+      rows.filter((row) => this.currentOccurrence(row, at)),
+      at
     );
   }
 
@@ -233,7 +240,7 @@ export class MaintenanceService {
          WHERE mr.resource_id IN (${placeholders}) AND mw.cancelled_at IS NULL`,
       ...resourceIds
     );
-    const summaries = await Promise.all(rows.map((row) => this.map(row, at)));
+    const summaries = await this.mapRows(rows, at);
     return summaries.filter(
       (window) =>
         window.status === "active" ||
@@ -330,7 +337,32 @@ export class MaintenanceService {
     );
   }
 
-  private async map(row: MaintenanceRow, at = new Date()): Promise<MaintenanceWindowSummary> {
+  private async mapRows(
+    rows: MaintenanceRow[],
+    at = new Date()
+  ): Promise<MaintenanceWindowSummary[]> {
+    if (rows.length === 0) return [];
+    const ids = rows.map((row) => row.id);
+    const placeholders = ids.map(() => "?").join(",");
+    const resourceRows = await this.database.all<MaintenanceResourceRow>(
+      `SELECT mr.maintenance_id, r.id, r.name FROM resources r
+       JOIN maintenance_resources mr ON mr.resource_id = r.id
+       WHERE mr.maintenance_id IN (${placeholders})
+       ORDER BY mr.maintenance_id, LOWER(r.name)`,
+      ...ids
+    );
+    const resources = new Map<string, IncidentResource[]>(ids.map((id) => [id, []]));
+    for (const resource of resourceRows) {
+      resources.get(resource.maintenance_id)?.push({ id: resource.id, name: resource.name });
+    }
+    return rows.map((row) => this.map(row, resources.get(row.id) ?? [], at));
+  }
+
+  private map(
+    row: MaintenanceRow,
+    resources: IncidentResource[],
+    at = new Date()
+  ): MaintenanceWindowSummary {
     const occurrences = this.occurrences(row, at);
     const status = row.cancelled_at
       ? "cancelled"
@@ -351,7 +383,7 @@ export class MaintenanceService {
       nextStartsAt: occurrences.current?.startsAt ?? occurrences.next?.startsAt ?? null,
       nextEndsAt: occurrences.current?.endsAt ?? occurrences.next?.endsAt ?? null,
       suppressNotifications: Boolean(row.suppress_notifications),
-      resources: await this.resources(row.id),
+      resources,
       createdAt: row.created_at,
     };
   }
