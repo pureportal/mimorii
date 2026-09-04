@@ -39,6 +39,7 @@ function check(status: "up" | "degraded" | "down", overrides: Record<string, unk
 
 describe("result notification transitions", () => {
   const database = {
+    all: vi.fn(),
     get: vi.fn(),
     run: vi.fn().mockResolvedValue({ changes: 1 }),
     transaction: vi.fn(async (action: () => Promise<void>) => action()),
@@ -64,6 +65,7 @@ describe("result notification transitions", () => {
     database.run.mockResolvedValue({ changes: 1 });
     database.transaction.mockImplementation(async (action: () => Promise<void>) => action());
     maintenance.suppressesNotifications.mockResolvedValue(false);
+    incidents.openForCheck.mockResolvedValue(null);
     incidents.resolveForCheck.mockResolvedValue(false);
   });
 
@@ -144,16 +146,47 @@ describe("result notification transitions", () => {
       })
     );
     const service = createService();
+    incidents.openForCheck.mockResolvedValue("incident-1");
 
     await service.record("check-1", { ...result, status: "down" });
-    await service.record("check-1", {
+    const alarmResult = await service.record("check-1", {
       ...result,
       status: "down",
       checkedAt: "2026-08-13T12:00:30.000Z",
     });
 
     expect(incidents.openForCheck).toHaveBeenCalledOnce();
+    expect(alarmResult.triggeredIncidentId).toBe("incident-1");
     expect(notifications.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("associates history with the exact result that opened an incident", async () => {
+    database.all.mockResolvedValue([
+      {
+        id: "result-2",
+        check_id: "check-1",
+        triggered_incident_id: "incident-1",
+        status: "down",
+        latency_ms: null,
+        status_code: null,
+        message: "CPU reached 96%",
+        metrics_json: JSON.stringify({ cpuPercent: 96 }),
+        checked_at: "2026-08-13T12:00:30.000Z",
+      },
+    ]);
+
+    const history = await createService().history("check-1", undefined, undefined, 500);
+
+    expect(database.all).toHaveBeenCalledWith(
+      expect.stringContaining("LEFT JOIN incidents i ON i.opening_result_id = cr.id"),
+      "check-1",
+      500
+    );
+    expect(history[0]).toMatchObject({
+      id: "result-2",
+      triggeredIncidentId: "incident-1",
+      checkedAt: "2026-08-13T12:00:30.000Z",
+    });
   });
 
   it("records a stale result without changing state or sending a notification", async () => {

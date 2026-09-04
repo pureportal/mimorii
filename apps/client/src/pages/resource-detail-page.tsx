@@ -30,6 +30,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
+import { CheckHistoryChart } from "../components/check-history-chart";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
 import { ResourceImageDialog } from "../components/resource-image-dialog";
@@ -43,24 +44,8 @@ import { Input, Select, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
-import {
-  checkPassingLabel,
-  checkMetricScale,
-  createCheckHistorySeries as createTypedCheckHistorySeries,
-  formatCheckMetric as formatTypedCheckMetric,
-  type CheckMetricScale,
-} from "../lib/check-health";
+import { checkPassingLabel, createCheckHistorySeries } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 export function ResourceDetailPage() {
   const { id = "" } = useParams();
@@ -134,27 +119,9 @@ export function ResourceDetailPage() {
   const deviceStatus = currentAgent?.deviceStatus;
   const chartData = (history.data ?? []).toReversed();
   const activeCheck = checks.data?.find((check) => check.id === activeCheckId);
-  const primaryHistorySeries = activeCheck
-    ? createTypedCheckHistorySeries(activeCheck.type, chartData).slice(0, 2)
-    : [];
-  const primaryHistoryAxes = primaryHistorySeries.reduce<
-    Array<{ scale: CheckMetricScale; metricKey: string; seriesIndex: number }>
-  >((axes, series, seriesIndex) => {
-    const scale = checkMetricScale(series.key);
-    if (!axes.some((axis) => axis.scale === scale)) {
-      axes.push({ scale, metricKey: series.key, seriesIndex });
-    }
-    return axes;
-  }, []);
-  const primaryHistoryData = chartData.map((result) => ({
-    checkedAt: result.checkedAt,
-    ...Object.fromEntries(
-      primaryHistorySeries.map((series, index) => [
-        `metric${index}`,
-        series.points.find((point) => point.checkedAt === result.checkedAt)?.value ?? null,
-      ])
-    ),
-  }));
+  const hasHistorySeries = activeCheck
+    ? createCheckHistorySeries(activeCheck.type, chartData).length > 0
+    : false;
 
   async function removeResource() {
     setDeleting(true);
@@ -290,83 +257,8 @@ export function ResourceDetailPage() {
           <CardContent className="h-72 pl-1 sm:pl-3">
             {history.isLoading ? (
               <LoadingState />
-            ) : primaryHistorySeries.length ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={primaryHistoryData}
-                  margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    yAxisId={primaryHistoryAxes[0]?.scale}
-                    stroke={chartColors.grid}
-                    strokeDasharray="4 6"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="checkedAt"
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                    }
-                    tick={{ fill: chartColors.muted, fontSize: 10 }}
-                    axisLine={false}
-                    tickLine={false}
-                    minTickGap={35}
-                  />
-                  {primaryHistoryAxes.map((axis, axisIndex) => (
-                    <YAxis
-                      key={axis.scale}
-                      yAxisId={axis.scale}
-                      orientation={axisIndex === 0 ? "left" : "right"}
-                      tick={{
-                        fill:
-                          primaryHistoryAxes.length === 1
-                            ? chartColors.muted
-                            : axis.seriesIndex === 0
-                              ? chartColors.lavender
-                              : chartColors.coral,
-                        fontSize: 10,
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value: number) =>
-                        formatTypedCheckMetric(axis.metricKey, value)
-                      }
-                      domain={axis.scale === "percent" ? [0, 100] : ["auto", "auto"]}
-                      width={56}
-                    />
-                  ))}
-                  <Tooltip
-                    labelFormatter={(value) =>
-                      typeof value === "string" || typeof value === "number"
-                        ? new Date(value).toLocaleString()
-                        : ""
-                    }
-                    formatter={(value, name) => {
-                      const series = primaryHistorySeries.find((item) => item.label === name);
-                      return [
-                        typeof value === "number" && series
-                          ? formatTypedCheckMetric(series.key, value)
-                          : "—",
-                        name,
-                      ];
-                    }}
-                    contentStyle={chartTooltipStyle}
-                  />
-                  {primaryHistorySeries.map((series, index) => (
-                    <Line
-                      key={series.key}
-                      type="monotone"
-                      dataKey={`metric${index}`}
-                      name={series.label}
-                      yAxisId={checkMetricScale(series.key)}
-                      stroke={index === 0 ? chartColors.lavender : chartColors.coral}
-                      strokeWidth={2.5}
-                      dot={false}
-                      connectNulls={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            ) : activeCheck && hasHistorySeries ? (
+              <CheckHistoryChart check={activeCheck} results={chartData} />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted">
                 <StateArtwork illustration="analysis" />

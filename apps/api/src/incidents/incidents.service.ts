@@ -275,13 +275,13 @@ export class IncidentsService {
     message: string | null,
     startedAt: string,
     details: CheckTransitionDetails
-  ): Promise<void> {
+  ): Promise<string | null> {
     const context = await this.checkContext(checkId);
     const existing = await this.database.get(
       "SELECT id FROM incidents WHERE check_id = ? AND status != 'resolved'",
       checkId
     );
-    if (existing) return;
+    if (existing) return null;
     const id = randomUUID();
     const title = `${context.resource_name}: ${context.check_name}`;
     const updateMessage = message?.trim() || "The check reported an outage.";
@@ -334,6 +334,7 @@ export class IncidentsService {
         });
       }
     });
+    return id;
   }
 
   async resolveForCheck(

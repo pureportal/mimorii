@@ -1,6 +1,11 @@
 import type { CheckResult, CheckSummary } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
-import { checkMetricScale, createCheckHistorySeries, getCheckHealthItems } from "./check-health";
+import {
+  checkMetricScale,
+  createCheckHistorySeries,
+  getCheckHealthItems,
+  prioritizeCheckHistorySeries,
+} from "./check-health";
 
 describe("check health presentation", () => {
   it("uses latency and response size for HTTP checks", () => {
@@ -52,16 +57,32 @@ describe("check health presentation", () => {
         key: "cpuPercent",
         label: "CPU",
         points: [
-          { checkedAt: "2026-08-24T08:00:00.000Z", value: 25 },
-          { checkedAt: "2026-08-24T08:01:00.000Z", value: 35 },
+          {
+            checkedAt: "2026-08-24T08:00:00.000Z",
+            value: 25,
+            triggeredIncidentId: null,
+          },
+          {
+            checkedAt: "2026-08-24T08:01:00.000Z",
+            value: 35,
+            triggeredIncidentId: null,
+          },
         ],
       },
       {
         key: "memoryPercent",
         label: "Memory",
         points: [
-          { checkedAt: "2026-08-24T08:00:00.000Z", value: 52 },
-          { checkedAt: "2026-08-24T08:01:00.000Z", value: 62 },
+          {
+            checkedAt: "2026-08-24T08:00:00.000Z",
+            value: 52,
+            triggeredIncidentId: null,
+          },
+          {
+            checkedAt: "2026-08-24T08:01:00.000Z",
+            value: 62,
+            triggeredIncidentId: null,
+          },
         ],
       },
     ]);
@@ -75,12 +96,41 @@ describe("check health presentation", () => {
     expect(checkMetricScale("containerCount")).toBe("number");
     expect(checkMetricScale("cpuPercent")).toBe(checkMetricScale("memoryPercent"));
   });
+
+  it("puts the host metric with a critical breach first", () => {
+    const check = {
+      type: "host" as const,
+      timeoutMs: 5_000,
+      config: {
+        cpuWarningPercent: 80,
+        cpuCriticalPercent: 95,
+        memoryWarningPercent: 80,
+        memoryCriticalPercent: 95,
+        loadWarning: 4,
+        loadCritical: 8,
+        swapWarningPercent: 80,
+        swapCriticalPercent: 95,
+      },
+    };
+    const results = [
+      result("2026-08-24T08:00:00.000Z", {
+        cpuPercent: 25,
+        memoryPercent: 52,
+        loadAverage: 9,
+      }),
+    ];
+
+    expect(
+      prioritizeCheckHistorySeries(check, createCheckHistorySeries("host", results))[0]?.key
+    ).toBe("loadAverage");
+  });
 });
 
 function result(checkedAt: string, metrics: CheckSummary["latestMetrics"]): CheckResult {
   return {
     id: checkedAt,
     checkId: "check-1",
+    triggeredIncidentId: null,
     status: "up",
     latencyMs: null,
     statusCode: null,

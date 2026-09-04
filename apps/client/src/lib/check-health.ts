@@ -4,6 +4,7 @@ import {
   type CheckSummary,
   type CheckType,
 } from "@mimorii/contracts";
+import { checkMetricThresholdSeverity, checkMetricThresholds } from "./check-chart";
 import { formatBytes } from "./format";
 
 type CheckMetricValue = number | string | boolean | null;
@@ -18,7 +19,7 @@ export interface CheckHealthItem {
 export interface CheckHistorySeries {
   key: string;
   label: string;
-  points: Array<{ checkedAt: string; value: number }>;
+  points: Array<{ checkedAt: string; value: number; triggeredIncidentId: string | null }>;
 }
 
 export type CheckMetricScale = "bytes" | "percent" | "milliseconds" | "days" | "seconds" | "number";
@@ -107,14 +108,19 @@ export function checkPassingLabel(type: CheckType): "Availability" | "Healthy" {
 }
 
 export function getCheckHealthItems(
-  check: Pick<CheckSummary, "type" | "lastLatencyMs" | "latestMetrics">
+  check: Pick<CheckSummary, "type" | "lastLatencyMs" | "latestMetrics">,
+  limit = 2
 ): CheckHealthItem[] {
   const metrics = check.latestMetrics;
   const items: Array<CheckHealthItem | null> = [];
 
   switch (check.type) {
     case "http":
-      items.push(valueItem("latencyMs", check.lastLatencyMs), metricItem(metrics, "responseBytes"));
+      items.push(
+        valueItem("latencyMs", check.lastLatencyMs),
+        metricItem(metrics, "responseBytes"),
+        metricItem(metrics, "certificateDaysRemaining")
+      );
       break;
     case "tcp":
       items.push(valueItem("latencyMs", check.lastLatencyMs), metricItem(metrics, "port"));
@@ -140,7 +146,12 @@ export function getCheckHealthItems(
       );
       break;
     case "host":
-      items.push(metricItem(metrics, "cpuPercent"), metricItem(metrics, "memoryPercent"));
+      items.push(
+        metricItem(metrics, "cpuPercent"),
+        metricItem(metrics, "memoryPercent"),
+        metricItem(metrics, "loadAverage"),
+        metricItem(metrics, "swapPercent")
+      );
       break;
     case "disk":
       items.push(metricItem(metrics, "usedPercent"), metricItem(metrics, "mount"));
@@ -154,18 +165,19 @@ export function getCheckHealthItems(
     case "database":
       items.push(
         metricItem(metrics, "connectionUtilizationPercent"),
-        metricItem(metrics, "replicationLagSeconds")
+        metricItem(metrics, "replicationLagSeconds"),
+        metricItem(metrics, "slowQueries")
       );
       break;
   }
 
   const result = items.filter((item): item is CheckHealthItem => item !== null);
-  if (result.length >= 2) return result.slice(0, 2);
+  if (result.length >= limit) return result.slice(0, limit);
 
   for (const [key, value] of Object.entries(metrics)) {
     if (result.some((item) => item.key === key) || value === null) continue;
     result.push(createItem(key, value));
-    if (result.length === 2) break;
+    if (result.length === limit) break;
   }
   return result;
 }
@@ -198,9 +210,28 @@ export function createCheckHistorySeries(
       label: checkMetricLabel(key),
       points: results.flatMap((result) => {
         const value = key === "latencyMs" ? result.latencyMs : result.metrics[key];
-        return typeof value === "number" ? [{ checkedAt: result.checkedAt, value }] : [];
+        return typeof value === "number"
+          ? [
+              {
+                checkedAt: result.checkedAt,
+                value,
+                triggeredIncidentId: result.triggeredIncidentId,
+              },
+            ]
+          : [];
       }),
     }));
+}
+
+export function prioritizeCheckHistorySeries(
+  check: Pick<CheckSummary, "type" | "config" | "timeoutMs">,
+  series: CheckHistorySeries[]
+): CheckHistorySeries[] {
+  return series.toSorted((left, right) => {
+    const leftPriority = historySeriesPriority(check, left);
+    const rightPriority = historySeriesPriority(check, right);
+    return rightPriority - leftPriority;
+  });
 }
 
 export function checkMetricLabel(metric: string): string {
@@ -282,4 +313,18 @@ function createItem(key: string, value: Exclude<CheckMetricValue, null>): CheckH
 
 function formatNumber(value: number, maximumFractionDigits: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits });
+}
+
+function historySeriesPriority(
+  check: Pick<CheckSummary, "type" | "config" | "timeoutMs">,
+  series: CheckHistorySeries
+): number {
+  const thresholds = checkMetricThresholds(check, series.key);
+  let priority = 0;
+  for (const point of series.points) {
+    const severity = checkMetricThresholdSeverity(point.value, thresholds);
+    if (severity === "critical") return 2;
+    if (severity === "warning") priority = 1;
+  }
+  return priority;
 }

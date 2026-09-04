@@ -16,6 +16,7 @@ interface RecordedCheckRow extends CheckRow {
 interface ResultRow {
   id: string;
   check_id: string;
+  triggered_incident_id: string | null;
   status: CheckResult["status"];
   latency_ms: number | null;
   status_code: number | null;
@@ -39,6 +40,7 @@ export class ResultsService {
     const now = new Date().toISOString();
     let recordedCheck: RecordedCheckRow | undefined;
     let stateApplied = false;
+    let triggeredIncidentId: string | null = null;
 
     await this.database.transaction(async () => {
       const check = await this.database.get<RecordedCheckRow>(
@@ -77,12 +79,13 @@ export class ResultsService {
       );
 
       if (check.current_status !== "down" && state.status === "down") {
-        await this.incidents.openForCheck(checkId, id, result.message, result.checkedAt, {
-          previousStatus: check.current_status,
-          metrics: result.metrics,
-          latencyMs: result.latencyMs,
-          statusCode: result.statusCode,
-        });
+        triggeredIncidentId =
+          (await this.incidents.openForCheck(checkId, id, result.message, result.checkedAt, {
+            previousStatus: check.current_status,
+            metrics: result.metrics,
+            latencyMs: result.latencyMs,
+            statusCode: result.statusCode,
+          })) ?? null;
       }
       if (
         state.status === "degraded" &&
@@ -137,6 +140,7 @@ export class ResultsService {
     return {
       id,
       checkId,
+      triggeredIncidentId,
       status: result.status,
       latencyMs: result.latencyMs,
       statusCode: result.statusCode,
@@ -159,13 +163,16 @@ export class ResultsService {
     }
     parameters.push(Math.min(Math.max(limit, 1), 1_000));
     const rows = await this.database.all<ResultRow>(
-      `SELECT * FROM check_results WHERE ${clauses.join(" AND ")}
-       ORDER BY checked_at DESC LIMIT ?`,
+      `SELECT cr.*, i.id AS triggered_incident_id FROM check_results cr
+       LEFT JOIN incidents i ON i.opening_result_id = cr.id
+       WHERE ${clauses.map((clause) => `cr.${clause}`).join(" AND ")}
+       ORDER BY cr.checked_at DESC LIMIT ?`,
       ...parameters
     );
     return rows.map((row) => ({
       id: row.id,
       checkId: row.check_id,
+      triggeredIncidentId: row.triggered_incident_id,
       status: row.status,
       latencyMs: row.latency_ms,
       statusCode: row.status_code,

@@ -1,25 +1,16 @@
 import type { CheckResult, CheckSummary } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { api } from "../lib/api";
 import {
   checkPassingLabel,
   checkMetricLabel,
   createCheckHistorySeries,
   formatCheckMetric,
-  type CheckHistorySeries,
+  prioritizeCheckHistorySeries,
 } from "../lib/check-health";
-import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import { formatPercent, formatRelative } from "../lib/format";
 import { CheckHealthSummary } from "./check-health-summary";
+import { CheckMetricHistoryCard } from "./check-metric-history-card";
 import { StatusBadge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
@@ -45,11 +36,15 @@ export function CheckDetailsDialog({
   });
   const results = (history.data ?? []).toReversed();
   const latestResult = history.data?.[0];
-  const historySeries = check ? createCheckHistorySeries(check.type, results) : [];
+  const historySeries = check
+    ? prioritizeCheckHistorySeries(check, createCheckHistorySeries(check.type, results))
+    : [];
   const latestMetrics = latestResult?.metrics ?? check?.latestMetrics ?? {};
   const currentCheck = check
     ? {
         type: check.type,
+        config: check.config,
+        timeoutMs: check.timeoutMs,
         lastLatencyMs: latestResult?.latencyMs ?? check.lastLatencyMs,
         latestMetrics,
       }
@@ -100,7 +95,7 @@ export function CheckDetailsDialog({
                 <h3 className="mb-3 text-sm font-semibold">History</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {historySeries.map((series) => (
-                    <MetricChart key={series.key} series={series} />
+                    <CheckMetricHistoryCard key={series.key} check={check} series={series} />
                   ))}
                 </div>
               </section>
@@ -141,66 +136,6 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
     <div className="rounded-2xl border border-line p-4">
       <p className="text-xs text-muted">{label}</p>
       <div className="mt-2 font-display text-lg font-bold">{children}</div>
-    </div>
-  );
-}
-
-function MetricChart({ series }: { series: CheckHistorySeries }) {
-  const latest = series.points.at(-1)?.value ?? null;
-  const percent = series.key.toLowerCase().includes("percent");
-  return (
-    <div className="h-52 rounded-2xl border border-line p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h4 className="text-sm font-semibold">{series.label}</h4>
-        <span className="text-sm font-bold">
-          {latest === null ? "—" : formatCheckMetric(series.key, latest)}
-        </span>
-      </div>
-      <div className="mt-2 h-40">
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-          <LineChart data={series.points} margin={{ top: 6, right: 8, left: -20, bottom: 0 }}>
-            <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
-            <XAxis
-              dataKey="checkedAt"
-              tickFormatter={(value) =>
-                new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-              }
-              tick={{ fill: chartColors.muted, fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              minTickGap={30}
-            />
-            <YAxis
-              tick={{ fill: chartColors.muted, fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(value: number) => formatCheckMetric(series.key, value)}
-              domain={percent ? [0, 100] : ["auto", "auto"]}
-              width={56}
-            />
-            <Tooltip
-              labelFormatter={(value) =>
-                typeof value === "string" || typeof value === "number"
-                  ? new Date(value).toLocaleString()
-                  : ""
-              }
-              formatter={(value) => [
-                typeof value === "number" ? formatCheckMetric(series.key, value) : "—",
-                series.label,
-              ]}
-              contentStyle={chartTooltipStyle}
-            />
-            <Line
-              type="monotone"
-              dataKey="value"
-              name={series.label}
-              stroke={chartColors.lavender}
-              strokeWidth={2.25}
-              dot={series.points.length === 1}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   );
 }

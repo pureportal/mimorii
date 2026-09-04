@@ -208,6 +208,11 @@ describe("ChecksPage actions", () => {
     ).toBeInTheDocument();
     expect(within(criticalRow!).queryByText("critical")).not.toBeInTheDocument();
     expect(within(downRow!).queryByText("down")).not.toBeInTheDocument();
+    expect(within(criticalRow!).getByRole("progressbar", { name: "Used" })).toHaveAttribute(
+      "aria-valuetext",
+      "97.3%, critical threshold exceeded"
+    );
+    expect(within(criticalRow!).getByText("97.3%")).toHaveClass("text-danger");
 
     fireEvent.focus(within(criticalRow!).getByRole("img", { name: "Disk usage status: Critical" }));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
@@ -256,6 +261,7 @@ function result(
   return {
     id: checkedAt,
     checkId: healthCheck.id,
+    triggeredIncidentId: null,
     status: "up",
     latencyMs: null,
     statusCode: null,

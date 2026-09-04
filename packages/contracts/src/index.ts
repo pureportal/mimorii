@@ -525,6 +525,7 @@ export interface CheckSummary {
 export interface CheckResult {
   id: string;
   checkId: string;
+  triggeredIncidentId: string | null;
   status: Exclude<CheckStatus, "pending" | "paused">;
   latencyMs: number | null;
   statusCode: number | null;

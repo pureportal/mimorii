@@ -3,8 +3,12 @@ export const chartColors = {
   ink: "var(--color-ink)",
   lavender: "var(--color-lavender)",
   coral: "var(--color-coral)",
+  danger: "var(--color-danger)",
   muted: "var(--color-muted)",
   success: "var(--color-success)",
+  surface: "var(--color-surface)",
+  warning: "var(--color-warning)",
+  warningStrong: "var(--color-warning-strong)",
 } as const;
 
 export const chartTooltipStyle = {
