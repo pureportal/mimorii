@@ -11,12 +11,13 @@ import { CalendarClock, Clock3, Pencil, Plus, Radio, Send, Trash2, XCircle } fro
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { IncidentList } from "../components/incident-list";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { ResourcePicker } from "../components/resource-picker";
 import { SectionTabs } from "../components/section-tabs";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Card } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldLabel } from "../components/ui/field";
@@ -24,7 +25,6 @@ import { Input, Select, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { formatCount, formatDuration, formatRelative } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export type OperationsView = "incidents" | "maintenance";
@@ -224,106 +224,6 @@ export function OperationsPage({ view }: { view: OperationsView }) {
           if (deleteMaintenance) removeMaintenance.mutate(deleteMaintenance.id);
         }}
       />
-    </div>
-  );
-}
-
-function IncidentList({
-  incidents,
-  resourceNames,
-  canManage,
-  onEdit,
-  onUpdate,
-}: {
-  incidents: IncidentSummary[];
-  resourceNames: ReadonlyMap<string, string>;
-  canManage: boolean;
-  onEdit: (incident: IncidentSummary) => void;
-  onUpdate: (incident: IncidentSummary) => void;
-}) {
-  const [visibleCount, setVisibleCount] = useState(20);
-  if (!incidents.length) return <EmptyState title="No incidents" illustration="empty" />;
-  const visibleIncidents = incidents
-    .toSorted(
-      (left, right) =>
-        Number(left.status === "resolved") - Number(right.status === "resolved") ||
-        right.startedAt.localeCompare(left.startedAt)
-    )
-    .slice(0, visibleCount);
-  return (
-    <div className="grid gap-4">
-      {visibleIncidents.map((incident) => {
-        const latest = incident.updates[0];
-        return (
-          <Card key={incident.id}>
-            <CardHeader>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-display text-lg font-bold">{incident.title}</h3>
-                  <StatusBadge status={incident.status} />
-                  <StatusBadge status={incident.impact} />
-                </div>
-                <p className="mt-2 text-xs text-muted">
-                  {incident.resources
-                    .map((resource) => resourceNames.get(resource.id) ?? resource.name)
-                    .join(", ")}{" "}
-                  · {formatRelative(incident.startedAt)} ·{" "}
-                  {formatDuration(incident.durationSeconds)}
-                </p>
-              </div>
-              {canManage ? (
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(incident)}>
-                    <Pencil /> Edit
-                  </Button>
-                  {incident.status !== "resolved" ? (
-                    <Button variant="outline" size="sm" onClick={() => onUpdate(incident)}>
-                      <Send /> Update
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-            </CardHeader>
-            {latest ? (
-              <CardContent>
-                <div className="rounded-xl bg-ink/[.035] p-4">
-                  <p className="text-sm leading-6">{latest.message}</p>
-                  <p className="mt-2 text-xs text-muted">{formatRelative(latest.createdAt)}</p>
-                </div>
-                {incident.updates.length > 1 ? (
-                  <details className="mt-3">
-                    <summary className="text-xs font-semibold text-muted">
-                      {formatCount(incident.updates.length - 1, "earlier update")}
-                    </summary>
-                    <div className="mt-3 grid gap-3 border-l border-line pl-4">
-                      {incident.updates.slice(1).map((update) => (
-                        <div key={update.id}>
-                          <div className="flex items-center gap-2">
-                            <StatusBadge status={update.status} />
-                            <span className="text-xs text-muted">
-                              {formatRelative(update.createdAt)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-sm">{update.message}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ) : null}
-              </CardContent>
-            ) : null}
-          </Card>
-        );
-      })}
-      {visibleIncidents.length < incidents.length ? (
-        <Button
-          variant="outline"
-          className="justify-self-center"
-          onClick={() => setVisibleCount((count) => count + 20)}
-        >
-          Load more
-        </Button>
-      ) : null}
     </div>
   );
 }

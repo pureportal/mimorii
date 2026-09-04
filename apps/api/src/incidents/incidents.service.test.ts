@@ -9,6 +9,7 @@ const incident = {
   team_id: "team-1",
   source: "automatic" as const,
   check_id: "check-1",
+  check_name: "Host health",
   heartbeat_id: null,
   title: "Database: Host health",
   impact: "major" as const,
@@ -218,10 +219,11 @@ describe("incident list hydration", () => {
       id: "incident-2",
       title: "API unavailable",
       check_id: "check-2",
+      check_name: "HTTP availability",
     };
     const database = {
       all: vi.fn(async (sql: string) => {
-        if (sql.includes("FROM incidents WHERE")) return [incident, secondIncident];
+        if (sql.includes("FROM incidents i")) return [incident, secondIncident];
         if (sql.includes("FROM resources r")) {
           return [
             { incident_id: incident.id, id: "resource-1", name: "Database" },
@@ -265,11 +267,15 @@ describe("incident list hydration", () => {
     expect(result).toEqual([
       expect.objectContaining({
         id: incident.id,
+        checkId: "check-1",
+        checkName: "Host health",
         resources: [{ id: "resource-1", name: "Database" }],
         updates: [expect.objectContaining({ id: "update-1", createdByName: "Operator" })],
       }),
       expect.objectContaining({
         id: secondIncident.id,
+        checkId: "check-2",
+        checkName: "HTTP availability",
         resources: [{ id: "resource-2", name: "API" }],
         updates: [expect.objectContaining({ id: "update-2", createdByName: null })],
       }),

@@ -42,9 +42,9 @@ export function ChecksPage() {
   const [visibleCount, setVisibleCount] = useState(20);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState<CheckSummary | null>(null);
-  const [detailsCheck, setDetailsCheck] = useState<CheckSummary | null>(null);
   const [deleteCheck, setDeleteCheck] = useState<CheckSummary | null>(null);
   const resourceId = searchParams.get("resourceId") ?? "";
+  const detailsCheckId = searchParams.get("checkId");
   const checks = useQuery({
     queryKey: ["checks", teamId],
     queryFn: () => api<CheckSummary[]>(`/teams/${teamId}/checks`),
@@ -111,6 +111,19 @@ export function ChecksPage() {
   );
   const hasFilters = Boolean(search.trim()) || Boolean(resourceId) || status !== "all";
   const visibleChecks = filtered.slice(0, visibleCount);
+  const detailsCheck = checks.data?.find((check) => check.id === detailsCheckId) ?? null;
+
+  const openCheckDetails = (checkId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("checkId", checkId);
+    setSearchParams(next);
+  };
+
+  const closeCheckDetails = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("checkId");
+    setSearchParams(next, { replace: true });
+  };
 
   if (checks.isLoading || resources.isLoading) return <LoadingState />;
   if (checks.isError || resources.isError)
@@ -231,7 +244,7 @@ export function ChecksPage() {
                 <div className="col-start-3 row-start-1 self-start justify-self-end lg:col-auto lg:row-auto">
                   <CheckActions
                     check={check}
-                    onDetails={() => setDetailsCheck(check)}
+                    onDetails={() => openCheckDetails(check.id)}
                     onRun={() => run.mutate(check.id)}
                     onEdit={() => {
                       setSelected(check);
@@ -308,7 +321,7 @@ export function ChecksPage() {
       <CheckDetailsDialog
         open={Boolean(detailsCheck)}
         onOpenChange={(open) => {
-          if (!open) setDetailsCheck(null);
+          if (!open) closeCheckDetails();
         }}
         teamId={teamId}
         check={detailsCheck}

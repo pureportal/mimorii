@@ -239,14 +239,22 @@ describe("ChecksPage actions", () => {
     expect(within(dialog).getByRole("heading", { name: "Memory" })).toBeInTheDocument();
     expect(apiMock).toHaveBeenCalledWith("/teams/team-1/checks/check-health/history?limit=500");
   });
+
+  it("opens the requested check details from a direct link", async () => {
+    renderPage("/app/monitoring/checks?checkId=check-health");
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Health" })).toBeInTheDocument();
+    expect(apiMock).toHaveBeenCalledWith("/teams/team-1/checks/check-health/history?limit=500");
+  });
 });
 
-function renderPage() {
+function renderPage(initialEntry = "/app/monitoring/checks") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <ChecksPage />
       </QueryClientProvider>

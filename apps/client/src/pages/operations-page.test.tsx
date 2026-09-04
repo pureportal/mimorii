@@ -39,6 +39,7 @@ const incident: IncidentSummary = {
   teamId: "team-1",
   source: "manual",
   checkId: null,
+  checkName: null,
   heartbeatId: null,
   title: "Elevated API errors",
   impact: "major",
@@ -132,6 +133,22 @@ describe("OperationsPage incident updates", () => {
     );
     await waitFor(() => expect(screen.getByText(status)).toBeInTheDocument());
     if (message) expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("links an automatic incident to its associated check", async () => {
+    currentIncident = {
+      ...incident,
+      source: "automatic",
+      checkId: "check-availability",
+      checkName: "HTTP availability",
+      title: "Public API: HTTP availability",
+    };
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("link", { name: "Open check HTTP availability" })
+    ).toHaveAttribute("href", "/app/monitoring/checks?checkId=check-availability");
   });
 
   it("loads long incident histories in manageable groups", async () => {

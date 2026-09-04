@@ -838,6 +838,7 @@ function incidentSummary(status: "investigating" | "resolved", updateCount = 0):
     teamId,
     source: "manual",
     checkId: null,
+    checkName: null,
     heartbeatId: null,
     title: "Database unavailable",
     impact: "major",

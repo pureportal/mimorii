@@ -9,6 +9,7 @@ export const appRoutes = {
   resource: (id: string) => `/app/monitoring/resources/${encodeURIComponent(id)}`,
   newResource: "/app/monitoring/resources?new=1",
   checks: "/app/monitoring/checks",
+  check: (id: string) => `/app/monitoring/checks?checkId=${encodeURIComponent(id)}`,
   checksForResource: (resourceId: string) =>
     `/app/monitoring/checks?resourceId=${encodeURIComponent(resourceId)}`,
   heartbeats: "/app/monitoring/heartbeats",
@@ -553,6 +554,7 @@ export interface IncidentSummary {
   teamId: string;
   source: "automatic" | "manual";
   checkId: string | null;
+  checkName: string | null;
   heartbeatId: string | null;
   title: string;
   impact: IncidentImpact;
