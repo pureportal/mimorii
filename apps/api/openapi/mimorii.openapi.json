@@ -5980,6 +5980,7 @@
           },
           "failureThreshold": {
             "type": "number",
+            "description": "Consecutive breached evaluations required before alerting",
             "default": 2,
             "minimum": 1,
             "maximum": 10
@@ -6055,6 +6056,7 @@
           },
           "failureThreshold": {
             "type": "number",
+            "description": "Consecutive breached evaluations required before alerting",
             "default": 2,
             "minimum": 1,
             "maximum": 10

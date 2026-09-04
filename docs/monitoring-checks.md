@@ -1,5 +1,9 @@
 # Monitoring checks
 
+## Alert confirmation
+
+A check alerts only after its configured number of consecutive breached evaluations. A healthy evaluation before confirmation resets the count without sending an alert or recovery notification. Set **Consecutive breaches before alert** to `1` for immediate alerting.
+
 ## ICMP and WAN
 
 Direct checks use the operating system `ping` executable. The Mimorii server image includes `iputils-ping`. Bare-metal server installations must provide a compatible `ping` executable to the API process.

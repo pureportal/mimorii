@@ -11,7 +11,7 @@ const result = {
   checkedAt,
 };
 
-function check(status: "up" | "degraded" | "down") {
+function check(status: "up" | "degraded" | "down", overrides: Record<string, unknown> = {}) {
   return {
     id: "check-1",
     team_id: "team-1",
@@ -33,6 +33,7 @@ function check(status: "up" | "degraded" | "down") {
     next_check_at: null,
     created_at: checkedAt,
     updated_at: checkedAt,
+    ...overrides,
   };
 }
 
@@ -49,6 +50,14 @@ describe("result notification transitions", () => {
   const maintenance = { suppressesNotifications: vi.fn().mockResolvedValue(false) };
   const notifications = { enqueue: vi.fn().mockResolvedValue([]) };
   const technologies = { observeHttp: vi.fn() };
+  const createService = () =>
+    new ResultsService(
+      database as never,
+      incidents as never,
+      maintenance as never,
+      notifications as never,
+      technologies as never
+    );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,13 +69,7 @@ describe("result notification transitions", () => {
 
   it("sends one warning when a check enters degraded", async () => {
     database.get.mockResolvedValue(check("up"));
-    const service = new ResultsService(
-      database as never,
-      incidents as never,
-      maintenance as never,
-      notifications as never,
-      technologies as never
-    );
+    const service = createService();
     await service.record("check-1", result);
     expect(database.get).toHaveBeenCalledWith(expect.stringContaining("FOR UPDATE"), "check-1");
     expect(notifications.enqueue).toHaveBeenCalledOnce();
@@ -79,14 +82,77 @@ describe("result notification transitions", () => {
 
   it("does not repeat a warning while the check remains degraded", async () => {
     database.get.mockResolvedValue(check("degraded"));
-    const service = new ResultsService(
-      database as never,
-      incidents as never,
-      maintenance as never,
-      notifications as never,
-      technologies as never
-    );
+    const service = createService();
     await service.record("check-1", result);
+    expect(notifications.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("does not notify when a breach clears before confirmation", async () => {
+    database.get.mockResolvedValueOnce(check("up", { failure_threshold: 2 })).mockResolvedValueOnce(
+      check("up", {
+        failure_threshold: 2,
+        consecutive_failures: 1,
+        last_checked_at: checkedAt,
+      })
+    );
+    const service = createService();
+
+    await service.record("check-1", result);
+    await service.record("check-1", {
+      ...result,
+      status: "up",
+      message: null,
+      metrics: {},
+      checkedAt: "2026-08-13T12:00:30.000Z",
+    });
+
+    expect(notifications.enqueue).not.toHaveBeenCalled();
+    expect(incidents.openForCheck).not.toHaveBeenCalled();
+    expect(incidents.resolveForCheck).not.toHaveBeenCalled();
+  });
+
+  it("notifies once when a breach reaches confirmation", async () => {
+    database.get.mockResolvedValueOnce(check("up", { failure_threshold: 2 })).mockResolvedValueOnce(
+      check("up", {
+        failure_threshold: 2,
+        consecutive_failures: 1,
+        last_checked_at: checkedAt,
+      })
+    );
+    const service = createService();
+
+    await service.record("check-1", result);
+    await service.record("check-1", {
+      ...result,
+      checkedAt: "2026-08-13T12:00:30.000Z",
+    });
+
+    expect(notifications.enqueue).toHaveBeenCalledOnce();
+    expect(notifications.enqueue).toHaveBeenCalledWith(
+      "team-1",
+      "check.degraded",
+      expect.objectContaining({ severity: "warning" })
+    );
+  });
+
+  it("opens an incident only after a sustained down breach", async () => {
+    database.get.mockResolvedValueOnce(check("up", { failure_threshold: 2 })).mockResolvedValueOnce(
+      check("up", {
+        failure_threshold: 2,
+        consecutive_failures: 1,
+        last_checked_at: checkedAt,
+      })
+    );
+    const service = createService();
+
+    await service.record("check-1", { ...result, status: "down" });
+    await service.record("check-1", {
+      ...result,
+      status: "down",
+      checkedAt: "2026-08-13T12:00:30.000Z",
+    });
+
+    expect(incidents.openForCheck).toHaveBeenCalledOnce();
     expect(notifications.enqueue).not.toHaveBeenCalled();
   });
 
@@ -95,13 +161,7 @@ describe("result notification transitions", () => {
       ...check("up"),
       last_checked_at: "2026-08-13T12:01:00.000Z",
     });
-    const service = new ResultsService(
-      database as never,
-      incidents as never,
-      maintenance as never,
-      notifications as never,
-      technologies as never
-    );
+    const service = createService();
     await service.record("check-1", result);
     expect(database.run).toHaveBeenCalledOnce();
     expect(notifications.enqueue).not.toHaveBeenCalled();
@@ -110,13 +170,7 @@ describe("result notification transitions", () => {
 
   it("sends an informational recovery after a degraded threshold clears", async () => {
     database.get.mockResolvedValue(check("degraded"));
-    const service = new ResultsService(
-      database as never,
-      incidents as never,
-      maintenance as never,
-      notifications as never,
-      technologies as never
-    );
+    const service = createService();
     await service.record("check-1", { ...result, status: "up", message: null, metrics: {} });
     expect(notifications.enqueue).toHaveBeenCalledWith(
       "team-1",
@@ -128,13 +182,7 @@ describe("result notification transitions", () => {
   it("uses the incident recovery notification after an outage", async () => {
     database.get.mockResolvedValue(check("down"));
     incidents.resolveForCheck.mockResolvedValue(true);
-    const service = new ResultsService(
-      database as never,
-      incidents as never,
-      maintenance as never,
-      notifications as never,
-      technologies as never
-    );
+    const service = createService();
     await service.record("check-1", { ...result, status: "up", message: null, metrics: {} });
     expect(incidents.resolveForCheck).toHaveBeenCalledOnce();
     expect(notifications.enqueue).not.toHaveBeenCalled();

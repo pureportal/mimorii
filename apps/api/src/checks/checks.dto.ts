@@ -66,7 +66,12 @@ export class CreateCheckDto {
   @Max(30_000)
   timeoutMs?: number;
 
-  @ApiPropertyOptional({ default: 2, minimum: 1, maximum: 10 })
+  @ApiPropertyOptional({
+    description: "Consecutive breached evaluations required before alerting",
+    default: 2,
+    minimum: 1,
+    maximum: 10,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

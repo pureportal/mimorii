@@ -78,6 +78,22 @@ describe("CheckDialog", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ name: "Public endpoint" }));
   });
 
+  it("configures the breach confirmation count per check", async () => {
+    const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
+
+    render(<CheckDialog open onOpenChange={vi.fn()} resources={[resource]} onSubmit={onSubmit} />);
+
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "Consecutive breaches before alert" }),
+      { target: { value: "3" } }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save check" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ failureThreshold: 3 }));
+  });
+
   it("uses Windows defaults for local checks", async () => {
     const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
     render(

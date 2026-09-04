@@ -375,7 +375,7 @@ function AdvancedFields({
         />
         <NumberField
           id="failure-threshold"
-          label="Failures before down"
+          label="Consecutive breaches before alert"
           value={failureThreshold}
           min={1}
           max={10}
