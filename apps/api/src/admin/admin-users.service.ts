@@ -129,6 +129,7 @@ export class AdminUsersService {
         now,
         target.id
       );
+      await this.database.run("DELETE FROM user_sessions WHERE user_id = ?", target.id);
       if (input.disabled) {
         await this.database.run("DELETE FROM api_tokens WHERE user_id = ?", target.id);
       }
@@ -151,6 +152,7 @@ export class AdminUsersService {
         targetId
       );
       if (result.changes === 0) throw new NotFoundException("User not found");
+      await this.database.run("DELETE FROM user_sessions WHERE user_id = ?", targetId);
       await this.database.run("DELETE FROM api_tokens WHERE user_id = ?", targetId);
       await this.audit.record({
         userId: actorId,

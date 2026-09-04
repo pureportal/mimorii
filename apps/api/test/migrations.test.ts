@@ -47,6 +47,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "oauth_authorization_codes",
           "oauth_access_tokens",
           "oauth_refresh_tokens",
+          "user_sessions",
         ])
       );
 

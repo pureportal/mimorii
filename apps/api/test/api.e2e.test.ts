@@ -15,6 +15,9 @@ import { NotificationsService } from "../src/notifications/notifications.service
 
 interface Registration {
   accessToken: string;
+  expiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
   user: { id: string; email: string; name: string };
   teams: Array<{ id: string; name: string; role: string }>;
 }
@@ -131,6 +134,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const openapi = await request(app.getHttpServer()).get("/docs-json").expect(200);
     expect(openapi.body.info.title).toBe("Mimorii API");
     expect(openapi.body.paths["/api/auth/register"]).toBeDefined();
+    expect(openapi.body.paths["/api/auth/refresh"]).toBeDefined();
+    expect(openapi.body.paths["/api/auth/logout"]).toBeDefined();
     expect(openapi.body.paths["/api/auth/api-tokens"]).toBeDefined();
     expect(openapi.body.paths["/api/agent/heartbeat"]).toBeDefined();
     expect(openapi.body.paths["/api/heartbeats/{token}"]).toBeDefined();
@@ -413,6 +418,51 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expect.objectContaining({ email: "member@example.com", role: "member" }),
       ])
     );
+  });
+
+  it("renews and revokes application sessions", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const account = await register(`session-renewal-${suffix}@example.com`, "Session User");
+    expect(account).toMatchObject({
+      accessToken: expect.any(String),
+      expiresAt: expect.any(String),
+      refreshToken: expect.stringMatching(/^mim_srt_/),
+      refreshExpiresAt: expect.any(String),
+    });
+    expect(new Date(account.expiresAt).getTime() - Date.now()).toBeGreaterThan(59 * 60_000);
+    expect(new Date(account.refreshExpiresAt).getTime() - Date.now()).toBeGreaterThan(
+      29 * 86_400_000
+    );
+
+    const renewed = await request(app.getHttpServer())
+      .post("/api/auth/refresh")
+      .send({ refreshToken: account.refreshToken })
+      .expect(200);
+    expect(renewed.headers["cache-control"]).toContain("no-store");
+    expect(renewed.body).toMatchObject({
+      accessToken: expect.any(String),
+      refreshToken: account.refreshToken,
+      user: { id: account.user.id },
+    });
+    expect(renewed.body.accessToken).not.toBe(account.accessToken);
+
+    await request(app.getHttpServer())
+      .get("/api/auth/me")
+      .set("authorization", `Bearer ${renewed.body.accessToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post("/api/auth/logout")
+      .send({ refreshToken: account.refreshToken })
+      .expect(204);
+    await request(app.getHttpServer())
+      .post("/api/auth/refresh")
+      .send({ refreshToken: account.refreshToken })
+      .expect(401);
+    await request(app.getHttpServer())
+      .get("/api/auth/me")
+      .set("authorization", `Bearer ${renewed.body.accessToken}`)
+      .expect(401);
   });
 
   it("persists tour acknowledgements independently in the user profile", async () => {

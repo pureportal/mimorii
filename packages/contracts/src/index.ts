@@ -326,6 +326,8 @@ export interface TeamInvitationSummary {
 export interface AuthSession {
   accessToken: string;
   expiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
   user: UserSummary;
   teams: TeamSummary[];
 }

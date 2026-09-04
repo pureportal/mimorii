@@ -9,6 +9,7 @@ import { OptionalAuthGuard } from "./optional-auth.guard.js";
 import { OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
 import { OAuthController } from "./oauth.controller.js";
 import { OAuthService } from "./oauth.service.js";
+import { SessionService } from "./session.service.js";
 
 function jwtSecret(): string {
   const configured = process.env.MIMORII_JWT_SECRET;
@@ -36,6 +37,7 @@ function jwtSecret(): string {
     ApiTokensService,
     OAuthClientMetadataService,
     OAuthService,
+    SessionService,
   ],
   exports: [AuthService, AuthGuard, OptionalAuthGuard, OAuthService, JwtModule],
 })

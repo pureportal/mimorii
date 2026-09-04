@@ -90,8 +90,8 @@ export class CreateApiTokenDto {
 }
 
 export class RefreshSessionDto {
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty({ minLength: 32, maxLength: 128 })
   @IsString()
-  token?: string;
+  @Length(32, 128)
+  refreshToken!: string;
 }

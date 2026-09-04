@@ -17,6 +17,8 @@ function renderRoute(isGlobalAdmin: boolean | null) {
         : {
             accessToken: "session-token",
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            refreshToken: "refresh-token",
+            refreshExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
             user: {
               id: "user-id",
               email: "user@example.com",

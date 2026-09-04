@@ -37,6 +37,7 @@ export class RetentionService implements OnModuleInit {
       await this.database.run(
         "DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP"
       );
+      await this.database.run("DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP");
       await this.database.run(
         `DELETE FROM status_subscribers
          WHERE verified_at IS NULL

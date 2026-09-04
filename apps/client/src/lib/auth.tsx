@@ -9,14 +9,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, jsonBody, setAccessToken } from "./api";
+import { api, jsonBody, revokeAuthSession } from "./api";
+import {
+  getAuthSession,
+  loadAuthSession,
+  storeAuthSession,
+  subscribeAuthSession,
+} from "./auth-session";
 import { usePrivacy } from "./privacy";
 import { revokePushOnLogout } from "./push-notifications";
 import { identifySwetrixUser, resetSwetrixUser, trackSwetrixEvent } from "./swetrix";
 
-const SESSION_KEY = "mimorii.session";
 const TEAM_KEY = "mimorii.team";
-const teamRoles = new Set(["owner", "admin", "member", "viewer"]);
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -37,74 +41,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readSession(): AuthSession | null {
-  localStorage.removeItem("mimorii.token");
-  try {
-    const value = localStorage.getItem(SESSION_KEY);
-    if (!value) return null;
-    const session: unknown = JSON.parse(value);
-    if (!isAuthSession(session)) throw new Error("Stored session is invalid");
-    if (new Date(session.expiresAt).getTime() <= Date.now()) {
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem(TEAM_KEY);
-      setAccessToken(null);
-      return null;
-    }
-    setAccessToken(session.accessToken);
-    return session;
-  } catch {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(TEAM_KEY);
-    setAccessToken(null);
-    return null;
-  }
-}
-
-function isAuthSession(value: unknown): value is AuthSession {
-  return (
-    isRecord(value) &&
-    typeof value.accessToken === "string" &&
-    typeof value.expiresAt === "string" &&
-    isUserSummary(value.user) &&
-    Array.isArray(value.teams) &&
-    value.teams.every(isTeamSummary)
-  );
-}
-
-function isUserSummary(value: unknown): value is UserSummary {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.email === "string" &&
-    typeof value.name === "string" &&
-    typeof value.isGlobalAdmin === "boolean" &&
-    Array.isArray(value.acknowledgedTourIds) &&
-    value.acknowledgedTourIds.every((tourId) => typeof tourId === "string") &&
-    typeof value.createdAt === "string"
-  );
-}
-
-function isTeamSummary(value: unknown): value is TeamSummary {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.role === "string" &&
-    teamRoles.has(value.role) &&
-    (value.logoUpdatedAt === undefined ||
-      typeof value.logoUpdatedAt === "string" ||
-      value.logoUpdatedAt === null) &&
-    typeof value.createdAt === "string"
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { preferences } = usePrivacy();
-  const [session, setSession] = useState<AuthSession | null>(readSession);
+  const [session, setSession] = useState<AuthSession | null>(loadAuthSession);
   const sessionRef = useRef(session);
   const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
   const [activeTeamId, setActiveTeamIdState] = useState(() => localStorage.getItem(TEAM_KEY));
@@ -112,10 +51,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const storeSession = useCallback((next: AuthSession | null) => {
     sessionRef.current = next;
     setSession(next);
-    setAccessToken(next?.accessToken ?? null);
-    if (next) localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-    else localStorage.removeItem(SESSION_KEY);
+    storeAuthSession(next);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeAuthSession((next) => {
+        sessionRef.current = next;
+        setSession(next);
+      }),
+    []
+  );
 
   const authenticate = useCallback(
     async (path: string, payload: Record<string, string | boolean>) => {
@@ -137,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    const refreshToken = sessionRef.current?.refreshToken;
     revokePushOnLogout();
+    if (refreshToken) void revokeAuthSession(refreshToken).catch(() => undefined);
     trackSwetrixEvent({ ev: "ACCOUNT_SIGNED_OUT" });
     resetSwetrixUser();
     storeSession(null);
@@ -147,14 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [storeSession]);
 
   const refreshIdentity = useCallback(async () => {
-    if (!session) {
+    const requestedSession = getAuthSession();
+    if (!requestedSession) {
       setProfileStatus("ready");
       return;
     }
-    const requestedSession = session;
     const identity = await api<{ user: UserSummary; teams: TeamSummary[] }>("/auth/me");
-    if (sessionRef.current?.accessToken !== requestedSession.accessToken) return;
-    const next = { ...requestedSession, ...identity };
+    const currentSession = getAuthSession();
+    if (!currentSession || currentSession.user.id !== requestedSession.user.id) return;
+    const next = { ...currentSession, ...identity };
     storeSession(next);
     setProfileStatus("ready");
     if (!identity.teams.some((team) => team.id === activeTeamId)) {
@@ -162,29 +111,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (first) localStorage.setItem(TEAM_KEY, first);
       setActiveTeamIdState(first);
     }
-  }, [activeTeamId, session, storeSession]);
+  }, [activeTeamId, storeSession]);
 
   const acknowledgeTour = useCallback(
     async (tourId: string) => {
-      if (!session) return;
+      if (!getAuthSession()) return;
       const user = await api<UserSummary>(
         `/auth/profile/tour-acknowledgements/${encodeURIComponent(tourId)}`,
         { method: "PUT" }
       );
-      setSession((current) => {
-        if (!current || current.user.id !== user.id) return current;
-        const next = { ...current, user };
-        sessionRef.current = next;
-        localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-        return next;
-      });
+      const activeSession = getAuthSession();
+      if (!activeSession || activeSession.user.id !== user.id) return;
+      storeSession({ ...activeSession, user });
       setProfileStatus("ready");
     },
-    [session]
+    [storeSession]
   );
 
+  const sessionUserId = session?.user.id;
   useEffect(() => {
-    if (!session) {
+    if (!sessionUserId) {
       setProfileStatus("ready");
       return undefined;
     }
@@ -196,12 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [profileStatus, refreshIdentity, session]);
-
-  useEffect(() => {
-    window.addEventListener("mimorii:unauthorized", logout);
-    return () => window.removeEventListener("mimorii:unauthorized", logout);
-  }, [logout]);
+  }, [profileStatus, refreshIdentity, sessionUserId]);
 
   const activeTeam =
     session?.teams.find((team) => team.id === activeTeamId) ?? session?.teams[0] ?? null;

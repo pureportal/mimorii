@@ -8606,6 +8606,172 @@
           "enumItems": [],
           "mappedType": "text"
         },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "user_token_version": {
+          "name": "user_token_version",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "last_refreshed_at": {
+          "name": "last_refreshed_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "user_sessions",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": ["expires_at"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "idx_user_sessions_expiry",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": ["user_id", "created_at"],
+          "composite": true,
+          "constraint": false,
+          "keyName": "idx_user_sessions_user",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": ["id"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "user_sessions_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": ["token_hash"],
+          "composite": false,
+          "constraint": true,
+          "keyName": "user_sessions_token_hash_key",
+          "unique": true,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "user_sessions_user_id_fkey": {
+          "columnNames": ["user_id"],
+          "constraintName": "user_sessions_user_id_fkey",
+          "localTableName": "public.user_sessions",
+          "referencedTableName": "public.users",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
         "email": {
           "name": "email",
           "type": "text",

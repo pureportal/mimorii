@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -19,6 +20,7 @@ import {
   ChangePasswordDto,
   CreateApiTokenDto,
   LoginDto,
+  RefreshSessionDto,
   RegisterDto,
   TourAcknowledgementParamsDto,
   UpdateProfileDto,
@@ -36,6 +38,7 @@ export class AuthController {
 
   @Post("register")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
   @ApiCreatedResponse({ description: "Account and initial team created" })
   register(@Body() input: RegisterDto) {
     return this.auth.register(input);
@@ -44,9 +47,25 @@ export class AuthController {
   @Post("login")
   @HttpCode(200)
   @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
   @ApiOkResponse({ description: "Authenticated session" })
   login(@Body() input: LoginDto) {
     return this.auth.login(input);
+  }
+
+  @Post("refresh")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
+  @ApiOkResponse({ description: "Renewed session" })
+  refresh(@Body() input: RefreshSessionDto) {
+    return this.auth.refreshSession(input.refreshToken);
+  }
+
+  @Post("logout")
+  @HttpCode(204)
+  async logout(@Body() input: RefreshSessionDto) {
+    await this.auth.revokeSession(input.refreshToken);
   }
 
   @Get("me")

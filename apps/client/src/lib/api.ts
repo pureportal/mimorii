@@ -1,10 +1,13 @@
+import type { AuthSession } from "@mimorii/contracts";
+import { getAuthSession, isAuthSession, storeAuthSession } from "./auth-session";
 import { trackSwetrixEvent } from "./swetrix";
 import { applicationRuntime, type ApplicationRuntime } from "./runtime";
 
 const DEFAULT_API_URL =
   import.meta.env.VITE_API_URL?.trim() || defaultApiUrl(applicationRuntime, window.location);
 const SERVER_KEY = "mimorii.server";
-let accessToken: string | null = null;
+const ACCESS_TOKEN_REFRESH_WINDOW_MILLISECONDS = 60_000;
+let refreshOperation: { refreshToken: string; promise: Promise<AuthSession> } | null = null;
 
 export class ApiError extends Error {
   constructor(
@@ -53,27 +56,10 @@ export function normalizeServerUrl(value: string, runtime: ApplicationRuntime): 
   return parsed.toString().replace(/\/$/, "");
 }
 
-export function setAccessToken(token: string | null): void {
-  accessToken = token;
-}
-
-export function getAccessToken(): string | null {
-  return accessToken;
-}
-
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
   const method = (options.method ?? "GET").toUpperCase();
   const scope = apiScope(path);
-  const headers = new Headers(options.headers);
-  if (options.body && !(options.body instanceof FormData) && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-  if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
-  const response = await fetch(`${getServerUrl()}${path}`, {
-    ...options,
-    headers,
-  });
+  const response = await authenticatedFetch(path, options);
   if (!response.ok) {
     if (method !== "GET") {
       trackSwetrixEvent({
@@ -81,7 +67,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
         meta: { method, scope, status: response.status },
       });
     }
-    throw await apiError(response, token);
+    throw await apiError(response);
   }
   if (response.status === 204) {
     if (method !== "GET") {
@@ -111,12 +97,18 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 }
 
 export async function apiBlob(path: string, options: RequestInit = {}): Promise<Blob> {
-  const token = getAccessToken();
-  const headers = new Headers(options.headers);
-  if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
-  const response = await fetch(`${getServerUrl()}${path}`, { ...options, headers });
-  if (!response.ok) throw await apiError(response, token);
+  const response = await authenticatedFetch(path, options);
+  if (!response.ok) throw await apiError(response);
   return response.blob();
+}
+
+export async function revokeAuthSession(refreshToken: string): Promise<void> {
+  const response = await fetch(`${getServerUrl()}/auth/logout`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (!response.ok) throw await apiError(response);
 }
 
 export function jsonBody(value: unknown): Pick<RequestInit, "body"> {
@@ -142,7 +134,92 @@ function isInternalTauriUrl(value: string): boolean {
   }
 }
 
-async function apiError(response: Response, token: string | null): Promise<ApiError> {
+async function authenticatedFetch(path: string, options: RequestInit): Promise<Response> {
+  const baseHeaders = new Headers(options.headers);
+  if (options.body && !(options.body instanceof FormData) && !baseHeaders.has("content-type")) {
+    baseHeaders.set("content-type", "application/json");
+  }
+  const usesSession = !baseHeaders.has("authorization");
+  const token = usesSession ? await accessTokenForRequest() : null;
+  const request = (accessToken: string | null) => {
+    const headers = new Headers(baseHeaders);
+    if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+    return fetch(`${getServerUrl()}${path}`, { ...options, headers });
+  };
+  const response = await request(token);
+  if (response.status !== 401 || !usesSession || !token) return response;
+
+  const refreshedToken = await refreshAfterUnauthorized(token);
+  if (!refreshedToken) return response;
+  return request(refreshedToken);
+}
+
+async function accessTokenForRequest(): Promise<string | null> {
+  const session = getAuthSession();
+  if (!session) return null;
+  const now = Date.now();
+  if (new Date(session.refreshExpiresAt).getTime() <= now) {
+    storeAuthSession(null);
+    return null;
+  }
+  if (new Date(session.expiresAt).getTime() > now + ACCESS_TOKEN_REFRESH_WINDOW_MILLISECONDS) {
+    return session.accessToken;
+  }
+  return (await refreshAuthSession()).accessToken;
+}
+
+async function refreshAfterUnauthorized(accessToken: string): Promise<string | null> {
+  const current = getAuthSession();
+  if (!current) return null;
+  if (current.accessToken !== accessToken && new Date(current.expiresAt).getTime() > Date.now()) {
+    return current.accessToken;
+  }
+  return (await refreshAuthSession()).accessToken;
+}
+
+async function refreshAuthSession(): Promise<AuthSession> {
+  const current = getAuthSession();
+  if (!current) throw new ApiError(401, "Sign in required");
+  const refreshToken = current.refreshToken;
+  if (refreshOperation?.refreshToken === refreshToken) return refreshOperation.promise;
+  const operation = { refreshToken, promise: exchangeRefreshToken(refreshToken) };
+  refreshOperation = operation;
+  try {
+    return await operation.promise;
+  } finally {
+    if (refreshOperation === operation) refreshOperation = null;
+  }
+}
+
+async function exchangeRefreshToken(refreshToken: string): Promise<AuthSession> {
+  const response = await fetch(`${getServerUrl()}/auth/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (!response.ok) {
+    const error = await apiError(response);
+    if (response.status === 401 && getAuthSession()?.refreshToken === refreshToken) {
+      storeAuthSession(null);
+    }
+    throw error;
+  }
+
+  let session: unknown;
+  try {
+    session = await response.json();
+  } catch {
+    throw invalidServerResponse(response.status);
+  }
+  if (!isAuthSession(session)) throw invalidServerResponse(response.status);
+  if (getAuthSession()?.refreshToken !== refreshToken) {
+    throw new ApiError(401, "Session changed");
+  }
+  storeAuthSession(session);
+  return session;
+}
+
+async function apiError(response: Response): Promise<ApiError> {
   let message = response.status === 401 ? "Sign in required" : "Request failed";
   try {
     const body = (await response.json()) as {
@@ -155,8 +232,9 @@ async function apiError(response: Response, token: string | null): Promise<ApiEr
   } catch {
     message = response.statusText || message;
   }
-  if (response.status === 401 && token) {
-    window.dispatchEvent(new Event("mimorii:unauthorized"));
-  }
   return new ApiError(response.status, message);
+}
+
+function invalidServerResponse(status: number): ApiError {
+  return new ApiError(status, "Server returned an invalid response. Check the server URL.");
 }

@@ -55,12 +55,14 @@ export function PrivacyPage() {
           <p>
             Registration stores name, email address, a password hash, account timestamps, the
             accepted Terms version and time, team membership and roles, administrator status,
-            account-disabled time, and last sign-in time. Login creates a signed session lasting up
-            to 12 hours. Team invitations store the invited email, role, inviter, and a hashed
-            token. Authorized global administrators can search account names and email addresses and
-            see account, sign-in, team-count, and API-token-count metadata to administer access and
-            security. The contract basis covers account and team functions; the legitimate interest
-            covers proof of acceptance, account security, and platform administration.
+            account-disabled time, and last sign-in time. Login creates a renewable session. The
+            server stores its refresh credential only as a hash and extends active sessions for up
+            to 30 days from their last renewal. Team invitations store the invited email, role,
+            inviter, and a hashed token. Authorized global administrators can search account names
+            and email addresses and see account, sign-in, team-count, and API-token-count metadata
+            to administer access and security. The contract basis covers account and team functions;
+            the legitimate interest covers proof of acceptance, account security, and platform
+            administration.
           </p>
         </ProcessingEntry>
 
@@ -247,16 +249,16 @@ export function PrivacyPage() {
 
       <LegalSection title="5. Browser storage">
         <p>
-          Mimorii does not set application cookies. It uses browser local storage for the access
-          token, session expiry, account and team summaries, active team, selected server URL, a
-          chosen landing-page theme, the analytics choice and decision time, and, if push is
-          enabled, a random device reference and server-specific endpoint reference. The browser
-          also stores the service worker and push subscription requested for Web Push. Swetrix
-          itself does not use browser storage in this integration. This storage provides functions
-          or choices requested by the user and is used under Section 25(2) No. 2 TDDDG. The session
-          and team selection are removed on sign-out and an expired session is removed when the app
-          is next opened. Push subscriptions and endpoint references are removed when push is
-          disabled; server URL, theme, privacy choice, device reference, and service-worker
+          Mimorii does not set application cookies. It uses browser local storage for the access and
+          refresh tokens, their expiry times, account and team summaries, active team, selected
+          server URL, a chosen landing-page theme, the analytics choice and decision time, and, if
+          push is enabled, a random device reference and server-specific endpoint reference. The
+          browser also stores the service worker and push subscription requested for Web Push.
+          Swetrix itself does not use browser storage in this integration. This storage provides
+          functions or choices requested by the user and is used under Section 25(2) No. 2 TDDDG.
+          The session and team selection are removed on sign-out and an expired session is removed
+          when the app is next opened. Push subscriptions and endpoint references are removed when
+          push is disabled; server URL, theme, privacy choice, device reference, and service-worker
           registration remain until changed or browser site data is cleared.
         </p>
       </LegalSection>

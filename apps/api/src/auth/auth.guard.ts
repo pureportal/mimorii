@@ -10,6 +10,7 @@ import { readBearerToken } from "./bearer-token.js";
 interface TokenPayload {
   sub: string;
   v: number;
+  sid: string;
 }
 
 interface ApiTokenUserRow extends UserRow {
@@ -70,7 +71,23 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException("Session expired");
     }
 
-    const user = await this.database.get<UserRow>("SELECT * FROM users WHERE id = ?", payload.sub);
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.v !== "number" ||
+      typeof payload.sid !== "string"
+    ) {
+      throw new UnauthorizedException("Session expired");
+    }
+
+    const user = await this.database.get<UserRow>(
+      `SELECT u.* FROM users u
+       JOIN user_sessions s ON s.user_id = u.id
+       WHERE u.id = ? AND s.id = ? AND s.expires_at > ?
+       AND s.user_token_version = u.token_version`,
+      payload.sub,
+      payload.sid,
+      new Date().toISOString()
+    );
     if (!user || user.disabled_at || user.token_version !== payload.v)
       throw new UnauthorizedException("Session expired");
 

@@ -4,7 +4,6 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
 import {
   termsVersion,
   type AuthSession,
@@ -19,8 +18,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { createDefaultNotificationPolicy } from "../notifications/default-notification-policy.js";
 import { PlatformSettingsService } from "../platform-settings/platform-settings.service.js";
 import type { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from "./auth.dto.js";
-
-const SESSION_SECONDS = 12 * 60 * 60;
+import { SessionService } from "./session.service.js";
 
 interface TeamRow {
   id: string;
@@ -39,9 +37,9 @@ interface UserProfileRow {
 export class AuthService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly jwt: JwtService,
     private readonly audit: AuditService,
-    private readonly settings: PlatformSettingsService
+    private readonly settings: PlatformSettingsService,
+    private readonly sessions: SessionService
   ) {}
 
   async register(input: RegisterDto): Promise<AuthSession> {
@@ -142,6 +140,15 @@ export class AuthService {
     return { user: await this.userSummary(user), teams: await this.listTeams(user.id) };
   }
 
+  async refreshSession(refreshToken: string): Promise<AuthSession> {
+    const refreshed = await this.sessions.refresh(refreshToken);
+    return this.session(refreshed.user, refreshed.credentials);
+  }
+
+  async revokeSession(refreshToken: string): Promise<void> {
+    await this.sessions.revoke(refreshToken);
+  }
+
   async updateProfile(user: AuthenticatedUser, input: UpdateProfileDto): Promise<UserSummary> {
     const name = input.name.trim();
     const updatedAt = new Date().toISOString();
@@ -188,6 +195,7 @@ export class AuthService {
       new Date().toISOString(),
       user.id
     );
+    await this.database.run("DELETE FROM user_sessions WHERE user_id = ?", user.id);
     await this.audit.record({
       userId: user.id,
       action: "account.password_changed",
@@ -197,13 +205,18 @@ export class AuthService {
   }
 
   private async createSession(user: AuthenticatedUser): Promise<AuthSession> {
-    const accessToken = await this.jwt.signAsync(
-      { sub: user.id, v: user.tokenVersion },
-      { expiresIn: SESSION_SECONDS }
-    );
+    return this.session(user, await this.sessions.create(user));
+  }
+
+  private async session(
+    user: AuthenticatedUser,
+    credentials: Pick<
+      AuthSession,
+      "accessToken" | "expiresAt" | "refreshToken" | "refreshExpiresAt"
+    >
+  ): Promise<AuthSession> {
     return {
-      accessToken,
-      expiresAt: new Date(Date.now() + SESSION_SECONDS * 1000).toISOString(),
+      ...credentials,
       user: await this.userSummary(user),
       teams: await this.listTeams(user.id),
     };

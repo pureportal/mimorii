@@ -49,6 +49,54 @@
         ]
       }
     },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renewed session"
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/api/auth/me": {
       "get": {
         "operationId": "current",
@@ -4832,6 +4880,19 @@
         "required": [
           "email",
           "password"
+        ]
+      },
+      "RefreshSessionDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "refreshToken"
         ]
       },
       "UpdateProfileDto": {

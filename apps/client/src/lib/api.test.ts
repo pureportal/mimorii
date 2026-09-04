@@ -7,9 +7,13 @@ import {
   normalizeServerUrl,
   setServerUrl,
 } from "./api";
+import { getAuthSession, storeAuthSession } from "./auth-session";
 
 describe("server URL configuration", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    storeAuthSession(null);
+    localStorage.clear();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("normalizes API paths", () => {
@@ -82,4 +86,110 @@ describe("server URL configuration", () => {
       "Server returned an invalid response. Check the server URL."
     );
   });
+
+  it("renews an expired access token before making the request", async () => {
+    const renewed = authSession("renewed-access", Date.now() + 60 * 60_000);
+    storeAuthSession(authSession("expired-access", Date.now() - 1_000));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(renewed))
+      .mockResolvedValueOnce(jsonResponse({ user: renewed.user, teams: renewed.teams }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api("/auth/me")).resolves.toMatchObject({ user: renewed.user });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:3000/api/auth/refresh");
+    const refreshBody = fetchMock.mock.calls[0]?.[1]?.body;
+    if (typeof refreshBody !== "string") throw new Error("Expected a JSON refresh request");
+    expect(JSON.parse(refreshBody)).toEqual({
+      refreshToken: "refresh-token",
+    });
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer renewed-access"
+    );
+    expect(getAuthSession()?.accessToken).toBe("renewed-access");
+  });
+
+  it("renews and retries once when the server rejects an access token", async () => {
+    const renewed = authSession("renewed-access", Date.now() + 60 * 60_000);
+    storeAuthSession(authSession("rejected-access", Date.now() + 60 * 60_000));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ message: "Session expired" }, 401))
+      .mockResolvedValueOnce(jsonResponse(renewed))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api("/checks")).resolves.toEqual({ ok: true });
+
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer rejected-access"
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:3000/api/auth/refresh");
+    expect(new Headers(fetchMock.mock.calls[2]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer renewed-access"
+    );
+  });
+
+  it("clears only the invalid session when refresh is rejected", async () => {
+    storeAuthSession(authSession("expired-access", Date.now() - 1_000));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ message: "Session expired" }, 401))
+    );
+
+    await expect(api("/auth/me")).rejects.toThrow("Session expired");
+    expect(getAuthSession()).toBeNull();
+    expect(localStorage.getItem("mimorii.session")).toBeNull();
+  });
+
+  it("keeps a valid session when the retried operation itself is unauthorized", async () => {
+    const renewed = authSession("renewed-access", Date.now() + 60 * 60_000);
+    storeAuthSession(authSession("current-access", Date.now() + 60 * 60_000));
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ message: "Current password is incorrect" }, 401))
+        .mockResolvedValueOnce(jsonResponse(renewed))
+        .mockResolvedValueOnce(jsonResponse({ message: "Current password is incorrect" }, 401))
+    );
+
+    await expect(
+      api("/auth/password", { method: "POST", body: JSON.stringify({}) })
+    ).rejects.toThrow("Current password is incorrect");
+    expect(getAuthSession()?.accessToken).toBe("renewed-access");
+  });
 });
+
+function authSession(accessToken: string, expiresAt: number) {
+  return {
+    accessToken,
+    expiresAt: new Date(expiresAt).toISOString(),
+    refreshToken: "refresh-token",
+    refreshExpiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    user: {
+      id: "user-1",
+      email: "user@example.com",
+      name: "User",
+      isGlobalAdmin: false,
+      acknowledgedTourIds: [],
+      createdAt: "2026-08-14T08:00:00.000Z",
+    },
+    teams: [
+      {
+        id: "team-1",
+        name: "Operations",
+        role: "owner" as const,
+        createdAt: "2026-08-14T08:00:00.000Z",
+      },
+    ],
+  };
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}

@@ -49,6 +49,9 @@ describe("retention", () => {
       "DELETE FROM mobile_device_statuses WHERE received_at < ?",
       "2026-05-15T00:00:00.000Z"
     );
+    expect(run).toHaveBeenCalledWith(
+      "DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP"
+    );
   });
 
   it("does not read settings or delete data when retention is disabled", async () => {

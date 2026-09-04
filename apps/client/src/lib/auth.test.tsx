@@ -3,16 +3,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./auth";
 
-const { apiMock, revokePushOnLogoutMock, setAccessTokenMock } = vi.hoisted(() => ({
+const { apiMock, revokeAuthSessionMock, revokePushOnLogoutMock } = vi.hoisted(() => ({
   apiMock: vi.fn(),
+  revokeAuthSessionMock: vi.fn(),
   revokePushOnLogoutMock: vi.fn(),
-  setAccessTokenMock: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
   api: apiMock,
   jsonBody: (value: unknown) => ({ body: JSON.stringify(value) }),
-  setAccessToken: setAccessTokenMock,
+  revokeAuthSession: revokeAuthSessionMock,
 }));
 
 vi.mock("./privacy", () => ({ usePrivacy: () => ({ preferences: null }) }));
@@ -34,8 +34,8 @@ describe("AuthProvider profile synchronization", () => {
   beforeEach(() => {
     localStorage.clear();
     apiMock.mockReset();
+    revokeAuthSessionMock.mockReset().mockResolvedValue(undefined);
     revokePushOnLogoutMock.mockReset();
-    setAccessTokenMock.mockReset();
   });
 
   afterEach(cleanup);
@@ -51,6 +51,8 @@ describe("AuthProvider profile synchronization", () => {
       JSON.stringify({
         accessToken: "session-token",
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        refreshToken: "refresh-token",
+        refreshExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
         user: user(["cached-view"]),
         teams: [team],
       })
@@ -93,6 +95,8 @@ describe("AuthProvider profile synchronization", () => {
       JSON.stringify({
         accessToken: "session-token",
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        refreshToken: "refresh-token",
+        refreshExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
         user: user([]),
         teams: [team],
       })
@@ -108,6 +112,7 @@ describe("AuthProvider profile synchronization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(revokePushOnLogoutMock).toHaveBeenCalledOnce();
+    expect(revokeAuthSessionMock).toHaveBeenCalledWith("refresh-token");
     expect(localStorage.getItem("mimorii.session")).toBeNull();
   });
 });

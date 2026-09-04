@@ -18,6 +18,8 @@ describe("ProtectedLayout navigation", () => {
       session: {
         accessToken: "session-token",
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        refreshToken: "refresh-token",
+        refreshExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
         user: {
           id: "user-1",
           email: "user@example.com",
