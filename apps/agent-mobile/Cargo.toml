@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-agent-mobile"
-version = "11.5.0"
+version = "11.6.0"
 description = "Mimorii Android device status agent"
 edition = "2024"
 links = "tauri-plugin-agent-mobile"
