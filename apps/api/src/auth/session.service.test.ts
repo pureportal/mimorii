@@ -1,5 +1,5 @@
 import { UnauthorizedException } from "@nestjs/common";
-import type { JwtService } from "@nestjs/jwt";
+import { JwtService } from "@nestjs/jwt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashSecret } from "../common/crypto.js";
 import type { AuthenticatedUser, UserRow } from "../common/rows.js";
@@ -26,7 +26,12 @@ describe("user sessions", () => {
       refreshExpiresAt: "2026-10-04T12:00:00.000Z",
     });
     expect(fixture.jwt.signAsync).toHaveBeenCalledWith(
-      { sub: authenticatedUser.id, v: authenticatedUser.tokenVersion, sid: expect.any(String) },
+      {
+        sub: authenticatedUser.id,
+        v: authenticatedUser.tokenVersion,
+        sid: expect.any(String),
+        jti: expect.any(String),
+      },
       { expiresIn: 3_600 }
     );
     expect(fixture.database.run).toHaveBeenCalledWith(
@@ -38,6 +43,38 @@ describe("user sessions", () => {
       "2026-10-04T12:00:00.000Z",
       "2026-09-04T12:00:00.000Z"
     );
+  });
+
+  it("issues distinct access tokens for repeated renewals within the same second", async () => {
+    const jwt = new JwtService({ secret: "test-only-session-secret" });
+    const fixture = serviceFixture(undefined, jwt);
+
+    const credentials = await fixture.service.create(authenticatedUser);
+    const payload = await jwt.verifyAsync<{ sid: string }>(credentials.accessToken);
+    fixture.database.get.mockResolvedValue(sessionRow({ session_id: payload.sid }));
+
+    const refreshed = await fixture.service.refresh(credentials.refreshToken);
+    const refreshedAgain = await fixture.service.refresh(credentials.refreshToken);
+    const accessTokens = [
+      credentials.accessToken,
+      refreshed.credentials.accessToken,
+      refreshedAgain.credentials.accessToken,
+    ];
+
+    expect(new Set(accessTokens).size).toBe(accessTokens.length);
+    const tokenPayloads = await Promise.all(
+      accessTokens.map((accessToken) => jwt.verifyAsync<Record<string, unknown>>(accessToken))
+    );
+    const issuedAt = Math.floor(Date.now() / 1_000);
+    for (const tokenPayload of tokenPayloads) {
+      expect(tokenPayload).toMatchObject({
+        sub: authenticatedUser.id,
+        v: authenticatedUser.tokenVersion,
+        sid: payload.sid,
+        iat: issuedAt,
+        exp: issuedAt + 3_600,
+      });
+    }
   });
 
   it("renews the access token and slides the refresh-session lease", async () => {
@@ -120,13 +157,15 @@ function sessionRow(overrides: Partial<UserRow & Record<string, unknown>> = {}) 
   };
 }
 
-function serviceFixture(row?: ReturnType<typeof sessionRow>) {
+function serviceFixture(
+  row?: ReturnType<typeof sessionRow>,
+  jwt: Pick<JwtService, "signAsync"> = { signAsync: vi.fn(async () => "signed-access-token") }
+) {
   const database = {
     get: vi.fn(async () => row),
     run: vi.fn(async () => ({ changes: 1 })),
     transaction: vi.fn(async (action: () => unknown) => action()),
   };
-  const jwt = { signAsync: vi.fn(async () => "signed-access-token") };
   return {
     database,
     jwt,

@@ -111,7 +111,7 @@ export class SessionService {
     now: Date
   ): Promise<SessionCredentials> {
     const accessToken = await this.jwt.signAsync(
-      { sub: user.id, v: user.tokenVersion, sid: sessionId },
+      { sub: user.id, v: user.tokenVersion, sid: sessionId, jti: randomUUID() },
       { expiresIn: ACCESS_TOKEN_LIFETIME_SECONDS }
     );
     return {
