@@ -6,6 +6,7 @@ import {
 } from "@mimorii/contracts";
 import { checkMetricThresholdSeverity, checkMetricThresholds } from "./check-chart";
 import { formatBytes } from "./format";
+import { hostMaintenanceFindings } from "./host-maintenance";
 
 type CheckMetricValue = number | string | boolean | null;
 
@@ -14,6 +15,7 @@ export interface CheckHealthItem {
   label: string;
   value: string;
   percent?: number;
+  severity?: "warning" | "critical";
 }
 
 export interface CheckHistorySeries {
@@ -51,6 +53,10 @@ const metricLabels: Record<string, string> = {
   loadAverage: "Load average",
   swapPercent: "Swap",
   processCount: "Processes",
+  pendingUpdateCount: "Pending updates",
+  pendingSecurityUpdateCount: "Security updates",
+  updateDataAgeHours: "Update data age",
+  failedServiceCount: "Failed services",
   storagePercent: "Storage",
   mount: "Mount",
   usedPercent: "Used",
@@ -112,6 +118,10 @@ export function getCheckHealthItems(
   limit = 2
 ): CheckHealthItem[] {
   const metrics = check.latestMetrics;
+  const maintenance =
+    check.type === "host"
+      ? hostMaintenanceFindings(metrics).filter((finding) => finding.status !== "okay")
+      : [];
   const items: Array<CheckHealthItem | null> = [];
 
   switch (check.type) {
@@ -147,6 +157,19 @@ export function getCheckHealthItems(
       break;
     case "host":
       items.push(
+        ...maintenance.map(
+          (finding): CheckHealthItem => ({
+            key: finding.key,
+            label: finding.label,
+            value:
+              finding.status === "unavailable"
+                ? "Unavailable"
+                : finding.status === "critical"
+                  ? "Critical"
+                  : "Warning",
+            severity: finding.status === "critical" ? "critical" : "warning",
+          })
+        ),
         metricItem(metrics, "cpuPercent"),
         metricItem(metrics, "memoryPercent"),
         metricItem(metrics, "loadAverage"),
@@ -175,6 +198,8 @@ export function getCheckHealthItems(
   if (result.length >= limit) return result.slice(0, limit);
 
   for (const [key, value] of Object.entries(metrics)) {
+    if (key.startsWith("maintenance.") || maintenance.some((finding) => finding.metric === key))
+      continue;
     if (result.some((item) => item.key === key) || value === null) continue;
     result.push(createItem(key, value));
     if (result.length === limit) break;
@@ -270,6 +295,7 @@ export function formatCheckMetric(metric: string, value: CheckMetricValue): stri
   if (normalized.includes("percent")) return `${formatNumber(value, 1)}%`;
   if (normalized.endsWith("ms")) return `${formatNumber(value, 1)} ms`;
   if (normalized.includes("days")) return `${formatNumber(value, 1)} d`;
+  if (normalized.includes("hours")) return `${formatNumber(value, 1)} h`;
   if (normalized.includes("seconds")) return `${formatNumber(value, 1)} s`;
   if (metric === "loadAverage") return formatNumber(value, 2);
   return formatNumber(value, 1);

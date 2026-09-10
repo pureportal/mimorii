@@ -505,6 +505,70 @@ export function HostCheckFields({ fields, update }: CheckFormFieldsProps) {
           />
         </div>
       ) : null}
+      <fieldset className="grid gap-4 border-t border-line pt-4">
+        <legend className="px-1 text-sm font-semibold">Maintenance</legend>
+        <Checkbox
+          label="Security updates"
+          checked={fields.securityUpdates}
+          onChange={(value) => update("securityUpdates", value)}
+        />
+        {fields.securityUpdates ? (
+          <ThresholdField
+            id="host-security-updates"
+            label="Critical update count"
+            value={fields.securityUpdateCriticalCount}
+            onChange={(value) => update("securityUpdateCriticalCount", value)}
+            max={100_000}
+          />
+        ) : null}
+        <Checkbox
+          label="Software updates"
+          checked={fields.softwareUpdates}
+          onChange={(value) => update("softwareUpdates", value)}
+        />
+        {fields.softwareUpdates ? (
+          <ThresholdField
+            id="host-software-updates"
+            label="Update warning count"
+            value={fields.softwareUpdateWarningCount}
+            onChange={(value) => update("softwareUpdateWarningCount", value)}
+            max={100_000}
+          />
+        ) : null}
+        {fields.securityUpdates || fields.softwareUpdates ? (
+          <ThresholdField
+            id="host-update-age"
+            label="Maximum update data age · hours"
+            value={fields.maxUpdateAgeHours}
+            onChange={(value) => update("maxUpdateAgeHours", value)}
+            max={8_760}
+          />
+        ) : null}
+        <Checkbox
+          label="Required restart"
+          checked={fields.rebootRequired}
+          onChange={(value) => update("rebootRequired", value)}
+        />
+        <Checkbox
+          label="Security problems"
+          checked={fields.hostSecurity}
+          onChange={(value) => update("hostSecurity", value)}
+        />
+        <Checkbox
+          label="Failed services"
+          checked={fields.failedServices}
+          onChange={(value) => update("failedServices", value)}
+        />
+        {fields.failedServices ? (
+          <ThresholdField
+            id="host-failed-services"
+            label="Failed service warning count"
+            value={fields.failedServiceWarningCount}
+            onChange={(value) => update("failedServiceWarningCount", value)}
+            max={100_000}
+          />
+        ) : null}
+      </fieldset>
     </div>
   );
 }

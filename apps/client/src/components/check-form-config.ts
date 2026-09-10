@@ -1,8 +1,9 @@
-import type {
-  CheckType,
-  HttpJsonAssertionGroup,
-  HttpJsonAssertionNode,
-  HttpJsonAssertionOperator,
+import {
+  hostMaintenanceDefaults,
+  type CheckType,
+  type HttpJsonAssertionGroup,
+  type HttpJsonAssertionNode,
+  type HttpJsonAssertionOperator,
 } from "@mimorii/contracts";
 
 export interface JsonAssertionField {
@@ -61,6 +62,15 @@ export const initialCheckFields = {
   monitorLoad: true,
   swap: "90",
   swapCritical: "98",
+  securityUpdates: hostMaintenanceDefaults.securityUpdates,
+  softwareUpdates: hostMaintenanceDefaults.softwareUpdates,
+  rebootRequired: hostMaintenanceDefaults.rebootRequired,
+  hostSecurity: hostMaintenanceDefaults.security,
+  failedServices: hostMaintenanceDefaults.failedServices,
+  securityUpdateCriticalCount: String(hostMaintenanceDefaults.securityUpdateCriticalCount),
+  softwareUpdateWarningCount: String(hostMaintenanceDefaults.softwareUpdateWarningCount),
+  failedServiceWarningCount: String(hostMaintenanceDefaults.failedServiceWarningCount),
+  maxUpdateAgeHours: String(hostMaintenanceDefaults.maxUpdateAgeHours),
   mount: "/",
   disk: "85",
   diskCritical: "95",
@@ -88,6 +98,7 @@ export type UpdateCheckField = <K extends keyof CheckFields>(key: K, value: Chec
 
 export function checkFields(value: unknown): CheckFields {
   const config = isRecord(value) ? value : undefined;
+  const maintenance = isRecord(config?.maintenance) ? config.maintenance : undefined;
   const target = isRecord(config?.target) ? config.target : undefined;
   const databaseEngine = stringField(target?.engine, "postgresql");
   const assertions = isRecord(config?.jsonAssertions) ? config.jsonAssertions : undefined;
@@ -133,6 +144,27 @@ export function checkFields(value: unknown): CheckFields {
       config === undefined || config.loadWarning !== undefined || config.loadCritical !== undefined,
     swap: stringField(config?.swapWarningPercent, initialCheckFields.swap),
     swapCritical: stringField(config?.swapCriticalPercent, initialCheckFields.swapCritical),
+    securityUpdates: maintenance?.securityUpdates !== false,
+    softwareUpdates: maintenance?.softwareUpdates !== false,
+    rebootRequired: maintenance?.rebootRequired !== false,
+    hostSecurity: maintenance?.security !== false,
+    failedServices: maintenance?.failedServices !== false,
+    securityUpdateCriticalCount: stringField(
+      maintenance?.securityUpdateCriticalCount,
+      initialCheckFields.securityUpdateCriticalCount
+    ),
+    softwareUpdateWarningCount: stringField(
+      maintenance?.softwareUpdateWarningCount,
+      initialCheckFields.softwareUpdateWarningCount
+    ),
+    failedServiceWarningCount: stringField(
+      maintenance?.failedServiceWarningCount,
+      initialCheckFields.failedServiceWarningCount
+    ),
+    maxUpdateAgeHours: stringField(
+      maintenance?.maxUpdateAgeHours,
+      initialCheckFields.maxUpdateAgeHours
+    ),
     mount: stringField(config?.mount, initialCheckFields.mount),
     disk: stringField(config?.warningPercent, initialCheckFields.disk),
     diskCritical: stringField(config?.criticalPercent, initialCheckFields.diskCritical),
@@ -225,6 +257,17 @@ export function buildCheckConfig(type: CheckType, fields: CheckFields): Record<s
           : {}),
         swapWarningPercent: Number(fields.swap),
         swapCriticalPercent: Number(fields.swapCritical),
+        maintenance: {
+          securityUpdates: fields.securityUpdates,
+          softwareUpdates: fields.softwareUpdates,
+          rebootRequired: fields.rebootRequired,
+          security: fields.hostSecurity,
+          failedServices: fields.failedServices,
+          securityUpdateCriticalCount: Number(fields.securityUpdateCriticalCount),
+          softwareUpdateWarningCount: Number(fields.softwareUpdateWarningCount),
+          failedServiceWarningCount: Number(fields.failedServiceWarningCount),
+          maxUpdateAgeHours: Number(fields.maxUpdateAgeHours),
+        },
       };
     case "disk":
       return {

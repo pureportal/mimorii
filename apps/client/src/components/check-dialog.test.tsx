@@ -124,6 +124,37 @@ describe("CheckDialog", () => {
     );
   });
 
+  it("saves host maintenance defaults and changes from the form", async () => {
+    const onSubmit = vi.fn(async (_payload: CheckPayload) => undefined);
+    render(
+      <CheckDialog open onOpenChange={vi.fn()} resources={[windowsResource]} onSubmit={onSubmit} />
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Type" }), { target: { value: "host" } });
+    expect(screen.getByRole("checkbox", { name: "Security updates" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Software updates" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Software updates" }));
+    expect(
+      screen.queryByRole("spinbutton", { name: "Update warning count" })
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Critical update count" }), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save check" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: 30_000,
+        config: expect.objectContaining({
+          maintenance: expect.objectContaining({
+            securityUpdates: true,
+            softwareUpdates: false,
+            securityUpdateCriticalCount: 2,
+          }),
+        }),
+      })
+    );
+  });
+
   it.each(["", "missing-resource"])(
     "submits the first available resource when the default is %j",
     async (defaultResourceId) => {

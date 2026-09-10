@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hostMaintenanceDefaults } from "@mimorii/contracts";
 import { buildCheckConfig, checkFields } from "./check-form-config";
 
 describe("check form configuration", () => {
@@ -63,7 +64,21 @@ describe("check form configuration", () => {
       loadCritical: 8,
       swapWarningPercent: 90,
       swapCriticalPercent: 98,
+      maintenance: hostMaintenanceDefaults,
     });
+  });
+
+  it("round-trips changed and disabled host maintenance settings", () => {
+    const maintenance = {
+      ...hostMaintenanceDefaults,
+      securityUpdates: false,
+      softwareUpdateWarningCount: 10,
+      failedServices: false,
+      maxUpdateAgeHours: 24,
+    };
+    const config = buildCheckConfig("host", checkFields({ maintenance }));
+    expect(config.maintenance).toEqual(maintenance);
+    expect(buildCheckConfig("host", checkFields(config))).toEqual(config);
   });
 
   it("round-trips disk thresholds", () => {

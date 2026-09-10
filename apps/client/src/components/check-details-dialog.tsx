@@ -10,6 +10,7 @@ import {
 } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
 import { CheckHealthSummary } from "./check-health-summary";
+import { HostMaintenanceResults } from "./host-maintenance-results";
 import { CheckMetricHistoryCard } from "./check-metric-history-card";
 import { StatusBadge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -79,6 +80,8 @@ export function CheckDetailsDialog({
               ) : null}
             </section>
 
+            {check.type === "host" ? <HostMaintenanceResults metrics={latestMetrics} /> : null}
+
             {history.isLoading ? (
               <div className="grid h-52 place-items-center text-sm text-muted">
                 Loading history…
@@ -110,6 +113,7 @@ export function CheckDetailsDialog({
                 <h3 className="mb-3 text-sm font-semibold">Latest metrics</h3>
                 <dl className="grid gap-x-6 gap-y-3 rounded-2xl border border-line p-4 sm:grid-cols-2 lg:grid-cols-3">
                   {Object.entries(latestMetrics)
+                    .filter(([metric]) => !metric.startsWith("maintenance."))
                     .toSorted(([left], [right]) =>
                       checkMetricLabel(left).localeCompare(checkMetricLabel(right))
                     )

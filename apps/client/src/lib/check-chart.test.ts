@@ -1,4 +1,4 @@
-import type { CheckSummary } from "@mimorii/contracts";
+import { hostMaintenanceDefaults, type CheckSummary } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
 import {
   checkMetricThresholdSeverity,
@@ -7,6 +7,30 @@ import {
 } from "./check-chart";
 
 describe("check chart indicators", () => {
+  it("uses maintenance thresholds and disabled checks in history", () => {
+    const check = hostCheck();
+    if (!("cpuCriticalPercent" in check.config)) throw new Error("Expected host configuration");
+    check.config.maintenance = {
+      ...hostMaintenanceDefaults,
+      securityUpdateCriticalCount: 3,
+      softwareUpdateWarningCount: 5,
+      maxUpdateAgeHours: 24,
+      failedServices: false,
+    };
+    const security = checkMetricThresholds(check, "pendingSecurityUpdateCount");
+    expect(checkMetricThresholdSeverity(2, security)).toBeNull();
+    expect(checkMetricThresholdSeverity(3, security)).toBe("critical");
+    expect(
+      checkMetricThresholdSeverity(5, checkMetricThresholds(check, "pendingUpdateCount"))
+    ).toBe("warning");
+    expect(
+      checkMetricThresholdSeverity(24, checkMetricThresholds(check, "updateDataAgeHours"))
+    ).toBeNull();
+    expect(
+      checkMetricThresholdSeverity(25, checkMetricThresholds(check, "updateDataAgeHours"))
+    ).toBe("warning");
+    expect(checkMetricThresholds(check, "failedServiceCount")).toEqual([]);
+  });
   it("maps host warning and critical thresholds to their metric", () => {
     const check = hostCheck();
 

@@ -6,6 +6,50 @@ import { CheckHealthSummary } from "./check-health-summary";
 describe("CheckHealthSummary", () => {
   afterEach(cleanup);
 
+  it("does not repeat the same update finding as a count", () => {
+    render(
+      <CheckHealthSummary
+        check={{
+          type: "host",
+          timeoutMs: 30_000,
+          config: hostConfig,
+          lastLatencyMs: null,
+          latestMetrics: {
+            cpuPercent: 10,
+            memoryPercent: 20,
+            "maintenance.securityUpdates.status": "critical",
+            pendingSecurityUpdateCount: 2,
+          },
+        }}
+      />
+    );
+    expect(screen.getAllByText("Security updates")).toHaveLength(1);
+    expect(screen.getByText("Critical")).toHaveClass("text-danger");
+  });
+
+  it("shows unavailable maintenance alongside a critical resource metric", () => {
+    render(
+      <CheckHealthSummary
+        check={{
+          type: "host",
+          timeoutMs: 30_000,
+          config: hostConfig,
+          lastLatencyMs: null,
+          latestMetrics: {
+            cpuPercent: 10,
+            memoryPercent: 20,
+            swapPercent: 99,
+            "maintenance.securityUpdates.status": "unavailable",
+            "maintenance.securityUpdates.detail": "No update data",
+            "maintenance.security.status": "okay",
+          },
+        }}
+      />
+    );
+    expect(screen.getByText("Unavailable")).toHaveClass("text-warning-strong");
+    expect(screen.getByText("99%")).toHaveClass("text-danger");
+  });
+
   it("prioritizes the host metric that crossed its threshold", () => {
     render(
       <CheckHealthSummary

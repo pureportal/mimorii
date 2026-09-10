@@ -1,4 +1,4 @@
-import type { CheckSummary } from "@mimorii/contracts";
+import { hostMaintenanceDefaults, type CheckSummary } from "@mimorii/contracts";
 
 export type CheckMetricThresholdComparison =
   | "greaterThan"
@@ -74,6 +74,18 @@ export function checkMetricThresholds(
     case "host": {
       const config =
         "cpuCriticalPercent" in check.config ? check.config : invalidCheckConfig(check.type);
+      const maintenance = config.maintenance ?? hostMaintenanceDefaults;
+      if (metric === "pendingUpdateCount" && maintenance.softwareUpdates)
+        return [warning(maintenance.softwareUpdateWarningCount)];
+      if (metric === "pendingSecurityUpdateCount" && maintenance.securityUpdates)
+        return [critical(maintenance.securityUpdateCriticalCount)];
+      if (metric === "failedServiceCount" && maintenance.failedServices)
+        return [warning(maintenance.failedServiceWarningCount)];
+      if (
+        metric === "updateDataAgeHours" &&
+        (maintenance.securityUpdates || maintenance.softwareUpdates)
+      )
+        return [warning(maintenance.maxUpdateAgeHours, "greaterThan")];
       const values: Partial<Record<string, [number, number]>> = {
         cpuPercent: [config.cpuWarningPercent, config.cpuCriticalPercent],
         memoryPercent: [config.memoryWarningPercent, config.memoryCriticalPercent],

@@ -207,6 +207,7 @@ export function CheckDialog({
                 const next = checkTypes.find((value) => value === event.target.value);
                 if (next) {
                   setType(next);
+                  if (next === "host" && !initial && timeout === "5000") setTimeoutValue("30000");
                   if (["host", "disk", "docker"].includes(next)) {
                     const resource =
                       resources.find(

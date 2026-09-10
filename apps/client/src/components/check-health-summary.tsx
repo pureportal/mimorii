@@ -14,12 +14,13 @@ export function CheckHealthSummary({
   check: Pick<CheckSummary, "type" | "config" | "timeoutMs" | "lastLatencyMs" | "latestMetrics">;
   className?: string;
 }) {
-  const items = getCheckHealthItems(check, 8)
+  const items = getCheckHealthItems(check, 16)
     .map((item) => {
       const thresholds = checkMetricThresholds(check, item.key);
       const value = item.key === "latencyMs" ? check.lastLatencyMs : check.latestMetrics[item.key];
       const severity =
-        typeof value === "number" ? checkMetricThresholdSeverity(value, thresholds) : null;
+        item.severity ??
+        (typeof value === "number" ? checkMetricThresholdSeverity(value, thresholds) : null);
       return { item, thresholds, severity };
     })
     .toSorted((left, right) => severityPriority(right.severity) - severityPriority(left.severity))
