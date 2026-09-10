@@ -1,6 +1,6 @@
-use std::net::{Ipv4Addr, Ipv6Addr, UdpSocket};
+use std::io::{Read, Write};
+use std::net::{Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
 use std::str::FromStr;
-use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -15,8 +15,6 @@ use super::{assert_result, snapshot, task};
 use crate::models::{CheckState, CheckType};
 use crate::target_policy::{TargetPolicy, TargetProtocol};
 use crate::test_support::tcp_listener;
-
-static DNS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn tcp_check_connects_and_records_the_port() {
@@ -80,7 +78,6 @@ fn tcp_latency_threshold_reports_up_and_degraded() {
 
 #[test]
 fn dns_check_supports_every_configured_record_type() {
-    let _guard = DNS_TEST_LOCK.lock().unwrap();
     for (record_type, expected) in [
         (RecordType::A, "192.0.2.10"),
         (RecordType::AAAA, "2001:db8::10"),
@@ -111,7 +108,6 @@ fn dns_check_supports_every_configured_record_type() {
 
 #[test]
 fn dns_check_reports_expected_value_mismatches() {
-    let _guard = DNS_TEST_LOCK.lock().unwrap();
     let (resolver, server) = dns_fixture(RecordType::A);
     let result = super::super::dns_with_config(
         &task(
@@ -163,33 +159,21 @@ fn dns_check_rejects_invalid_configuration_and_record_types() {
 
 #[test]
 fn dns_timeout_errors_are_reported() {
-    let _guard = DNS_TEST_LOCK.lock().unwrap();
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    socket
-        .set_read_timeout(Some(Duration::from_secs(1)))
-        .unwrap();
-    let address = socket.local_addr().unwrap();
-    let server_socket = socket.try_clone().unwrap();
-    let server = thread::spawn(move || {
-        let mut buffer = [0_u8; 2048];
-        server_socket.recv_from(&mut buffer).unwrap();
-    });
+    let (resolver, listener) = dns_listener();
+    listener.set_nonblocking(true).unwrap();
     let mut value = task(
         CheckType::Dns,
         json!({ "target": { "hostname": "relay.test." }, "recordType": "A" }),
     );
     value.timeout_ms = 100;
-    let resolver = ResolverConfig::from_parts(
-        None,
-        Vec::new(),
-        vec![NameServerConfig::new(address, Protocol::Udp)],
-    );
-
     let error = super::super::dns_with_config(&value, resolver).unwrap_err();
 
+    let (mut stream, _) = listener.accept().unwrap();
+    stream.set_nonblocking(false).unwrap();
+    let request = read_dns_request(&mut stream);
+    assert_eq!(request.queries()[0].query_type(), RecordType::A);
+    assert_eq!(request.queries()[0].name().to_string(), "relay.test.");
     assert_eq!(super::super::safe_error(&error), "Check timed out");
-    drop(socket);
-    server.join().unwrap();
 }
 
 #[test]
@@ -282,15 +266,10 @@ fn icmp_wan_and_database_checks_enforce_the_agent_target_policy() {
 }
 
 fn dns_fixture(record_type: RecordType) -> (ResolverConfig, thread::JoinHandle<()>) {
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    socket
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
-    let address = socket.local_addr().unwrap();
+    let (resolver, listener) = dns_listener();
     let server = thread::spawn(move || {
-        let mut buffer = [0_u8; 2048];
-        let (length, client) = socket.recv_from(&mut buffer).unwrap();
-        let request = Message::from_vec(&buffer[..length]).unwrap();
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_dns_request(&mut stream);
         let query = request.queries()[0].clone();
         assert_eq!(query.query_type(), record_type);
         let mut response = Message::new();
@@ -306,16 +285,35 @@ fn dns_fixture(record_type: RecordType) -> (ResolverConfig, thread::JoinHandle<(
                 fixture_rdata(record_type),
             ));
         let payload = response.to_vec().unwrap();
-        socket.send_to(&payload, client).unwrap();
+        let length = u16::try_from(payload.len()).unwrap().to_be_bytes();
+        stream.write_all(&length).unwrap();
+        stream.write_all(&payload).unwrap();
     });
+    (resolver, server)
+}
+
+fn dns_listener() -> (ResolverConfig, TcpListener) {
+    let (listener, _) = tcp_listener();
+    let address = listener.local_addr().unwrap();
     (
         ResolverConfig::from_parts(
             None,
             Vec::new(),
-            vec![NameServerConfig::new(address, Protocol::Udp)],
+            vec![NameServerConfig::new(address, Protocol::Tcp)],
         ),
-        server,
+        listener,
     )
+}
+
+fn read_dns_request(stream: &mut TcpStream) -> Message {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut length = [0_u8; 2];
+    stream.read_exact(&mut length).unwrap();
+    let mut payload = vec![0_u8; usize::from(u16::from_be_bytes(length))];
+    stream.read_exact(&mut payload).unwrap();
+    Message::from_vec(&payload).unwrap()
 }
 
 fn fixture_rdata(record_type: RecordType) -> RData {
