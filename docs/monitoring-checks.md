@@ -12,6 +12,42 @@ Desktop agents use ICMP sockets. Windows services have the required access. Nati
 
 Firewalls and hosts may intentionally reject ICMP. A rejected echo request is a valid down result; it does not imply that another protocol on the target is unavailable.
 
+## Host maintenance
+
+Native Windows and Linux agents assess host maintenance when a Host health check runs. Findings appear alongside resource metrics in check details and use the existing Okay, Warning, and Critical health states. An enabled assessment with missing, stale, inaccessible, or timed-out data reports **Unavailable** and makes the host check at least Warning. Known critical findings remain Critical when another assessment is unavailable.
+
+All maintenance checks are enabled by default, including when `maintenance` is omitted from a host configuration. Security updates become Critical at one pending update; software updates and failed services become Warning at one. Required restarts are Warning. Detected security problems are Critical. Update data may be at most 72 hours old. New host checks use a 30-second timeout. Existing checks retain their configured timeout.
+
+Configure these settings in the Host health form or its `maintenance` configuration object:
+
+| Setting                                                                              | Default | Accepted values    |
+| ------------------------------------------------------------------------------------ | ------- | ------------------ |
+| `securityUpdates`, `softwareUpdates`, `rebootRequired`, `security`, `failedServices` | `true`  | Boolean            |
+| `securityUpdateCriticalCount`                                                        | `1`     | Integer, 1–100,000 |
+| `softwareUpdateWarningCount`                                                         | `1`     | Integer, 1–100,000 |
+| `failedServiceWarningCount`                                                          | `1`     | Integer, 1–100,000 |
+| `maxUpdateAgeHours`                                                                  | `72`    | Integer, 1–8,760   |
+
+Disabled checks do not collect or report their assessment. Threshold changes apply on the next run. Counts include all detected items; details name up to five examples. Package and update searches use local metadata without refreshing repositories, downloading updates, installing software, restarting services, or changing security settings.
+
+### Windows
+
+The agent uses an [offline Windows Update search](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-get_online) for pending software updates, including hidden updates. Security and Critical Updates categories, plus updates marked with critical MSRC severity, contribute to the security count. Freshness uses Windows Update's [last successful automatic search](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iautomaticupdatesresults-get_lastsearchsuccessdate). Missing search history cannot establish freshness. Slow or disabled Windows Update services can leave this assessment unavailable.
+
+Restart detection uses Windows Update's restart state and the Component Based Servicing restart marker. Security assessment checks Windows Firewall's active profiles and Microsoft Defender's real-time protection. Third-party antivirus is not assessed; passive or inaccessible Defender data is unavailable. Failed services are automatically started services that are stopped with a nonzero exit code; intentionally stopped services without an error are excluded. Windows PowerShell and access to these OS data sources are required.
+
+### Linux
+
+Update assessment supports Debian and Ubuntu APT hosts with `/usr/bin/python3` and `python3-apt`. It compares installed versions with newer versions in trusted local repository indexes using [APT's package data and version comparison](https://apt-team.pages.debian.net/python-apt/library/apt_pkg.html). Held and pinned packages are included. Security classification uses Debian and Ubuntu security origins, including a newer security version superseded by a later regular update. A missing security repository leaves security classification unavailable.
+
+Missing or untrusted configured indexes and expired repository metadata prevent a successful update assessment. Freshness uses the oldest configured repository metadata's local change time, or a more recent APT success stamp. Without a success stamp, unchanged repository metadata can conservatively appear stale after a refresh. Refresh metadata through the host's package management process; Mimorii does not do so.
+
+Restart assessment uses `/run/reboot-required`; an absent marker is only a successful assessment when its `update-notifier` provider is installed. Security assessment reads the [kernel's CPU vulnerability reports](https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/mds.html), including partially mitigated reports that still say vulnerable. Failed service assessment requires systemd. Other package managers, Linux firewall configurations, and Linux antivirus are not assessed.
+
+These checks cover the host's configured update sources and OS reports. They do not provide a universal software inventory, CVE scan, upstream latest-version comparison, or OS end-of-support determination. Manually installed software and updates outside those sources are not covered. Docker check runners and mobile agents do not assess host maintenance.
+
+Collector fixtures can be verified with `cargo test --manifest-path apps/agent-desktop/Cargo.toml`, `python -B apps/agent-desktop/src/host_maintenance/apt_tests.py`, and, on Windows, `powershell -NoProfile -NonInteractive -File apps/agent-desktop/src/host_maintenance/windows_tests.ps1`.
+
 ## Docker
 
 Docker telemetry is collected through the local Docker Engine API. The native agent account needs read access to the engine socket. That access is security-sensitive because control of the Docker socket is generally equivalent to administrative access to the host; grant it only on machines where container monitoring is required.
