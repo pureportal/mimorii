@@ -12,7 +12,8 @@ fn host_config() -> serde_json::Value {
         "loadWarning": 4,
         "loadCritical": 8,
         "swapWarningPercent": 80,
-        "swapCriticalPercent": 90
+        "swapCriticalPercent": 90,
+        "maintenance": { "securityUpdates": false, "softwareUpdates": false, "rebootRequired": false, "security": false, "failedServices": false }
     })
 }
 

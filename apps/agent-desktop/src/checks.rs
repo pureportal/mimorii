@@ -150,19 +150,6 @@ struct WanTarget {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HostConfig {
-    cpu_warning_percent: f32,
-    cpu_critical_percent: f32,
-    memory_warning_percent: f64,
-    memory_critical_percent: f64,
-    load_warning: Option<f64>,
-    load_critical: Option<f64>,
-    swap_warning_percent: f64,
-    swap_critical_percent: f64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct DiskConfig {
     mount: String,
     warning_percent: f64,
@@ -212,7 +199,7 @@ pub fn execute(
         CheckType::Dns => dns(task),
         CheckType::Icmp => icmp_check(task, target_policy),
         CheckType::Wan => wan(task, target_policy),
-        CheckType::Host => host(task, snapshot),
+        CheckType::Host => crate::host_check::execute(task, snapshot),
         CheckType::Disk => disk(task, snapshot),
         CheckType::Docker => docker(task, snapshot),
         CheckType::Database => database_check(task, target_policy),
@@ -871,64 +858,6 @@ fn database_check(task: &AgentTask, target_policy: &TargetPolicy) -> Result<Task
         status_code: None,
         message: result.message,
         metrics: result.metrics,
-        checked_at: time_now(),
-        favicon: None,
-    })
-}
-
-fn host(task: &AgentTask, snapshot: &HostSnapshot) -> Result<TaskResult> {
-    let config: HostConfig =
-        serde_json::from_value(task.config.clone()).context("host configuration is invalid")?;
-    if config.load_warning.is_some() != config.load_critical.is_some() {
-        bail!("host configuration is invalid");
-    }
-    let memory_percent = if snapshot.memory_total_bytes == 0 {
-        0.0
-    } else {
-        snapshot.memory_used_bytes as f64 / snapshot.memory_total_bytes as f64 * 100.0
-    };
-    let swap_percent = if snapshot.swap_total_bytes == 0 {
-        0.0
-    } else {
-        snapshot.swap_used_bytes as f64 / snapshot.swap_total_bytes as f64 * 100.0
-    };
-    let critical = snapshot.cpu_percent >= config.cpu_critical_percent
-        || memory_percent >= config.memory_critical_percent
-        || config
-            .load_critical
-            .is_some_and(|threshold| snapshot.load_average >= threshold)
-        || swap_percent >= config.swap_critical_percent;
-    let degraded = snapshot.cpu_percent >= config.cpu_warning_percent
-        || memory_percent >= config.memory_warning_percent
-        || config
-            .load_warning
-            .is_some_and(|threshold| snapshot.load_average >= threshold)
-        || swap_percent >= config.swap_warning_percent;
-    let mut metrics = BTreeMap::new();
-    metrics.insert("cpuPercent".to_owned(), json!(snapshot.cpu_percent));
-    metrics.insert("memoryPercent".to_owned(), json!(memory_percent));
-    if config.load_warning.is_some() {
-        metrics.insert("loadAverage".to_owned(), json!(snapshot.load_average));
-    }
-    metrics.insert("swapPercent".to_owned(), json!(swap_percent));
-    metrics.insert("processCount".to_owned(), json!(snapshot.process_count));
-    Ok(TaskResult {
-        task_id: task.id.clone(),
-        status: if critical {
-            CheckState::Down
-        } else if degraded {
-            CheckState::Degraded
-        } else {
-            CheckState::Up
-        },
-        latency_ms: None,
-        status_code: None,
-        message: critical
-            .then(|| "A host resource critical threshold was reached".to_owned())
-            .or_else(|| {
-                degraded.then(|| "A host resource warning threshold was reached".to_owned())
-            }),
-        metrics,
         checked_at: time_now(),
         favicon: None,
     })

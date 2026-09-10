@@ -6,6 +6,8 @@ mod config_command;
 mod containers;
 mod database;
 mod favicon;
+mod host_check;
+mod host_maintenance;
 mod icmp;
 #[cfg(target_os = "linux")]
 mod linux;
