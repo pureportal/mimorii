@@ -69,6 +69,40 @@ describe("result notification transitions", () => {
     incidents.resolveForCheck.mockResolvedValue(false);
   });
 
+  it("preserves host maintenance findings in history and incidents", async () => {
+    database.get.mockResolvedValue(check("up"));
+    const metrics = {
+      "maintenance.securityUpdates.status": "critical",
+      "maintenance.securityUpdates.detail": "2 pending: openssl 3.0.1 -> 3.0.2",
+      "maintenance.updateData.status": "unavailable",
+      pendingSecurityUpdateCount: 2,
+    };
+    await createService().record("check-1", {
+      ...result,
+      status: "down",
+      message: "Security updates: 2 pending",
+      metrics,
+    });
+    expect(database.run).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO check_results"),
+      expect.any(String),
+      "check-1",
+      "down",
+      null,
+      null,
+      "Security updates: 2 pending",
+      JSON.stringify(metrics),
+      checkedAt
+    );
+    expect(incidents.openForCheck).toHaveBeenCalledWith(
+      "check-1",
+      expect.any(String),
+      "Security updates: 2 pending",
+      checkedAt,
+      expect.objectContaining({ metrics })
+    );
+  });
+
   it("sends one warning when a check enters degraded", async () => {
     database.get.mockResolvedValue(check("up"));
     const service = createService();

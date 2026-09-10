@@ -101,7 +101,7 @@ export class ChecksService {
       execution.kind === "agent" ? execution.agentId : null,
       encryptedSecret,
       input.intervalSeconds ?? 60,
-      input.timeoutMs ?? 5_000,
+      input.timeoutMs ?? (input.type === "host" ? 30_000 : 5_000),
       input.failureThreshold ?? 2,
       input.recoveryThreshold ?? 1,
       enabled ? 1 : 0,

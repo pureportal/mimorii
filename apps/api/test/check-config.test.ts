@@ -1,10 +1,49 @@
 import { BadRequestException } from "@nestjs/common";
-import { httpMethods } from "@mimorii/contracts";
+import { hostMaintenanceDefaults, httpMethods } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
 import { CheckConfigService } from "../src/checks/check-config.service.js";
 
 describe("check configuration", () => {
   const service = new CheckConfigService();
+
+  it("enables host maintenance by default and normalizes partial settings", () => {
+    expect(service.validate("host", {})).toMatchObject({ maintenance: hostMaintenanceDefaults });
+    const config = service.validate("host", {
+      maintenance: {
+        securityUpdates: false,
+        softwareUpdateWarningCount: 10,
+        maxUpdateAgeHours: 24,
+      },
+    });
+    expect(config).toMatchObject({
+      maintenance: {
+        ...hostMaintenanceDefaults,
+        securityUpdates: false,
+        softwareUpdateWarningCount: 10,
+        maxUpdateAgeHours: 24,
+      },
+    });
+    expect(service.validate("host", { ...config })).toEqual(config);
+  });
+
+  it.each([
+    null,
+    [],
+    "disabled",
+    { securityUpdates: "false" },
+    { softwareUpdates: 0 },
+    { rebootRequired: null },
+    { security: "yes" },
+    { failedServices: 1 },
+    { securityUpdateCriticalCount: 0 },
+    { softwareUpdateWarningCount: 1.5 },
+    { failedServiceWarningCount: -1 },
+    { maxUpdateAgeHours: 0 },
+    { maxUpdateAgeHours: 8761 },
+    { softwareUpdateWarningCount: "10" },
+  ])("rejects invalid maintenance settings: %j", (maintenance) => {
+    expect(() => service.validate("host", { maintenance })).toThrow(BadRequestException);
+  });
 
   it("normalizes safe HTTP defaults", () => {
     expect(service.validate("http", { target: { url: "https://example.com/status" } })).toEqual({

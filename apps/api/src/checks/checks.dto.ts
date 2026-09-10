@@ -59,7 +59,12 @@ export class CreateCheckDto {
   @Max(86_400)
   intervalSeconds?: number;
 
-  @ApiPropertyOptional({ default: 5000, minimum: 250, maximum: 30000 })
+  @ApiPropertyOptional({
+    description:
+      "Timeout in milliseconds. Defaults to 30000 for host checks and 5000 for other checks.",
+    minimum: 250,
+    maximum: 30000,
+  })
   @IsOptional()
   @IsInt()
   @Min(250)

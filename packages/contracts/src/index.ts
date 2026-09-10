@@ -440,6 +440,29 @@ export interface WanCheckConfig {
   latencyWarningMs?: number;
 }
 
+export const hostMaintenanceDefaults = {
+  securityUpdates: true,
+  softwareUpdates: true,
+  rebootRequired: true,
+  security: true,
+  failedServices: true,
+  securityUpdateCriticalCount: 1,
+  softwareUpdateWarningCount: 1,
+  failedServiceWarningCount: 1,
+  maxUpdateAgeHours: 72,
+};
+
+export type HostMaintenanceConfig = typeof hostMaintenanceDefaults;
+
+export const hostMaintenanceChecks = [
+  { key: "securityUpdates", label: "Security updates" },
+  { key: "softwareUpdates", label: "Software updates" },
+  { key: "updateData", label: "Update data" },
+  { key: "rebootRequired", label: "Restart" },
+  { key: "security", label: "Security" },
+  { key: "failedServices", label: "Failed services" },
+] as const;
+
 export interface HostCheckConfig {
   cpuWarningPercent: number;
   cpuCriticalPercent: number;
@@ -449,6 +472,7 @@ export interface HostCheckConfig {
   loadCritical?: number;
   swapWarningPercent: number;
   swapCriticalPercent: number;
+  maintenance?: HostMaintenanceConfig;
 }
 
 export interface DiskCheckConfig {

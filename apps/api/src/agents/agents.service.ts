@@ -8,6 +8,7 @@ import {
   agentCollectionInterval,
   agentCapabilitiesByKind,
   mobileAgentCollectionInterval,
+  hostMaintenanceDefaults,
   type AgentHeartbeatResponse,
   type AgentPollResponse,
   type AgentSummary,
@@ -196,7 +197,7 @@ export class AgentsService {
             JSON.stringify(this.defaultHostCheckConfig(input.platform)),
             id,
             60,
-            5_000,
+            30_000,
             2,
             1,
             now,
@@ -704,6 +705,7 @@ export class AgentsService {
       ...(platform === "linux" ? { loadWarning: 4, loadCritical: 8 } : {}),
       swapWarningPercent: 90,
       swapCriticalPercent: 98,
+      maintenance: { ...hostMaintenanceDefaults },
     };
   }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { hostMaintenanceDefaults } from "@mimorii/contracts";
 import type { AuditService } from "../common/audit.service.js";
 import type { DatabaseService } from "../database/database.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
@@ -123,6 +124,8 @@ describe("AgentsService", () => {
       const diskConfig = JSON.parse(String(checkInserts[1]![5]));
       expect(Object.hasOwn(hostConfig, "loadWarning")).toBe(monitorsLoad);
       expect(hostConfig).not.toHaveProperty("storage");
+      expect(hostConfig.maintenance).toEqual(hostMaintenanceDefaults);
+      expect(checkInserts[0]![8]).toBe(30_000);
       expect(diskConfig).toEqual({ mount, warningPercent: 85, criticalPercent: 95 });
     }
   );

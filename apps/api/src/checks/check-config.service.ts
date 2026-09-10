@@ -3,6 +3,7 @@ import {
   databaseEngines,
   httpJsonAssertionOperators,
   httpMethods,
+  hostMaintenanceDefaults,
   type CheckConfig,
   type CheckType,
   type DatabaseCheckConfig,
@@ -274,6 +275,53 @@ export class CheckConfigService {
         value.swapCriticalPercent ?? Math.max(98, swapWarningPercent),
         swapWarningPercent,
         "Swap critical"
+      ),
+      maintenance: this.hostMaintenance(value.maintenance),
+    };
+  }
+
+  private hostMaintenance(value: unknown): NonNullable<HostCheckConfig["maintenance"]> {
+    const settings: Record<string, unknown> = {
+      ...hostMaintenanceDefaults,
+      ...(value === undefined ? {} : this.object(value, "Host maintenance")),
+    };
+    const enabled = (
+      key: "securityUpdates" | "softwareUpdates" | "rebootRequired" | "security" | "failedServices"
+    ): boolean => {
+      if (typeof settings[key] !== "boolean") {
+        this.invalid(`${key} must be a boolean`);
+      }
+      return settings[key] !== false;
+    };
+    return {
+      securityUpdates: enabled("securityUpdates"),
+      softwareUpdates: enabled("softwareUpdates"),
+      rebootRequired: enabled("rebootRequired"),
+      security: enabled("security"),
+      failedServices: enabled("failedServices"),
+      securityUpdateCriticalCount: this.integer(
+        settings.securityUpdateCriticalCount,
+        1,
+        100_000,
+        "Security update critical count"
+      ),
+      softwareUpdateWarningCount: this.integer(
+        settings.softwareUpdateWarningCount,
+        1,
+        100_000,
+        "Software update warning count"
+      ),
+      failedServiceWarningCount: this.integer(
+        settings.failedServiceWarningCount,
+        1,
+        100_000,
+        "Failed service warning count"
+      ),
+      maxUpdateAgeHours: this.integer(
+        settings.maxUpdateAgeHours,
+        1,
+        8_760,
+        "Maximum update data age"
       ),
     };
   }
