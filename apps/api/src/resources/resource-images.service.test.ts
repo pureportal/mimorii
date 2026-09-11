@@ -1,6 +1,7 @@
 import { BadGatewayException, BadRequestException } from "@nestjs/common";
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
+import { createFavicon, faviconFormats } from "../common/image-asset.fixtures.js";
 import type { AuditService } from "../common/audit.service.js";
 import type { DatabaseService } from "../database/database.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
@@ -153,35 +154,40 @@ describe("resource images", () => {
     );
   });
 
-  it("normalizes and stores a favicon transferred by an agent", async () => {
-    const favicon = await sharp({
-      create: {
-        width: 48,
-        height: 48,
-        channels: 4,
-        background: { r: 40, g: 120, b: 220, alpha: 1 },
-      },
-    })
-      .png()
-      .toBuffer();
+  it.each(faviconFormats)(
+    "normalizes and stores a %s favicon transferred by an agent",
+    async (format) => {
+      const favicon = await createFavicon(format);
+      const { database, images } = setup();
+      database.get.mockResolvedValueOnce({ updated_at: "2026-08-21T12:02:00.000Z" });
+
+      await expect(
+        images.acceptAgentFavicon("resource-1", "check-1", "request-1", favicon)
+      ).resolves.toBe(true);
+
+      expect(database.run).toHaveBeenCalledWith(
+        expect.stringContaining("favicon_request_id = ?"),
+        "check-1",
+        "resource-1",
+        "request-1"
+      );
+      const storedImage = database.get.mock.calls[0]?.[2];
+      expect(await sharp(storedImage as Buffer).metadata()).toMatchObject({
+        format: "png",
+        width: 128,
+        height: 128,
+      });
+    }
+  );
+
+  it("does not replace the image or clear the request for an invalid agent SVG", async () => {
     const { database, images } = setup();
-    database.get.mockResolvedValueOnce({ updated_at: "2026-08-21T12:02:00.000Z" });
 
     await expect(
-      images.acceptAgentFavicon("resource-1", "check-1", "request-1", favicon)
-    ).resolves.toBe(true);
+      images.acceptAgentFavicon("resource-1", "check-1", "request-1", Buffer.from("<svg><path"))
+    ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(database.run).toHaveBeenCalledWith(
-      expect.stringContaining("favicon_request_id = ?"),
-      "check-1",
-      "resource-1",
-      "request-1"
-    );
-    const storedImage = database.get.mock.calls[0]?.[2];
-    expect(await sharp(storedImage as Buffer).metadata()).toMatchObject({
-      format: "png",
-      width: 128,
-      height: 128,
-    });
+    expect(database.get).not.toHaveBeenCalled();
+    expect(database.run).not.toHaveBeenCalled();
   });
 });

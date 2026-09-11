@@ -26,11 +26,17 @@ export async function optimizeImageAsset(
     throw new BadRequestException("Choose a valid image");
   }
 
+  const faviconFormat =
+    metadata.format === "svg" || (metadata.format === "heif" && metadata.compression === "av1");
   if (
     !metadata.format ||
-    (!supportedFormats.has(metadata.format) && !(allowFaviconFormats && metadata.format === "svg"))
+    (!supportedFormats.has(metadata.format) && !(allowFaviconFormats && faviconFormat))
   ) {
-    throw new BadRequestException("Choose a PNG, JPEG, WebP, or GIF image");
+    throw new BadRequestException(
+      allowFaviconFormats
+        ? "Choose a PNG, JPEG, WebP, GIF, ICO, SVG, or AVIF image"
+        : "Choose a PNG, JPEG, WebP, or GIF image"
+    );
   }
   if (!metadata.width || !metadata.height) {
     throw new BadRequestException("Choose a valid image");
@@ -43,7 +49,13 @@ export async function optimizeImageAsset(
 
   try {
     return await sharp(decoded, {
-      density: allowFaviconFormats ? 256 : 72,
+      density:
+        metadata.format === "svg"
+          ? Math.min(
+              100_000,
+              Math.max(1, (72 * dimension) / Math.max(metadata.width, metadata.height))
+            )
+          : 72,
       failOn: "warning",
       limitInputPixels: imageAssetMaxDimension * imageAssetMaxDimension,
       sequentialRead: true,

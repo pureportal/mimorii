@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createFavicon, faviconFormats } from "../common/image-asset.fixtures.js";
 import type { TargetSafetyService } from "../common/target-safety.service.js";
 import { FaviconFetcherService, FaviconRetrievalError } from "./favicon-fetcher.service.js";
 
@@ -115,5 +116,53 @@ describe("favicon retrieval", () => {
     await expect(
       new FaviconFetcherService(targets).retrieve(`http://website.test:${port}/missing`)
     ).rejects.toBeInstanceOf(FaviconRetrievalError);
+  });
+
+  it.each(faviconFormats)("discovers and processes a linked %s favicon", async (format) => {
+    const favicon = await createFavicon(format);
+    const paths: string[] = [];
+    server.removeAllListeners("request");
+    server.on("request", (request, response) => {
+      paths.push(request.url!);
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end(`<head>
+          <base href="/assets/">
+          <link rel="icon" href="small.png" sizes="16x16">
+          <link rel="icon" type="image/${format === "svg" ? "svg+xml" : format}" href="icon?v=2" sizes="any">
+        </head>`);
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      response.end(favicon);
+    });
+
+    const image = await new FaviconFetcherService(targets).retrieve(`http://website.test:${port}/`);
+
+    expect(paths).toEqual(["/", "/assets/icon?v=2"]);
+    expect(await sharp(image).metadata()).toMatchObject({ format: "png", width: 128, height: 128 });
+  });
+
+  it("continues to another icon after an invalid SVG", async () => {
+    server.removeAllListeners("request");
+    server.on("request", (request, response) => {
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end(
+          '<link rel="icon" href="/broken.svg" sizes="any"><link rel="icon" href="/valid.png">'
+        );
+      } else if (request.url === "/broken.svg") {
+        response.writeHead(200, { "content-type": "image/svg+xml" });
+        response.end("<svg><path");
+      } else {
+        response.writeHead(200, { "content-type": "image/png" });
+        response.end(largeIcon);
+      }
+    });
+
+    const image = await new FaviconFetcherService(targets).retrieve(`http://website.test:${port}/`);
+
+    expect(await sharp(image).metadata()).toMatchObject({ format: "png", width: 128, height: 128 });
+    expect(resolveStrictPublicHost).toHaveBeenCalledTimes(3);
   });
 });

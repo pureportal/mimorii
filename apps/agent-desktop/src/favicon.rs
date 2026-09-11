@@ -12,6 +12,9 @@ use url::Url;
 
 use crate::target_policy::{TargetPolicy, TargetProtocol};
 
+#[path = "favicon_formats.rs"]
+mod formats;
+
 const MAXIMUM_PAGE_BYTES: u64 = 512 * 1024;
 const MAXIMUM_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 const MAXIMUM_REDIRECTS: usize = 3;
@@ -86,7 +89,7 @@ pub(crate) fn retrieve_with_resolver(
         ) else {
             continue;
         };
-        if looks_like_image(&image.body, image.content_type.as_deref()) {
+        if formats::looks_like_image(&image.body, image.content_type.as_deref()) {
             return Ok(image.body);
         }
     }
@@ -252,27 +255,6 @@ fn icon_score(sizes: Option<&str>) -> u64 {
 fn is_html(content_type: &str) -> bool {
     let content_type = content_type.to_ascii_lowercase();
     content_type.starts_with("text/html") || content_type.starts_with("application/xhtml+xml")
-}
-
-fn looks_like_image(body: &[u8], content_type: Option<&str>) -> bool {
-    let content_type_is_svg = content_type.is_some_and(|value| {
-        let value = value.to_ascii_lowercase();
-        value.starts_with("image/svg+xml") || value.starts_with("application/svg+xml")
-    });
-    let text_prefix = String::from_utf8_lossy(&body[..body.len().min(4_096)]);
-    let text_prefix = text_prefix
-        .trim_start_matches(|character: char| character.is_whitespace() || character == '\u{feff}')
-        .to_ascii_lowercase();
-    let svg = text_prefix.starts_with("<svg")
-        || (text_prefix.starts_with("<?xml") && text_prefix.contains("<svg"));
-    body.starts_with(b"\x89PNG\r\n\x1a\n")
-        || body.starts_with(b"\xff\xd8\xff")
-        || body.starts_with(b"GIF87a")
-        || body.starts_with(b"GIF89a")
-        || (body.starts_with(b"RIFF") && body.get(8..12) == Some(b"WEBP"))
-        || body.starts_with(b"\x00\x00\x01\x00")
-        || svg
-        || (content_type_is_svg && text_prefix.contains("<svg"))
 }
 
 #[cfg(test)]
