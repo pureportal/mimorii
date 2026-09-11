@@ -28,6 +28,7 @@ export function ResourcesPage() {
   const resources = useQuery({
     queryKey: ["resources", teamId],
     queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
+    refetchInterval: 30_000,
   });
   const agents = useQuery({
     queryKey: ["agents", teamId],
@@ -279,6 +280,13 @@ function QuickResourceDialog({
             enabled: true,
           }),
         });
+      }
+      if (mode === "website") {
+        try {
+          await api(`/teams/${teamId}/resources/${resourceId}/favicon`, { method: "POST" });
+        } catch {
+          toast.error("Favicon could not be retrieved. Use Update favicon to try again.");
+        }
       }
       await onCreated();
       onOpenChange(false);
