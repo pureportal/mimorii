@@ -46,6 +46,7 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { checkPassingLabel, createCheckHistorySeries } from "../lib/check-health";
 import { formatPercent, formatRelative } from "../lib/format";
+import { resourceKindLabels } from "../lib/resource-option-labels";
 
 export function ResourceDetailPage() {
   const { id = "" } = useParams();
@@ -164,8 +165,8 @@ export function ResourceDetailPage() {
                 <StatusBadge status={resource.data.status} />
                 {resource.data.inMaintenance ? <StatusBadge status="maintenance" /> : null}
               </div>
-              <p className="mt-2 text-sm capitalize text-muted">
-                {resource.data.agent?.platform ?? resource.data.kind}
+              <p className="mt-2 text-sm text-muted">
+                {resource.data.agent?.platform ?? resourceKindLabels[resource.data.kind]}
               </p>
               {resource.data.description ? (
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
@@ -244,7 +245,7 @@ export function ResourceDetailPage() {
               <Select
                 value={activeCheckId ?? ""}
                 onChange={(event) => setSelectedCheckId(event.target.value)}
-                className="h-9 w-44 text-xs"
+                className="h-9 w-48"
               >
                 {checks.data.map((check) => (
                   <option key={check.id} value={check.id}>

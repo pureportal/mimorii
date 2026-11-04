@@ -76,7 +76,9 @@ export function CheckDetailsDialog({
                 <CheckHealthSummary check={currentCheck!} className="max-w-xl" />
               </div>
               {latestResult?.message ? (
-                <p className="mt-2 text-sm text-muted">{latestResult.message}</p>
+                <p className="mt-2 line-clamp-2 text-sm text-muted" title={latestResult.message}>
+                  {latestResult.message}
+                </p>
               ) : null}
             </section>
 

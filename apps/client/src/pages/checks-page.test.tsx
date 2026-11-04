@@ -213,6 +213,8 @@ describe("ChecksPage actions", () => {
       "97.3%, critical threshold exceeded"
     );
     expect(within(criticalRow!).getByText("97.3%")).toHaveClass("text-danger");
+    expect(within(downRow!).getByText("Timed out")).toHaveClass("text-danger");
+    expect(within(downRow!).queryByText("Yes")).not.toBeInTheDocument();
 
     fireEvent.focus(within(criticalRow!).getByRole("img", { name: "Disk usage status: Critical" }));
     expect(screen.getByRole("tooltip")).toHaveTextContent(

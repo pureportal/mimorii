@@ -47,13 +47,14 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
+        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
+        children === undefined && "capitalize",
         styles[status],
         className
       )}
       {...props}
     >
-      {children ?? status}
+      {children ?? status.replaceAll("-", " ")}
     </span>
   );
 }

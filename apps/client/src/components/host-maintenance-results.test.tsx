@@ -27,6 +27,26 @@ describe("host maintenance results", () => {
     expect(screen.queryByText("Failed services")).not.toBeInTheDocument();
   });
 
+  it("lists the most severe findings first", () => {
+    render(
+      <HostMaintenanceResults
+        metrics={{
+          "maintenance.rebootRequired.status": "okay",
+          "maintenance.rebootRequired.detail": "",
+          "maintenance.softwareUpdates.status": "unavailable",
+          "maintenance.softwareUpdates.detail": "Unavailable: update data is stale",
+          "maintenance.security.status": "critical",
+          "maintenance.security.detail": "1 issue",
+        }}
+      />
+    );
+    expect(screen.getAllByRole("term").map((term) => term.firstChild?.textContent)).toEqual([
+      "Security",
+      "Software updates",
+      "Restart",
+    ]);
+  });
+
   it("shows pending updates below a configured alert threshold", () => {
     render(
       <HostMaintenanceResults

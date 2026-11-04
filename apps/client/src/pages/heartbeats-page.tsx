@@ -110,7 +110,7 @@ export function HeartbeatsPage() {
               else next.delete("resourceId");
               setSearchParams(next, { replace: true });
             }}
-            className="h-9 w-44 text-xs"
+            className="h-9 w-48"
           >
             <option value="">All resources</option>
             {resources.data?.map((resource) => (
@@ -209,7 +209,7 @@ export function HeartbeatsPage() {
               </span>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[900px] text-left text-sm [&_td:not(:first-child)]:whitespace-nowrap [&_td:not(:last-child)]:pr-5 [&_th:not(:last-child)]:pr-5">
                 <thead className="text-xs text-muted">
                   <tr>
                     <th className="pb-3 font-medium">Heartbeat</th>

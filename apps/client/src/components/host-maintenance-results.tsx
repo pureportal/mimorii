@@ -1,9 +1,18 @@
 import type { CheckSummary } from "@mimorii/contracts";
-import { hostMaintenanceFindings } from "../lib/host-maintenance";
+import { hostMaintenanceFindings, type HostMaintenanceStatus } from "../lib/host-maintenance";
 import { cn } from "../lib/cn";
 
+const findingPriority: Record<HostMaintenanceStatus, number> = {
+  critical: 0,
+  warning: 1,
+  unavailable: 2,
+  okay: 3,
+};
+
 export function HostMaintenanceResults({ metrics }: { metrics: CheckSummary["latestMetrics"] }) {
-  const findings = hostMaintenanceFindings(metrics);
+  const findings = hostMaintenanceFindings(metrics).toSorted(
+    (left, right) => findingPriority[left.status] - findingPriority[right.status]
+  );
   if (!findings.length) return null;
   return (
     <section>

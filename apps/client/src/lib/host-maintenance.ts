@@ -7,17 +7,18 @@ const findingMetrics: Partial<Record<(typeof hostMaintenanceChecks)[number]["key
   failedServices: "failedServiceCount",
 };
 
+const findingStatuses = ["okay", "warning", "critical", "unavailable"] as const;
+export type HostMaintenanceStatus = (typeof findingStatuses)[number];
+
+function isFindingStatus(value: unknown): value is HostMaintenanceStatus {
+  return findingStatuses.some((status) => status === value);
+}
+
 export function hostMaintenanceFindings(metrics: CheckSummary["latestMetrics"]) {
   return hostMaintenanceChecks.flatMap(({ key, label }) => {
     const metric = `maintenance.${key}.status`;
     const status = metrics[metric];
-    if (
-      status !== "okay" &&
-      status !== "warning" &&
-      status !== "critical" &&
-      status !== "unavailable"
-    )
-      return [];
+    if (!isFindingStatus(status)) return [];
     const detail = metrics[`maintenance.${key}.detail`];
     return [
       {

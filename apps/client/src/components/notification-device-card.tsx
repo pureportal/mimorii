@@ -59,7 +59,7 @@ export function NotificationDeviceCard() {
   const openSettings = current?.platform === "android" && current.permission === "denied";
 
   return (
-    <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+    <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
       <span className="grid size-10 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
         <MonitorSmartphone className="size-5" />
       </span>

@@ -118,6 +118,9 @@ export function getCheckHealthItems(
   limit = 2
 ): CheckHealthItem[] {
   const metrics = check.latestMetrics;
+  if (metrics.agentTimeout === true) {
+    return [{ key: "agentTimeout", label: "Agent", value: "Timed out", severity: "critical" }];
+  }
   const maintenance =
     check.type === "host"
       ? hostMaintenanceFindings(metrics).filter((finding) => finding.status !== "okay")
@@ -200,7 +203,8 @@ export function getCheckHealthItems(
   for (const [key, value] of Object.entries(metrics)) {
     if (key.startsWith("maintenance.") || maintenance.some((finding) => finding.metric === key))
       continue;
-    if (result.some((item) => item.key === key) || value === null) continue;
+    if (key === "agentTimeout" || result.some((item) => item.key === key) || value === null)
+      continue;
     result.push(createItem(key, value));
     if (result.length === limit) break;
   }
