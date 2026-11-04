@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -104,10 +105,10 @@ impl GitHubReleaseClient {
         )
     }
 
-    pub fn download(&self, release: &LatestRelease) -> Result<DownloadedPackage> {
+    pub fn download(&self, release: &LatestRelease, directory: &Path) -> Result<DownloadedPackage> {
         let checksums = self.download_bytes(&release.checksums, MAX_CHECKSUM_BYTES)?;
         let expected_checksum = checksum_for(&checksums, PACKAGE_ASSET)?;
-        let mut file = self.download_file(&release.package, MAX_PACKAGE_BYTES)?;
+        let mut file = self.download_file(&release.package, MAX_PACKAGE_BYTES, directory)?;
         let actual_checksum = sha256_file(file.as_file_mut())?;
         let api_checksum = asset_sha256(&release.package)?;
         if actual_checksum != api_checksum || actual_checksum != expected_checksum {
@@ -133,12 +134,17 @@ impl GitHubReleaseClient {
         Ok(bytes)
     }
 
-    fn download_file(&self, asset: &ReleaseAsset, limit: u64) -> Result<NamedTempFile> {
+    fn download_file(
+        &self,
+        asset: &ReleaseAsset,
+        limit: u64,
+        directory: &Path,
+    ) -> Result<NamedTempFile> {
         let mut response = self.request_asset(asset, limit)?;
         let mut file = tempfile::Builder::new()
             .prefix("mimorii-agent-update-")
             .suffix(PACKAGE_SUFFIX)
-            .tempfile()?;
+            .tempfile_in(directory)?;
         let count = std::io::copy(&mut response.by_ref().take(limit + 1), &mut file)?;
         if count != asset.size {
             bail!("GitHub returned an unexpected size for {}", asset.name);
@@ -386,7 +392,7 @@ mod tests {
     fn downloads_and_verifies_the_live_platform_package() {
         let client = GitHubReleaseClient::new().unwrap();
         let release = client.latest().unwrap();
-        let package = client.download(&release).unwrap();
+        let package = client.download(&release, &std::env::temp_dir()).unwrap();
         assert!(
             package
                 .file

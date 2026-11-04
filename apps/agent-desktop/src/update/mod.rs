@@ -58,11 +58,13 @@ pub fn run(check_only: bool, json: bool, _privileged: bool) -> Result<()> {
     }
 
     let version = release.version.to_string();
-    let package = client.download(&release)?;
     #[cfg(target_os = "linux")]
-    let outcome = linux::install(package, _privileged)?;
+    let outcome = linux::install(
+        client.download(&release, &std::env::temp_dir())?,
+        _privileged,
+    )?;
     #[cfg(windows)]
-    let outcome = windows::install(package)?;
+    let outcome = windows::install(client.download(&release, &windows::staging_directory()?)?)?;
 
     let result = UpdateResult {
         previous_version: current.to_string(),
