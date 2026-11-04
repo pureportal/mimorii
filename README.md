@@ -133,6 +133,8 @@ journalctl --user --unit mimorii-agent-desktop.service --lines 50 --no-pager
 
 The first two commands should print `enabled` and `active`; the linger setting should be `yes`. If enrollment completed but service setup failed, fix the reported issue and run `mimorii-agent-desktop service install`.
 
+`mimorii-agent-desktop status` shows when the agent last reached the server, when it last uploaded telemetry, how many snapshots are waiting, and the current error, if any. The Windows application shows the same information. While the server is unreachable, the agent keeps up to 2,880 snapshots locally, dropping the oldest first, and uploads them in batches after it reconnects.
+
 ### Update the desktop agent
 
 On Windows or Linux, check the latest stable GitHub release:
