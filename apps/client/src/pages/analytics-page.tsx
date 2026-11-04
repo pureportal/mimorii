@@ -2,22 +2,15 @@ import type { AnalyticsReport, CheckSummary, ResourceSummary } from "@mimorii/co
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Clock3, Gauge, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
+import { AvailabilityBars, LatencyArea, type TimelinePoint } from "../components/timeline-charts";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
+import { cn } from "../lib/cn";
 import { isHealthCheckType } from "../lib/check-health";
 import { formatCount, formatDuration, formatLatency, formatPercent } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
@@ -60,13 +53,36 @@ export function AnalyticsPage() {
     return <ErrorState retry={() => void report.refetch()} />;
   }
   const data = report.data;
+  const timeline = dailyTimeline(data);
+  const hasLatency = timeline.some((day) => day.latencyMs !== null);
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">{formatCount(data.totalResults, "result")}</p>
+      <div role="group" aria-label="Report range" className="flex flex-wrap gap-1.5">
+        {rangePresets.map((days) => {
+          const range = dateRange(days);
+          const selected = range.from === from && range.to === to;
+          return (
+            <Button
+              key={days}
+              type="button"
+              size="sm"
+              variant={selected ? "outline" : "ghost"}
+              aria-pressed={selected}
+              className={cn(selected && "border-lavender text-violet-strong")}
+              onClick={() => {
+                setFrom(range.from);
+                setTo(range.to);
+              }}
+            >
+              {days} days
+            </Button>
+          );
+        })}
+      </div>
 
       <Card data-guide-page="reports-filters" className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Field>
             <FieldLabel htmlFor="report-from">From</FieldLabel>
             <Input
@@ -85,7 +101,7 @@ export function AnalyticsPage() {
               onChange={(event) => setTo(event.target.value)}
             />
           </Field>
-          <Field>
+          <Field className="col-span-2 xl:col-span-1">
             <FieldLabel htmlFor="report-resource">Resource</FieldLabel>
             <Select
               id="report-resource"
@@ -103,7 +119,7 @@ export function AnalyticsPage() {
               ))}
             </Select>
           </Field>
-          <Field>
+          <Field className="col-span-2 xl:col-span-1">
             <FieldLabel htmlFor="report-check">Check</FieldLabel>
             <Select
               id="report-check"
@@ -130,10 +146,7 @@ export function AnalyticsPage() {
         </div>
       </Card>
 
-      <section
-        data-guide-page="reports-summary"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
+      <section data-guide-page="reports-summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric icon={Gauge} label="Availability" value={formatPercent(data.availabilityPercent)} />
         <Metric icon={Clock3} label="P95 latency" value={formatLatency(data.latencyP95Ms)} />
         <Metric icon={TriangleAlert} label="Incidents" value={String(data.incidentCount)} />
@@ -151,49 +164,11 @@ export function AnalyticsPage() {
       <Card data-guide-page="reports-chart">
         <CardHeader>
           <h3 className="font-display font-bold">Availability</h3>
+          <span className="text-xs text-muted">{formatCount(data.totalResults, "result")}</span>
         </CardHeader>
-        <CardContent className="h-80 pl-1 sm:pl-3">
+        <CardContent className="h-72 pl-1 sm:pl-3">
           {data.daily.length ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.daily} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="availability" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor={chartColors.success} stopOpacity={0.4} />
-                    <stop offset="1" stopColor={chartColors.success} stopOpacity={0.03} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: chartColors.muted, fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={28}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tick={{ fill: chartColors.muted, fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  unit="%"
-                  width={45}
-                />
-                <Tooltip
-                  formatter={(value) => [
-                    formatPercent(typeof value === "number" ? value : Number(value)),
-                    "Availability",
-                  ]}
-                  contentStyle={chartTooltipStyle}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="availabilityPercent"
-                  stroke={chartColors.success}
-                  strokeWidth={2.5}
-                  fill="url(#availability)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <AvailabilityBars points={timeline} showAxes />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted">
               <StateArtwork illustration="analysis" />
@@ -203,7 +178,18 @@ export function AnalyticsPage() {
         </CardContent>
       </Card>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {hasLatency ? (
+        <Card>
+          <CardHeader>
+            <h3 className="font-display font-bold">Response time</h3>
+          </CardHeader>
+          <CardContent className="h-56 pl-1 sm:pl-3">
+            <LatencyArea points={timeline} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Detail label="P50 latency" value={formatLatency(data.latencyP50Ms)} />
         <Detail label="P99 latency" value={formatLatency(data.latencyP99Ms)} />
         <Detail label="Degraded" value={formatPercent(data.degradedPercent)} />
@@ -260,6 +246,37 @@ function checkOptionLabel(
   const resourceName = resourceNames.get(check.resourceId);
   if (!resourceName) throw new Error("Check resource is unavailable");
   return `${check.name} · ${resourceName}`;
+}
+
+const DAY_MS = 86_400_000;
+const rangePresets = [7, 30, 90] as const;
+
+function dailyTimeline(report: AnalyticsReport): TimelinePoint[] {
+  const days = new Map(report.daily.map((day) => [day.date, day]));
+  const first = Date.parse(`${report.from.slice(0, 10)}T00:00:00.000Z`);
+  const last = Date.parse(`${report.to.slice(0, 10)}T00:00:00.000Z`);
+  const points: TimelinePoint[] = [];
+  for (let time = first; time <= last; time += DAY_MS) {
+    const date = new Date(time);
+    const key = date.toISOString().slice(0, 10);
+    const day = days.get(key);
+    points.push({
+      key,
+      label: date.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" }),
+      detail: date.toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
+      up: day?.up ?? 0,
+      degraded: day?.degraded ?? 0,
+      down: day?.down ?? 0,
+      latencyMs: day?.averageLatencyMs ?? null,
+    });
+  }
+  return points;
 }
 
 function dateRange(days: number): { from: string; to: string } {

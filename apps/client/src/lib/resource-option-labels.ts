@@ -1,6 +1,6 @@
 import type { ResourceSummary } from "@mimorii/contracts";
 
-const resourceKindLabels: Record<ResourceSummary["kind"], string> = {
+export const resourceKindLabels: Record<ResourceSummary["kind"], string> = {
   host: "Host",
   device: "Device",
   service: "Service",

@@ -1,27 +1,18 @@
-import type { OverviewAnalytics, ResourceSummary } from "@mimorii/contracts";
+import type { OverviewAnalytics, ResourceStatus, ResourceSummary } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, ArrowRight, Clock3, Gauge, Plus, TriangleAlert } from "lucide-react";
 import { Link } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
+import { AvailabilityBars, LatencyArea, type TimelinePoint } from "../components/timeline-charts";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { chartColors, chartTooltipStyle } from "../lib/chart-theme";
 import { formatLatency, formatPercent } from "../lib/format";
-import { resourceOptionLabels } from "../lib/resource-option-labels";
+import { resourceKindLabels, resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function OverviewPage() {
   const { activeTeam } = useAuth();
@@ -51,6 +42,10 @@ export function OverviewPage() {
   const resourceNames = resourceOptionLabels(resources.data ?? []);
   const attentionNeeded = data.warning + data.critical + data.down;
   const allGood = attentionNeeded === 0 && data.pending === 0;
+  const timeline = lastDayTimeline(data, Date.now());
+  const attentionFirst = (resources.data ?? []).toSorted(
+    (left, right) => statusPriority[left.status] - statusPriority[right.status]
+  );
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -125,69 +120,35 @@ export function OverviewPage() {
       ) : null}
 
       <section data-guide-page="overview-details" className="grid gap-4 xl:grid-cols-[1.55fr_1fr]">
-        <Card className="min-w-0">
+        <Card className="flex min-w-0 flex-col">
           <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
-            <h3 className="font-display font-bold">Response time</h3>
+            <h3 className="font-display font-bold">Last 24 hours</h3>
             <Button asChild variant="ghost" size="sm">
               <Link to={appRoutes.reports}>
                 Reports <ArrowRight />
               </Link>
             </Button>
           </CardHeader>
-          <CardContent className="h-56 px-2 pb-3 pt-0 sm:h-64 sm:px-4">
-            {data.latencyTimeline.length ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={data.latencyTimeline}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="latency" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stopColor={chartColors.lavender} stopOpacity={0.38} />
-                      <stop offset="1" stopColor={chartColors.lavender} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={chartColors.grid} strokeDasharray="4 6" vertical={false} />
-                  <XAxis
-                    dataKey="bucket"
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleTimeString([], { hour: "2-digit" })
-                    }
-                    tick={{ fill: chartColors.muted, fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    minTickGap={30}
-                  />
-                  <YAxis
-                    tick={{ fill: chartColors.muted, fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    unit="ms"
-                    width={48}
-                  />
-                  <Tooltip
-                    contentStyle={chartTooltipStyle}
-                    labelFormatter={(value) =>
-                      typeof value === "string" || typeof value === "number"
-                        ? new Date(value).toLocaleString()
-                        : ""
-                    }
-                    formatter={(value) => [
-                      `${typeof value === "string" || typeof value === "number" ? value : "—"} ms`,
-                      "Latency",
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="latencyMs"
-                    stroke={chartColors.lavender}
-                    strokeWidth={2.5}
-                    fill="url(#latency)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+          <CardContent className="flex flex-1 flex-col gap-4 px-2 pb-3 pt-0 sm:px-4">
+            {data.statusTimeline.length || data.latencyTimeline.length ? (
+              <>
+                <div>
+                  <p className="mb-1.5 px-2 text-xs font-medium text-muted">Availability</p>
+                  <div className="h-12 pl-12">
+                    <AvailabilityBars points={timeline} showAxes={false} />
+                  </div>
+                </div>
+                {data.latencyTimeline.length ? (
+                  <div className="flex flex-1 flex-col">
+                    <p className="mb-1.5 px-2 text-xs font-medium text-muted">Response time</p>
+                    <div className="min-h-44 flex-1">
+                      <LatencyArea points={timeline} />
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted">
+              <div className="flex h-56 flex-col items-center justify-center gap-1 text-sm text-muted sm:h-64">
                 <StateArtwork illustration="analysis" />
                 <span>Waiting for check results</span>
               </div>
@@ -205,7 +166,7 @@ export function OverviewPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-1 px-3 pb-3 pt-0 sm:p-5 sm:pt-2">
-            {resources.data?.slice(0, 7).map((resource) => (
+            {attentionFirst.slice(0, 7).map((resource) => (
               <Link
                 key={resource.id}
                 to={appRoutes.resource(resource.id)}
@@ -218,7 +179,7 @@ export function OverviewPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{resourceNames.get(resource.id)}</p>
-                  <p className="truncate text-xs capitalize text-muted">{resource.kind}</p>
+                  <p className="truncate text-xs text-muted">{resourceKindLabels[resource.kind]}</p>
                 </div>
                 <StatusBadge status={resource.status} />
               </Link>
@@ -234,6 +195,39 @@ export function OverviewPage() {
       </section>
     </div>
   );
+}
+
+const HOUR_MS = 3_600_000;
+
+const statusPriority: Record<ResourceStatus, number> = {
+  down: 0,
+  critical: 1,
+  warning: 2,
+  degraded: 3,
+  pending: 4,
+  up: 5,
+  okay: 5,
+  paused: 6,
+};
+
+function lastDayTimeline(data: OverviewAnalytics, now: number): TimelinePoint[] {
+  const currentHour = Math.floor(now / HOUR_MS) * HOUR_MS;
+  const statuses = new Map(data.statusTimeline.map((entry) => [entry.bucket, entry]));
+  const latencies = new Map(data.latencyTimeline.map((entry) => [entry.bucket, entry.latencyMs]));
+  return Array.from({ length: 24 }, (_, index) => {
+    const start = new Date(currentHour - (23 - index) * HOUR_MS);
+    const key = start.toISOString();
+    const status = statuses.get(key);
+    return {
+      key,
+      label: start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      detail: start.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      up: status?.up ?? 0,
+      degraded: status?.degraded ?? 0,
+      down: status?.down ?? 0,
+      latencyMs: latencies.get(key) ?? null,
+    };
+  });
 }
 
 function Metric({
