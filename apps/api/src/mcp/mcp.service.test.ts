@@ -250,14 +250,18 @@ describe("Mimorii MCP handler", () => {
   });
 
   it("binds analytics and objectives to the authenticated user", async () => {
-    const overview = vi.fn(async (): Promise<OverviewAnalytics> => overviewAnalytics(120));
+    const overview = vi.fn(async (): Promise<OverviewAnalytics> => overviewAnalytics());
     const report = vi.fn(async (): Promise<AnalyticsReport> => availabilityReport());
     const list = vi.fn(
       async (): Promise<ServiceLevelObjectiveSummary[]> => [objective("First"), objective("Second")]
     );
+    const listIncidents = vi.fn(
+      async (): Promise<IncidentSummary[]> => [incidentSummary("investigating", 120)]
+    );
     const handler = createHandler({
       analytics: { overview, report },
       objectives: { list },
+      incidents: { ...emptyServices().incidents, list: listIncidents },
     });
 
     const overviewResponse = await send(
@@ -291,6 +295,7 @@ describe("Mimorii MCP handler", () => {
     );
 
     expect(overview).toHaveBeenCalledWith("analyst", teamId);
+    expect(listIncidents).toHaveBeenCalledWith("analyst", teamId, { limit: 20 });
     const overviewResult = toolResult<{
       incidents: Array<{ updateCount: number; updates?: unknown[] }>;
     }>(await json(overviewResponse));
@@ -859,7 +864,7 @@ function incidentSummary(status: "investigating" | "resolved", updateCount = 0):
   };
 }
 
-function overviewAnalytics(updateCount: number): OverviewAnalytics {
+function overviewAnalytics(): OverviewAnalytics {
   return {
     resources: 2,
     checks: 3,
@@ -878,7 +883,6 @@ function overviewAnalytics(updateCount: number): OverviewAnalytics {
     breachedObjectives: 1,
     statusTimeline: [],
     latencyTimeline: [],
-    incidents: [incidentSummary("investigating", updateCount)],
   };
 }
 

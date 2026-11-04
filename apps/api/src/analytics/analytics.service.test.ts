@@ -1,19 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnalyticsService } from "./analytics.service.js";
 
 describe("AnalyticsService overview", () => {
-  it("counts a live critical disk check as critical without counting it as down", async () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("aggregates hour-aligned windows from hourly results and current monitor states", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-28T12:34:56.000Z"));
     const database = {
       get: vi.fn(async (sql: string) => {
-        if (sql.includes("AS open_incidents")) return { resources: 1, open_incidents: 0 };
+        if (sql.includes("AS open_incidents")) {
+          expect(sql).toContain("breach_state = 'breached'");
+          return { resources: 1, open_incidents: 0, breached_objectives: 2 };
+        }
         if (sql.includes("AS uptime_24h")) {
-          expect(sql).toContain("category = 'availability'");
-          return { uptime_24h: 100, uptime_30d: 100, latency: 42 };
+          expect(sql).toContain("FROM check_result_hourly");
+          expect(sql).not.toContain("FROM check_results");
+          return { uptime_24h: 100, uptime_30d: 99.5, latency: 42 };
         }
         throw new Error(`Unexpected query: ${sql}`);
       }),
       all: vi.fn(async (sql: string) => {
         if (sql.includes("FROM checks c LEFT JOIN agents")) {
+          expect(sql).toContain(`@> '{"agentTimeout": true}'`);
           return [
             {
               source: "check",
@@ -22,7 +31,7 @@ describe("AnalyticsService overview", () => {
               agent_kind: null,
               agent_last_seen_at: null,
               agent_collection_interval_seconds: null,
-              latest_metrics_json: "{}",
+              agent_timed_out: false,
             },
             {
               source: "check",
@@ -31,11 +40,20 @@ describe("AnalyticsService overview", () => {
               agent_kind: "desktop",
               agent_last_seen_at: new Date().toISOString(),
               agent_collection_interval_seconds: 30,
-              latest_metrics_json: '{"usedPercent":97.3}',
+              agent_timed_out: false,
+            },
+            {
+              source: "check",
+              type: "tcp",
+              status: "up",
+              agent_kind: "desktop",
+              agent_last_seen_at: new Date().toISOString(),
+              agent_collection_interval_seconds: 30,
+              agent_timed_out: true,
             },
           ];
         }
-        if (sql.includes("FROM observations")) {
+        if (sql.includes("FROM hourly_observations")) {
           expect(sql).toContain("category = 'availability'");
           expect(sql).toContain('AS "latencyMs"');
           return [
@@ -51,20 +69,26 @@ describe("AnalyticsService overview", () => {
         throw new Error(`Unexpected query: ${sql}`);
       }),
     };
+    const maintenance = { countActive: vi.fn(async () => 1) };
     const service = new AnalyticsService(
       database as never,
       { require: vi.fn(async () => undefined) } as never,
-      { list: vi.fn(async () => []) } as never,
-      { list: vi.fn(async () => []) } as never,
-      { list: vi.fn(async () => []) } as never
+      maintenance as never
     );
 
-    await expect(service.overview("user-1", "team-1")).resolves.toMatchObject({
-      checks: 2,
+    const overview = await service.overview("user-1", "team-1");
+
+    expect(overview).toMatchObject({
+      checks: 3,
       passing: 1,
       warning: 0,
       critical: 1,
-      down: 0,
+      down: 1,
+      uptime24h: 100,
+      uptime30d: 99.5,
+      averageLatencyMs: 42,
+      activeMaintenance: 1,
+      breachedObjectives: 2,
       statusTimeline: [
         {
           bucket: "2026-08-28T12:00:00.000Z",
@@ -75,6 +99,19 @@ describe("AnalyticsService overview", () => {
       ],
       latencyTimeline: [{ bucket: "2026-08-28T12:00:00.000Z", latencyMs: 42 }],
     });
+    expect(overview).not.toHaveProperty("incidents");
+    expect(database.get).toHaveBeenCalledWith(
+      expect.stringContaining("AS uptime_24h"),
+      "2026-08-27T13:00:00.000Z",
+      "team-1",
+      "2026-07-29T13:00:00.000Z"
+    );
+    expect(database.all).toHaveBeenCalledWith(
+      expect.stringContaining("FROM hourly_observations"),
+      "team-1",
+      "2026-08-27T13:00:00.000Z"
+    );
+    expect(maintenance.countActive).toHaveBeenCalledWith("team-1");
     expect(database.get).toHaveBeenCalledTimes(2);
     expect(database.all).toHaveBeenCalledTimes(2);
   });
@@ -115,8 +152,6 @@ describe("AnalyticsService reports", () => {
     const service = new AnalyticsService(
       database as never,
       { require: vi.fn(async () => undefined) } as never,
-      {} as never,
-      {} as never,
       {} as never
     );
 

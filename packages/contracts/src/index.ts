@@ -1272,5 +1272,4 @@ export interface OverviewAnalytics {
   breachedObjectives: number;
   statusTimeline: Array<{ bucket: string; up: number; degraded: number; down: number }>;
   latencyTimeline: Array<{ bucket: string; latencyMs: number }>;
-  incidents: IncidentSummary[];
 }

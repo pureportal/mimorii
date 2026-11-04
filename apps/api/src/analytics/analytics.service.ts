@@ -13,12 +13,21 @@ import {
   resolveMonitorStatus,
   summarizeMonitorStatuses,
 } from "../common/health-status.js";
-import { MONITOR_OBSERVATIONS_CTE } from "../common/monitor-observations.js";
+import {
+  HOURLY_MONITOR_OBSERVATIONS_CTE,
+  MONITOR_OBSERVATIONS_CTE,
+} from "../common/monitor-observations.js";
 import { DatabaseService } from "../database/database.service.js";
-import { IncidentsService } from "../incidents/incidents.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
-import { ObjectivesService } from "../objectives/objectives.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
+
+const HOUR_MS = 3_600_000;
+
+interface OverviewCountsRow {
+  resources: number;
+  open_incidents: number;
+  breached_objectives: number;
+}
 
 interface MonitorStatusRow {
   source: "check" | "heartbeat";
@@ -27,7 +36,13 @@ interface MonitorStatusRow {
   agent_kind: AgentKind | null;
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
-  latest_metrics_json: string | null;
+  agent_timed_out: boolean;
+}
+
+interface OverviewAvailabilityRow {
+  uptime_24h: number | null;
+  uptime_30d: number | null;
+  latency: number | null;
 }
 
 interface OverviewTimelineRow {
@@ -50,72 +65,72 @@ export class AnalyticsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly access: TeamAccessService,
-    private readonly incidents: IncidentsService,
-    private readonly maintenance: MaintenanceService,
-    private readonly objectives: ObjectivesService
+    private readonly maintenance: MaintenanceService
   ) {}
 
   async overview(userId: string, teamId: string): Promise<OverviewAnalytics> {
     await this.access.require(userId, teamId, "viewer");
-    const now = Date.now();
-    const from24h = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-    const from30d = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const [counts, monitorRows, availability, timelineRows, incidents, maintenance, objectives] =
-      await Promise.all([
-        this.database.get<{ resources: number; open_incidents: number }>(
-          `SELECT
-           (SELECT COUNT(*) FROM resources WHERE team_id = ?) AS resources,
-           (SELECT COUNT(*) FROM incidents
-            WHERE team_id = ? AND status != 'resolved') AS open_incidents`,
-          teamId,
-          teamId
-        ),
-        this.database.all<MonitorStatusRow>(
-          `SELECT 'check' AS source, c.type, c.current_status AS status,
-           a.kind AS agent_kind, a.last_seen_at AS agent_last_seen_at,
-           a.collection_interval_seconds AS agent_collection_interval_seconds,
-           (SELECT cr.metrics_json FROM check_results cr WHERE cr.check_id = c.id
-            ORDER BY cr.checked_at DESC, cr.id DESC LIMIT 1) AS latest_metrics_json
-           FROM checks c LEFT JOIN agents a ON a.id = c.agent_id WHERE c.team_id = ?
-           UNION ALL
-           SELECT 'heartbeat', NULL::text, hm.current_status,
-           NULL::text, NULL::timestamptz, NULL::integer, NULL::text
-           FROM heartbeat_monitors hm WHERE hm.team_id = ?`,
-          teamId,
-          teamId
-        ),
-        this.database.get<{
-          uptime_24h: number | null;
-          uptime_30d: number | null;
-          latency: number | null;
-        }>(
-          `${MONITOR_OBSERVATIONS_CTE} SELECT
-           AVG(CASE WHEN observed_at >= ? THEN CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_24h,
-           AVG(CASE WHEN observed_at >= ? THEN CASE WHEN status = 'down' THEN 0.0 ELSE 100.0 END END) AS uptime_30d,
-           AVG(CASE WHEN observed_at >= ? AND status != 'down' THEN latency_ms END) AS latency
-           FROM observations WHERE team_id = ? AND category = 'availability'`,
-          from24h,
-          from30d,
-          from24h,
-          teamId
-        ),
-        this.database.all<OverviewTimelineRow>(
-          `${MONITOR_OBSERVATIONS_CTE} SELECT
-           TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"') AS bucket,
-           SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up,
-           SUM(CASE WHEN status = 'degraded' THEN 1 ELSE 0 END) AS degraded,
-           SUM(CASE WHEN status = 'down' THEN 1 ELSE 0 END) AS down,
-           ROUND(AVG(CASE WHEN status != 'down' THEN latency_ms END)::numeric, 1)::double precision AS "latencyMs"
-           FROM observations WHERE team_id = ? AND category = 'availability' AND observed_at >= ?
-           GROUP BY TO_CHAR(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"')
-           ORDER BY bucket`,
-          teamId,
-          from24h
-        ),
-        this.incidents.list(userId, teamId, { limit: 20 }),
-        this.maintenance.list(userId, teamId),
-        this.objectives.list(userId, teamId),
-      ]);
+    const currentHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    const from24h = new Date(currentHour - 23 * HOUR_MS).toISOString();
+    const from30d = new Date(currentHour - (30 * 24 - 1) * HOUR_MS).toISOString();
+    const [counts, monitorRows, availability, timelineRows, activeMaintenance] = await Promise.all([
+      this.database.get<OverviewCountsRow>(
+        `SELECT
+         (SELECT COUNT(*) FROM resources WHERE team_id = ?) AS resources,
+         (SELECT COUNT(*) FROM incidents
+          WHERE team_id = ? AND status != 'resolved') AS open_incidents,
+         (SELECT COUNT(*) FROM service_level_objectives
+          WHERE team_id = ? AND breach_state = 'breached') AS breached_objectives`,
+        teamId,
+        teamId,
+        teamId
+      ),
+      this.database.all<MonitorStatusRow>(
+        `SELECT 'check' AS source, c.type, c.current_status AS status,
+         a.kind AS agent_kind, a.last_seen_at AS agent_last_seen_at,
+         a.collection_interval_seconds AS agent_collection_interval_seconds,
+         COALESCE((SELECT cr.metrics_json::jsonb @> '{"agentTimeout": true}'
+          FROM check_results cr WHERE cr.check_id = c.id
+          ORDER BY cr.checked_at DESC, cr.id DESC LIMIT 1), FALSE) AS agent_timed_out
+         FROM checks c LEFT JOIN agents a ON a.id = c.agent_id WHERE c.team_id = ?
+         UNION ALL
+         SELECT 'heartbeat', NULL::text, hm.current_status,
+         NULL::text, NULL::timestamptz, NULL::integer, FALSE
+         FROM heartbeat_monitors hm WHERE hm.team_id = ?`,
+        teamId,
+        teamId
+      ),
+      this.database.get<OverviewAvailabilityRow>(
+        `${HOURLY_MONITOR_OBSERVATIONS_CTE}, windowed AS (
+           SELECT observed_at >= ? AS recent, up_count + degraded_count AS available,
+             up_count + degraded_count + down_count AS total, latency_sum, latency_count
+           FROM hourly_observations
+           WHERE team_id = ? AND category = 'availability' AND observed_at >= ?
+         ) SELECT
+         100.0 * SUM(available) FILTER (WHERE recent)
+           / NULLIF(SUM(total) FILTER (WHERE recent), 0) AS uptime_24h,
+         100.0 * SUM(available) / NULLIF(SUM(total), 0) AS uptime_30d,
+         SUM(latency_sum) FILTER (WHERE recent)
+           / NULLIF(SUM(latency_count) FILTER (WHERE recent), 0) AS latency
+         FROM windowed`,
+        from24h,
+        teamId,
+        from30d
+      ),
+      this.database.all<OverviewTimelineRow>(
+        `${HOURLY_MONITOR_OBSERVATIONS_CTE} SELECT
+         TO_CHAR(bucket_start AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:00:00.000"Z"') AS bucket,
+         SUM(up_count) AS up, SUM(degraded_count) AS degraded, SUM(down_count) AS down,
+         ROUND((SUM(latency_sum) / NULLIF(SUM(latency_count), 0))::numeric, 1)::double precision
+           AS "latencyMs"
+         FROM hourly_observations
+         WHERE team_id = ? AND category = 'availability' AND observed_at >= ?
+         GROUP BY bucket_start ORDER BY bucket_start`,
+        teamId,
+        from24h
+      ),
+      this.maintenance.countActive(teamId),
+    ]);
     if (!counts || !availability) throw new Error("Overview aggregation failed");
     let checks = 0;
     const monitorCounts = summarizeMonitorStatuses(
@@ -130,15 +145,7 @@ export class AnalyticsService {
             collectionIntervalSeconds: row.agent_collection_interval_seconds ?? 30,
             lastSeenAt: row.agent_last_seen_at,
           }) === "offline";
-        const latestMetrics: unknown = row.latest_metrics_json
-          ? JSON.parse(row.latest_metrics_json)
-          : null;
-        const agentTimedOut =
-          typeof latestMetrics === "object" &&
-          latestMetrics !== null &&
-          "agentTimeout" in latestMetrics &&
-          latestMetrics.agentTimeout === true;
-        return resolveMonitorStatus(row.type, row.status, reporterOffline || agentTimedOut);
+        return resolveMonitorStatus(row.type, row.status, reporterOffline || row.agent_timed_out);
       })
     );
     const heartbeats = monitorRows.length - checks;
@@ -165,11 +172,10 @@ export class AnalyticsService {
       uptime30d: availability.uptime_30d,
       averageLatencyMs: availability.latency,
       openIncidents: counts.open_incidents,
-      activeMaintenance: maintenance.filter((window) => window.status === "active").length,
-      breachedObjectives: objectives.filter((objective) => objective.status === "breached").length,
+      activeMaintenance,
+      breachedObjectives: counts.breached_objectives,
       statusTimeline,
       latencyTimeline,
-      incidents,
     };
   }
 

@@ -48,7 +48,6 @@ const analytics: OverviewAnalytics = {
   breachedObjectives: 0,
   statusTimeline: [],
   latencyTimeline: [],
-  incidents: [],
 };
 
 describe("OverviewPage", () => {

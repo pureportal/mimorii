@@ -59,3 +59,59 @@ describe("MaintenanceService list", () => {
     ]);
   });
 });
+
+describe("MaintenanceService countActive", () => {
+  it("counts current occurrences without loading resources", async () => {
+    const at = new Date("2026-08-28T12:00:00.000Z");
+    const window = {
+      team_id: "team-1",
+      recurrence_until: null,
+      suppress_notifications: 1,
+      cancelled_at: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+    };
+    const database = {
+      all: vi.fn(async () => [
+        {
+          ...window,
+          id: "once",
+          name: "Database upgrade",
+          starts_at: "2026-08-28T11:00:00.000Z",
+          ends_at: "2026-08-28T13:00:00.000Z",
+          recurrence: "none" as const,
+        },
+        {
+          ...window,
+          id: "daily-current",
+          name: "Midday rotation",
+          starts_at: "2026-08-01T11:30:00.000Z",
+          ends_at: "2026-08-01T12:30:00.000Z",
+          recurrence: "daily" as const,
+        },
+        {
+          ...window,
+          id: "daily-later",
+          name: "Evening backup",
+          starts_at: "2026-08-01T18:00:00.000Z",
+          ends_at: "2026-08-01T19:00:00.000Z",
+          recurrence: "daily" as const,
+        },
+      ]),
+    };
+    const service = new MaintenanceService(
+      database as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+
+    await expect(service.countActive("team-1", at)).resolves.toBe(2);
+    expect(database.all).toHaveBeenCalledOnce();
+    expect(database.all).toHaveBeenCalledWith(
+      expect.stringContaining("cancelled_at IS NULL"),
+      "team-1",
+      at.toISOString(),
+      at.toISOString()
+    );
+  });
+});

@@ -952,7 +952,12 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(200);
     expect(recoveredOverview.body).toMatchObject({ passing: 1, openIncidents: 0 });
-    expect(recoveredOverview.body.incidents[0]).toMatchObject({ status: "resolved" });
+    expect(recoveredOverview.body).not.toHaveProperty("incidents");
+    const recoveredIncidents = await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/incidents?limit=1`)
+      .set("authorization", authorization)
+      .expect(200);
+    expect(recoveredIncidents.body[0]).toMatchObject({ status: "resolved" });
 
     const snapshots = await request(app.getHttpServer())
       .get(`/api/teams/${teamId}/agents/${createdAgent.body.id}/snapshots`)

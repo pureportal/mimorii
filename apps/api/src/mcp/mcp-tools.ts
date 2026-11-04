@@ -115,7 +115,10 @@ export function registerMcpTools(
     },
     ({ teamId }) =>
       executeTool(async () => {
-        const { incidents, ...overview } = await services.analytics.overview(userId, teamId);
+        const [overview, incidents] = await Promise.all([
+          services.analytics.overview(userId, teamId),
+          services.incidents.list(userId, teamId, { limit: 20 }),
+        ]);
         return { ...overview, incidents: incidents.map(incidentListItem) };
       })
   );

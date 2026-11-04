@@ -209,6 +209,19 @@ export class MaintenanceService {
     return rows.some((row) => Boolean(this.currentOccurrence(row, at)));
   }
 
+  async countActive(teamId: string, at = new Date()): Promise<number> {
+    const instant = at.toISOString();
+    const rows = await this.database.all<MaintenanceRow>(
+      `SELECT * FROM maintenance_windows
+       WHERE team_id = ? AND cancelled_at IS NULL AND starts_at <= ?
+       AND (recurrence != 'none' OR ends_at > ?)`,
+      teamId,
+      instant,
+      instant
+    );
+    return rows.filter((row) => this.currentOccurrence(row, at)).length;
+  }
+
   async activeForResources(
     resourceIds: string[],
     at = new Date()
