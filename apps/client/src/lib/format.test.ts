@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { formatCount } from "./format";
+import { formatCount, formatInitials, formatPercent } from "./format";
+
+describe("formatPercent", () => {
+  it("keeps service-level precision below 100 percent", () => {
+    expect(formatPercent(99.95)).toBe("99.950%");
+    expect(formatPercent(42.31)).toBe("42.3%");
+  });
+
+  it("shows full availability without trailing zeros", () => {
+    expect(formatPercent(100)).toBe("100%");
+  });
+});
+
+describe("formatInitials", () => {
+  it("uses the first letter of the first two words", () => {
+    expect(formatInitials("Leo Martins")).toBe("LM");
+    expect(formatInitials("Mimorii Owner's team")).toBe("MO");
+  });
+
+  it("uses the first two letters of a single word", () => {
+    expect(formatInitials("operations")).toBe("OP");
+  });
+});
 
 describe("formatCount", () => {
   it("uses the singular label for one item", () => {

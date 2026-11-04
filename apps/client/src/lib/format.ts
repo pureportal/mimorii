@@ -1,5 +1,7 @@
 export function formatPercent(value: number | null | undefined): string {
-  return value == null ? "—" : `${value.toFixed(value >= 99 ? 3 : 1)}%`;
+  if (value == null) return "—";
+  if (value >= 100) return "100%";
+  return `${value.toFixed(value >= 99 ? 3 : 1)}%`;
 }
 
 export function formatLatency(value: number | null | undefined): string {
@@ -42,4 +44,22 @@ export function formatDuration(seconds: number): string {
 
 export function formatCount(count: number, singular: string, plural = `${singular}s`): string {
   return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+const dateTimeRangeFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+export function formatDateTimeRange(start: string, end: string): string {
+  return dateTimeRangeFormat.formatRange(new Date(start), new Date(end));
+}
+
+export function formatInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters =
+    words.length > 1
+      ? words.slice(0, 2).map((word) => Array.from(word)[0])
+      : Array.from(words[0] ?? "").slice(0, 2);
+  return letters.join("").toUpperCase();
 }

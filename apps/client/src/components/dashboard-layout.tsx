@@ -22,7 +22,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import {
@@ -37,6 +37,7 @@ import {
   type NavigationItemId,
 } from "../lib/app-navigation";
 import { cn } from "../lib/cn";
+import { formatInitials } from "../lib/format";
 import { Brand } from "./brand";
 import { DeviceNotificationPrompt } from "./device-notification-prompt";
 import { ProductGuide } from "./guide/product-guide";
@@ -67,6 +68,12 @@ export function ProtectedLayout() {
   const { session, profileReady, activeTeam, setActiveTeamId, acknowledgeTour, logout } = useAuth();
   const location = useLocation();
   const [guideOpen, setGuideOpen] = useState(false);
+  const navigationRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navigationRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [location.pathname]);
   if (!session) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   if (!activeTeam) {
     const platformAdministration =
@@ -132,9 +139,10 @@ export function ProtectedLayout() {
         </div>
 
         <nav
+          ref={navigationRef}
           aria-label="Primary navigation"
           data-guide="primary-navigation"
-          className="mt-6 min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-4"
+          className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-4 [scrollbar-color:var(--color-line)_transparent] [scrollbar-width:thin]"
         >
           {groups.map((group) => (
             <DesktopNavigationGroup
@@ -146,33 +154,42 @@ export function ProtectedLayout() {
           ))}
         </nav>
 
-        <div className="border-t border-line px-1 pt-3">
-          <button
-            type="button"
-            data-guide="guide-trigger"
-            onClick={() => setGuideOpen(true)}
-            className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink"
-          >
-            <CircleHelp className="size-[18px]" /> Guide
-          </button>
+        <div className="flex items-center gap-1 border-t border-line px-1 pt-3">
           <Link
             to={appRoutes.account}
+            aria-label="Account"
             aria-current={location.pathname === appRoutes.account ? "page" : undefined}
             className={cn(
-              "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
-              location.pathname === appRoutes.account &&
-                "bg-lavender-soft font-semibold text-violet-strong"
+              "flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
+              location.pathname === appRoutes.account && "bg-lavender-soft text-violet-strong"
             )}
           >
-            <Settings className="size-[18px]" /> Account
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-lavender-soft font-display text-[10px] font-black text-violet-strong">
+              {formatInitials(session.user.name)}
+            </span>
+            <span className="truncate">{session.user.name}</span>
           </Link>
-          <button
+          <Button
             type="button"
-            onClick={logout}
-            className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink"
+            variant="ghost"
+            size="icon"
+            data-guide="guide-trigger"
+            aria-label="Guide"
+            title="Guide"
+            onClick={() => setGuideOpen(true)}
           >
-            <LogOut className="size-[18px]" /> Sign out
-          </button>
+            <CircleHelp />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={logout}
+          >
+            <LogOut />
+          </Button>
         </div>
       </aside>
 
@@ -281,7 +298,7 @@ function DesktopNavigationItem({
         data-guide-nav={item.id}
         aria-current={active && !item.children ? "page" : undefined}
         className={cn(
-          "relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
+          "relative flex h-9 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition hover:bg-ink/5 hover:text-ink",
           active && "bg-lavender-soft font-semibold text-violet-strong"
         )}
       >

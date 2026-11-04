@@ -4,6 +4,7 @@ import { Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { apiBlob } from "../lib/api";
 import { cn } from "../lib/cn";
+import { formatInitials } from "../lib/format";
 
 export function TeamLogo({
   team,
@@ -14,7 +15,7 @@ export function TeamLogo({
   className?: string;
   iconClassName?: string;
 }) {
-  const initials = team.name.trim().slice(0, 2).toUpperCase();
+  const initials = formatInitials(team.name);
 
   return (
     <span

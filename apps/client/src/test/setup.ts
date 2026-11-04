@@ -38,3 +38,7 @@ if (!globalThis.ResizeObserver) {
     unobserve() {}
   };
 }
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => undefined;
+}
