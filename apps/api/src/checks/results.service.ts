@@ -51,9 +51,25 @@ export class ResultsService {
       if (!check) throw new NotFoundException("Check not found");
       recordedCheck = check;
       await this.database.run(
-        `INSERT INTO check_results
-         (id, check_id, status, latency_ms, status_code, message, metrics_json, checked_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `WITH recorded AS (
+           INSERT INTO check_results
+           (id, check_id, status, latency_ms, status_code, message, metrics_json, checked_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING check_id, status, latency_ms, checked_at
+         )
+         INSERT INTO check_result_hourly AS hourly
+         (check_id, bucket_start, up_count, degraded_count, down_count, latency_sum, latency_count)
+         SELECT check_id, date_trunc('hour', checked_at, 'UTC'),
+           (status = 'up')::integer, (status = 'degraded')::integer, (status = 'down')::integer,
+           CASE WHEN status != 'down' THEN COALESCE(latency_ms, 0) ELSE 0 END,
+           (status != 'down' AND latency_ms IS NOT NULL)::integer
+         FROM recorded
+         ON CONFLICT (check_id, bucket_start) DO UPDATE SET
+           up_count = hourly.up_count + EXCLUDED.up_count,
+           degraded_count = hourly.degraded_count + EXCLUDED.degraded_count,
+           down_count = hourly.down_count + EXCLUDED.down_count,
+           latency_sum = hourly.latency_sum + EXCLUDED.latency_sum,
+           latency_count = hourly.latency_count + EXCLUDED.latency_count`,
         id,
         checkId,
         result.status,

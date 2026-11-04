@@ -57,8 +57,30 @@ export async function seedMonitoring(
   await seedChecks(context, identity, ids);
   await seedResults(context, ids);
   await seedMonitoringDemo(context, identity);
+  await rebuildHourlyResults(context);
   await seedRelayTelemetry(context, identity, ids);
   return ids;
+}
+
+async function rebuildHourlyResults(context: SeedContext): Promise<void> {
+  await context.database.run(
+    "DELETE FROM check_result_hourly WHERE check_id IN (SELECT id FROM checks WHERE team_id = ?)",
+    context.teamId
+  );
+  await context.database.run(
+    `INSERT INTO check_result_hourly
+     (check_id, bucket_start, up_count, degraded_count, down_count, latency_sum, latency_count)
+     SELECT cr.check_id, date_trunc('hour', cr.checked_at, 'UTC'),
+       COUNT(*) FILTER (WHERE cr.status = 'up'),
+       COUNT(*) FILTER (WHERE cr.status = 'degraded'),
+       COUNT(*) FILTER (WHERE cr.status = 'down'),
+       COALESCE(SUM(cr.latency_ms::double precision) FILTER (WHERE cr.status != 'down'), 0),
+       COUNT(cr.latency_ms) FILTER (WHERE cr.status != 'down')
+     FROM check_results cr JOIN checks c ON c.id = cr.check_id
+     WHERE c.team_id = ?
+     GROUP BY cr.check_id, date_trunc('hour', cr.checked_at, 'UTC')`,
+    context.teamId
+  );
 }
 
 function monitoringIds(context: SeedContext, identity: SeedIdentityIds): SeedMonitoringIds {

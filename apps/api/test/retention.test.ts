@@ -52,6 +52,10 @@ describe("retention", () => {
     expect(run).toHaveBeenCalledWith(
       "DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP"
     );
+    expect(run).toHaveBeenCalledWith(
+      "DELETE FROM check_result_hourly WHERE bucket_start < ?",
+      "2025-08-13T00:00:00.000Z"
+    );
   });
 
   it("does not read settings or delete data when retention is disabled", async () => {

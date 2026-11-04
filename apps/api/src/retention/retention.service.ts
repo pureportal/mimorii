@@ -45,6 +45,10 @@ export class RetentionService implements OnModuleInit {
       );
       await this.database.run("DELETE FROM check_results WHERE checked_at < ?", cutoffs.results);
       await this.database.run(
+        "DELETE FROM check_result_hourly WHERE bucket_start < ?",
+        cutoffs.results
+      );
+      await this.database.run(
         "DELETE FROM host_snapshots WHERE observed_at < ?",
         cutoffs.snapshots
       );
