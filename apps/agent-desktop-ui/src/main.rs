@@ -102,6 +102,16 @@ mod windows {
         server_url: Option<String>,
         target_policy: Option<TargetPolicy>,
         configuration_error: Option<String>,
+        runtime: Option<RuntimeStatus>,
+        log_path: PathBuf,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeStatus {
+        last_contact_seconds_ago: Option<u64>,
+        last_error: Option<String>,
+        pending_snapshots: usize,
     }
 
     #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -376,6 +386,30 @@ mod windows {
                             ui.ctx(),
                         );
                     }
+                    let log_path = self
+                        .status
+                        .as_ref()
+                        .map(|status| status.log_path.clone())
+                        .filter(|path| path.is_file());
+                    if let Some(path) = log_path
+                        && ui
+                            .add(
+                                Button::new(
+                                    RichText::new("Open log").size(13.0).color(palette.muted),
+                                )
+                                .min_size(Vec2::new(76.0, 32.0))
+                                .fill(palette.surface_muted)
+                                .stroke(Stroke::NONE),
+                            )
+                            .clicked()
+                    {
+                        self.result_message = None;
+                        self.result_error = Command::new("notepad.exe")
+                            .arg(path)
+                            .spawn()
+                            .err()
+                            .map(|error| format!("Log could not be opened: {error}"));
+                    }
                 });
             });
             if let Some(server) = self
@@ -392,6 +426,37 @@ mod windows {
                         .color(palette.muted)
                         .size(13.0),
                 );
+            }
+            let Some(runtime) = self
+                .status
+                .as_ref()
+                .filter(|status| status.enrolled)
+                .and_then(|status| status.runtime.as_ref())
+            else {
+                return;
+            };
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(runtime.last_contact_seconds_ago.map_or_else(
+                    || "No contact yet".to_owned(),
+                    |seconds| format!("Last contact {}", format_age(seconds)),
+                ))
+                .color(palette.muted)
+                .size(13.0),
+            );
+            if let Some(error) = runtime.last_error.as_ref() {
+                ui.add_space(4.0);
+                ui.label(RichText::new(error).color(palette.danger).size(13.0));
+                if runtime.pending_snapshots > 0 {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} waiting to upload",
+                            count_label(runtime.pending_snapshots, "snapshot")
+                        ))
+                        .color(palette.muted)
+                        .size(13.0),
+                    );
+                }
             }
         }
 
@@ -803,6 +868,21 @@ mod windows {
         });
     }
 
+    fn format_age(seconds: u64) -> String {
+        let (value, unit) = match seconds {
+            0..5 => return "just now".to_owned(),
+            5..60 => (seconds, "second"),
+            60..3_600 => (seconds / 60, "minute"),
+            3_600..86_400 => (seconds / 3_600, "hour"),
+            _ => (seconds / 86_400, "day"),
+        };
+        format!("{} ago", count_label(value as usize, unit))
+    }
+
+    fn count_label(count: usize, singular: &str) -> String {
+        format!("{count} {singular}{}", if count == 1 { "" } else { "s" })
+    }
+
     fn join_values<T: ToString>(values: &[T]) -> String {
         values
             .iter()
@@ -1041,6 +1121,41 @@ mod windows {
         #[test]
         fn server_url_uses_the_mimorii_api_by_default() {
             assert_eq!(DEFAULT_SERVER_URL, "https://mimorii.app/api");
+        }
+
+        #[test]
+        fn status_includes_runtime_health_and_the_log_location() {
+            let status: AgentStatus = serde_json::from_value(serde_json::json!({
+                "service": "running",
+                "enrolled": true,
+                "serverUrl": "https://mimorii.app/api",
+                "targetPolicy": null,
+                "configurationError": null,
+                "runtime": {
+                    "updatedSecondsAgo": 2,
+                    "lastContactSecondsAgo": 75,
+                    "lastUploadSecondsAgo": 75,
+                    "lastError": "trigger poll failed: agent key was rejected",
+                    "lastErrorSecondsAgo": 2,
+                    "pendingSnapshots": 4
+                },
+                "logPath": "C:/ProgramData/Mimorii/Agent/agent-desktop.log"
+            }))
+            .unwrap();
+
+            let runtime = status.runtime.unwrap();
+            assert_eq!(runtime.last_contact_seconds_ago, Some(75));
+            assert_eq!(runtime.pending_snapshots, 4);
+            assert!(status.log_path.ends_with("agent-desktop.log"));
+        }
+
+        #[test]
+        fn ages_and_counts_read_naturally() {
+            assert_eq!(format_age(1), "just now");
+            assert_eq!(format_age(75), "1 minute ago");
+            assert_eq!(format_age(7_300), "2 hours ago");
+            assert_eq!(count_label(1, "snapshot"), "1 snapshot");
+            assert_eq!(count_label(4, "snapshot"), "4 snapshots");
         }
 
         #[test]
