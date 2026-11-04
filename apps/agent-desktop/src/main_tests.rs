@@ -12,8 +12,9 @@ use super::ServiceAction;
 use super::{AgentControlStatus, WindowsServiceControlAction};
 use super::{
     Cli, CollectionWorker, Command, ConfigOptions, apply_config_options, check_runner_cycle, cycle,
-    run_configured_cycle, time_now,
+    execute_tasks, run_configured_cycle, time_now,
 };
+use crate::api::ApiClient;
 use crate::config::AgentConfig;
 use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
 use crate::snapshot_store::SnapshotStore;
@@ -30,6 +31,10 @@ fn config(server_url: &str, key: String) -> AgentConfig {
         agent_key: key,
         target_policy: TargetPolicy::default(),
     }
+}
+
+fn client(server_url: &str) -> ApiClient {
+    ApiClient::new(config(server_url, valid_key())).unwrap()
 }
 
 fn snapshot(observed_at: &str, cpu_percent: f32) -> HostSnapshot {
@@ -289,6 +294,8 @@ fn control_status_exposes_the_target_policy_without_the_agent_key() {
         server_url: Some("https://observe.example.com/api".to_owned()),
         target_policy: Some(TargetPolicy::default()),
         configuration_error: None,
+        runtime: None,
+        log_path: "agent-desktop.log".to_owned(),
     })
     .unwrap();
 
@@ -348,22 +355,18 @@ fn polling_without_a_task_transfers_collected_telemetry() {
         .unwrap();
 
     let configured_interval = Cell::new(0);
-    let outcome = cycle(
-        &config(&server.url, valid_key()),
-        &store,
-        |seconds, enabled| {
-            configured_interval.set(seconds);
-            assert!(enabled);
-            Ok(())
-        },
-    )
+    let outcome = cycle(&client(&server.url), &store, |seconds, enabled| {
+        configured_interval.set(seconds);
+        assert!(enabled);
+        Ok(())
+    })
     .unwrap();
 
     assert_eq!(configured_interval.get(), 45);
     let response = outcome.heartbeat.unwrap().unwrap();
     assert_eq!(response.accepted_snapshots, 2);
     assert_eq!(response.accepted_results, 0);
-    assert!(store.load().unwrap().is_empty());
+    assert_eq!(store.pending().unwrap(), 0);
     let poll = server
         .requests
         .recv_timeout(Duration::from_secs(1))
@@ -392,19 +395,15 @@ fn disabled_host_collection_clears_pending_telemetry_without_uploading_it() {
         .append(&snapshot("2026-08-13T10:00:00Z", 10.0))
         .unwrap();
 
-    let outcome = cycle(
-        &config(&server.url, valid_key()),
-        &store,
-        |seconds, enabled| {
-            assert_eq!(seconds, 45);
-            assert!(!enabled);
-            Ok(())
-        },
-    )
+    let outcome = cycle(&client(&server.url), &store, |seconds, enabled| {
+        assert_eq!(seconds, 45);
+        assert!(!enabled);
+        Ok(())
+    })
     .unwrap();
 
     assert!(outcome.heartbeat.unwrap().is_none());
-    assert!(store.load().unwrap().is_empty());
+    assert_eq!(store.pending().unwrap(), 0);
     let request = server
         .requests
         .recv_timeout(Duration::from_secs(1))
@@ -448,15 +447,11 @@ fn disk_tasks_collect_locally_without_uploading_host_telemetry() {
     fs::create_dir_all(&directory).unwrap();
     let store = SnapshotStore::new(directory.clone());
 
-    let outcome = cycle(
-        &config(&server.url, valid_key()),
-        &store,
-        |seconds, enabled| {
-            assert_eq!(seconds, 45);
-            assert!(!enabled);
-            Ok(())
-        },
-    )
+    let outcome = cycle(&client(&server.url), &store, |seconds, enabled| {
+        assert_eq!(seconds, 45);
+        assert!(!enabled);
+        Ok(())
+    })
     .unwrap();
 
     assert_eq!(outcome.heartbeat.unwrap().unwrap().accepted_snapshots, 0);
@@ -472,7 +467,7 @@ fn disk_tasks_collect_locally_without_uploading_host_telemetry() {
     assert_eq!(payload["snapshots"], json!([]));
     assert_eq!(payload["results"][0]["taskId"], "task-disk");
     assert_eq!(payload["results"][0]["metrics"]["mount"], mount);
-    assert!(store.load().unwrap().is_empty());
+    assert_eq!(store.pending().unwrap(), 0);
 
     fs::remove_dir_all(directory).unwrap();
 }
@@ -495,12 +490,12 @@ fn trigger_transfers_and_acknowledges_the_complete_collected_dataset() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
 
     let response = outcome.heartbeat.unwrap().unwrap();
     assert_eq!(response.accepted_snapshots, 2);
     assert_eq!(response.accepted_results, 1);
-    assert!(store.load().unwrap().is_empty());
+    assert_eq!(store.pending().unwrap(), 0);
     let _poll = server
         .requests
         .recv_timeout(Duration::from_secs(1))
@@ -558,7 +553,9 @@ fn check_runner_registers_network_capabilities_and_never_sends_host_snapshots() 
     let mut agent_config = config(&server.url, valid_key());
     agent_config.target_policy.allowed_cidrs = vec!["127.0.0.0/8".parse().unwrap()];
 
-    let response = check_runner_cycle(&agent_config).unwrap().unwrap();
+    let response = check_runner_cycle(&ApiClient::new(agent_config).unwrap())
+        .unwrap()
+        .unwrap();
 
     assert_eq!(response.accepted_snapshots, 0);
     assert_eq!(response.accepted_results, 1);
@@ -607,12 +604,12 @@ fn trigger_collects_immediately_when_the_store_is_empty() {
     let directory = temporary_path("collected");
     let store = SnapshotStore::new(directory.clone());
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
 
     let response = outcome.heartbeat.unwrap().unwrap();
     assert_eq!(response.accepted_snapshots, 1);
     assert_eq!(response.accepted_results, 1);
-    assert!(store.load().unwrap().is_empty());
+    assert_eq!(store.pending().unwrap(), 0);
     let _poll = server
         .requests
         .recv_timeout(Duration::from_secs(1))
@@ -643,7 +640,7 @@ fn failed_trigger_transfer_retains_the_complete_dataset_for_retry() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
     assert!(outcome.heartbeat.is_err());
 
     let pending = store.load().unwrap();
@@ -672,7 +669,7 @@ fn partial_snapshot_acknowledgement_retains_the_complete_dataset_for_retry() {
         .append(&snapshot("2026-08-13T10:00:15Z", 20.0))
         .unwrap();
 
-    let outcome = cycle(&config(&server.url, valid_key()), &store, |_, _| Ok(())).unwrap();
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
 
     assert!(outcome.heartbeat.is_err());
     assert_eq!(store.load().unwrap().snapshots().len(), 2);
@@ -746,4 +743,85 @@ fn generated_timestamps_are_utc_rfc3339_values() {
     let value = time_now();
     assert!(value.contains('T'));
     assert!(value.ends_with('Z'));
+}
+
+#[test]
+fn tasks_run_concurrently_and_keep_their_order() {
+    let tasks = (0..8).collect::<Vec<u64>>();
+    let started = std::time::Instant::now();
+
+    let results = execute_tasks(&tasks, |task| {
+        thread::sleep(Duration::from_millis(150));
+        task * 10
+    });
+
+    assert_eq!(results, [0, 10, 20, 30, 40, 50, 60, 70]);
+    assert!(started.elapsed() < Duration::from_millis(900));
+}
+
+#[test]
+fn large_backlogs_upload_in_bounded_batches() {
+    let accepted =
+        r#"{"acceptedAt":"2026-08-13T10:00:31Z","acceptedSnapshots":1,"acceptedResults":0}"#;
+    let server = http_server(vec![
+        MockResponse::new(
+            200,
+            r#"{"collectionIntervalSeconds":30,"collectHostTelemetry":true,"tasks":[]}"#,
+        ),
+        MockResponse::new(200, accepted),
+        MockResponse::new(200, accepted),
+        MockResponse::new(200, accepted),
+    ]);
+    let directory = temporary_path("batched-upload");
+    let store = SnapshotStore::with_limits(directory.clone(), 100, 1, u64::MAX);
+    for second in 0..3 {
+        store
+            .append(&snapshot(
+                &format!("2026-08-13T10:00:0{second}Z"),
+                second as f32,
+            ))
+            .unwrap();
+    }
+
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
+
+    assert_eq!(outcome.heartbeat.unwrap().unwrap().accepted_snapshots, 3);
+    assert_eq!(store.pending().unwrap(), 0);
+    let _poll = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    let first = server
+        .requests
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    let payload: Value = serde_json::from_str(first.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(payload["snapshots"].as_array().unwrap().len(), 1);
+    assert_eq!(payload["snapshots"][0]["cpuPercent"], 0.0);
+
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn permanently_rejected_snapshots_are_discarded_instead_of_blocking_uploads() {
+    let server = http_server(vec![
+        MockResponse::new(
+            200,
+            r#"{"collectionIntervalSeconds":30,"collectHostTelemetry":true,"tasks":[]}"#,
+        ),
+        MockResponse::new(400, "invalid snapshot"),
+    ]);
+    let directory = temporary_path("rejected-upload");
+    let store = SnapshotStore::new(directory.clone());
+    store
+        .append(&snapshot("2026-08-13T10:00:00Z", 10.0))
+        .unwrap();
+
+    let outcome = cycle(&client(&server.url), &store, |_, _| Ok(())).unwrap();
+
+    let error = outcome.heartbeat.unwrap_err();
+    assert!(format!("{error:#}").contains("discarded 1 snapshot(s)"));
+    assert_eq!(store.pending().unwrap(), 0);
+
+    fs::remove_dir_all(directory).unwrap();
 }

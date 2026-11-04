@@ -255,6 +255,7 @@ mod windows {
     use std::ffi::OsString;
     use std::fs::{self, File, OpenOptions};
     use std::io::Write;
+    use std::path::{Path, PathBuf};
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -307,11 +308,6 @@ mod windows {
     pub fn run() -> Result<()> {
         service_dispatcher::start(SERVICE_NAME, service_main)
             .context("could not connect the Mimorii agent to the Windows Service Control Manager")
-    }
-
-    pub fn print_status() -> Result<()> {
-        println!("service: {}", status()?.as_str());
-        Ok(())
     }
 
     pub fn status() -> Result<AgentServiceState> {
@@ -487,6 +483,7 @@ mod windows {
     }
 
     struct FileReporter {
+        path: PathBuf,
         file: Mutex<File>,
     }
 
@@ -495,28 +492,37 @@ mod windows {
             let path = crate::config::log_path()?;
             let directory = path.parent().context("agent log path has no parent")?;
             fs::create_dir_all(directory)?;
-            if fs::metadata(&path)
-                .map(|metadata| metadata.len() >= LOG_LIMIT_BYTES)
-                .unwrap_or(false)
-            {
-                let rotated = path.with_extension("log.1");
-                if rotated.exists() {
-                    fs::remove_file(&rotated)?;
-                }
-                fs::rename(&path, rotated)?;
-            }
-            let file = OpenOptions::new().create(true).append(true).open(path)?;
+            let file = open_log(&path)?;
             Ok(Self {
+                path,
                 file: Mutex::new(file),
             })
         }
 
         fn write(&self, level: &str, message: &str) {
             if let Ok(mut file) = self.file.lock() {
+                if file
+                    .metadata()
+                    .is_ok_and(|metadata| metadata.len() >= LOG_LIMIT_BYTES)
+                    && let Ok(next) = open_log(&self.path)
+                {
+                    *file = next;
+                }
                 let _ = writeln!(file, "{} {level} {message}", crate::time_now());
                 let _ = file.flush();
             }
         }
+    }
+
+    fn open_log(path: &Path) -> Result<File> {
+        if fs::metadata(path).is_ok_and(|metadata| metadata.len() >= LOG_LIMIT_BYTES) {
+            let rotated = path.with_extension("log.1");
+            if rotated.exists() {
+                fs::remove_file(&rotated)?;
+            }
+            fs::rename(path, rotated)?;
+        }
+        Ok(OpenOptions::new().create(true).append(true).open(path)?)
     }
 
     impl RuntimeReporter for FileReporter {
@@ -531,7 +537,7 @@ mod windows {
 }
 
 #[cfg(windows)]
-pub use windows::{print_status, run, start, status, stop};
+pub use windows::{run, start, status, stop};
 
 #[cfg(any(target_os = "linux", test))]
 fn command(program: &str, arguments: &[&str]) -> Result<()> {

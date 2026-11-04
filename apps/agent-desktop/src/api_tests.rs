@@ -238,3 +238,20 @@ fn unreachable_servers_preserve_operation_context() {
         "could not send the agent heartbeat"
     );
 }
+
+#[test]
+fn permanently_rejected_heartbeats_are_identified() {
+    let server = http_server(vec![MockResponse::new(400, "invalid snapshot")]);
+    let error = ApiClient::new(config(server.url))
+        .unwrap()
+        .heartbeat(&HeartbeatRequest {
+            agent_version: env!("CARGO_PKG_VERSION"),
+            snapshots: vec![snapshot()],
+            results: Vec::new(),
+            capabilities: Vec::new(),
+        })
+        .unwrap_err();
+
+    assert!(error.downcast_ref::<super::PayloadRejected>().is_some());
+    assert!(error.to_string().contains("400"));
+}

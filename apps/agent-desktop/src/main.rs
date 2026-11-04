@@ -13,6 +13,7 @@ mod icmp;
 mod linux;
 mod models;
 mod runtime;
+mod runtime_state;
 mod service;
 mod snapshot_store;
 mod target_policy;
@@ -22,7 +23,6 @@ mod update;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-#[cfg(windows)]
 use serde::Serialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -33,10 +33,11 @@ use config::AgentConfig;
 use config_command::apply_config_options;
 use config_command::{ConfigOptions, configure};
 use runtime::{run_check_runner_loop, run_check_runner_once, run_loop, run_once};
+use runtime_state::{RuntimeState, RuntimeSummary, unix_now};
 use target_policy::TargetPolicy;
 
 #[cfg(test)]
-use runtime::{CollectionWorker, check_runner_cycle, cycle, run_configured_cycle};
+use runtime::{CollectionWorker, check_runner_cycle, cycle, execute_tasks, run_configured_cycle};
 
 #[derive(Parser)]
 #[command(
@@ -153,7 +154,7 @@ fn main() -> Result<()> {
             let config =
                 AgentConfig::new_check_runner(&server, &key, allow_insecure_http, &allowed_cidrs)?;
             if once {
-                run_check_runner_once(&config)
+                run_check_runner_once(config)
             } else {
                 run_check_runner_loop(config)
             }
@@ -219,6 +220,11 @@ fn doctor() -> Result<()> {
     println!("configuration: ok");
     println!("agent: ok");
     println!("{}", config.public_summary());
+    if let Some(summary) = runtime_summary()? {
+        for line in summary.lines() {
+            println!("{line}");
+        }
+    }
     ApiClient::new(config)?
         .verify()
         .context("server verification failed")?;
@@ -227,63 +233,76 @@ fn doctor() -> Result<()> {
 }
 
 fn status(json: bool) -> Result<()> {
+    let status = control_status()?;
+    if json {
+        println!("{}", serde_json::to_string(&status)?);
+        return Ok(());
+    }
     #[cfg(windows)]
-    {
-        if json {
-            println!("{}", serde_json::to_string(&control_status()?)?);
-            return Ok(());
+    println!("service: {}", status.service);
+    match (&status.server_url, &status.configuration_error) {
+        (Some(server_url), _) => {
+            println!("server: {server_url}");
+            println!("credential: enrolled");
         }
-        service::print_status()
+        (None, Some(error)) => println!("configuration: {error}"),
+        (None, None) => println!("credential: not enrolled"),
     }
-
-    #[cfg(not(windows))]
-    {
-        let _ = json;
-        println!("{}", AgentConfig::load()?.public_summary());
-        Ok(())
+    if let Some(runtime) = &status.runtime {
+        for line in runtime.lines() {
+            println!("{line}");
+        }
     }
+    Ok(())
 }
 
-#[cfg(windows)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentControlStatus {
+    #[cfg(windows)]
     service: &'static str,
     enrolled: bool,
     server_url: Option<String>,
     target_policy: Option<TargetPolicy>,
     configuration_error: Option<String>,
+    runtime: Option<RuntimeSummary>,
+    #[cfg(windows)]
+    log_path: String,
 }
 
-#[cfg(windows)]
 fn control_status() -> Result<AgentControlStatus> {
+    #[cfg(windows)]
     let service = service::status()?.as_str();
+    let runtime = runtime_summary().ok().flatten();
     let path = config::config_path()?;
-    if !path.exists() {
-        return Ok(AgentControlStatus {
-            service,
-            enrolled: false,
-            server_url: None,
-            target_policy: None,
-            configuration_error: None,
-        });
-    }
-    match AgentConfig::load() {
-        Ok(config) => Ok(AgentControlStatus {
-            service,
-            enrolled: true,
-            server_url: Some(config.server_url),
-            target_policy: Some(config.target_policy),
-            configuration_error: None,
-        }),
-        Err(error) => Ok(AgentControlStatus {
-            service,
-            enrolled: false,
-            server_url: None,
-            target_policy: None,
-            configuration_error: Some(format!("{error:#}")),
-        }),
-    }
+    let (enrolled, server_url, target_policy, configuration_error) = if !path.exists() {
+        (false, None, None, None)
+    } else {
+        match AgentConfig::load() {
+            Ok(config) => (
+                true,
+                Some(config.server_url),
+                Some(config.target_policy),
+                None,
+            ),
+            Err(error) => (false, None, None, Some(format!("{error:#}"))),
+        }
+    };
+    Ok(AgentControlStatus {
+        #[cfg(windows)]
+        service,
+        enrolled,
+        server_url,
+        target_policy,
+        configuration_error,
+        runtime,
+        #[cfg(windows)]
+        log_path: config::log_path()?.display().to_string(),
+    })
+}
+
+fn runtime_summary() -> Result<Option<RuntimeSummary>> {
+    Ok(RuntimeState::load(&config::state_path()?)?.map(|state| state.summary(unix_now())))
 }
 
 pub fn time_now() -> String {

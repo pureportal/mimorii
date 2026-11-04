@@ -116,10 +116,19 @@ pub fn collection_path() -> Result<PathBuf> {
     return Ok(directories.data_local_dir().join("collected-snapshots"));
 }
 
+pub fn state_path() -> Result<PathBuf> {
+    Ok(collection_path()?.join("agent.state"))
+}
+
 #[cfg(not(windows))]
 fn project_directories() -> Result<ProjectDirs> {
     ProjectDirs::from("app", "mimorii", "agent-desktop")
         .context("could not determine the user configuration directory")
+}
+
+#[cfg(windows)]
+pub fn update_staging_directory() -> Result<PathBuf> {
+    Ok(windows_data_directory()?.join("updates"))
 }
 
 #[cfg(windows)]

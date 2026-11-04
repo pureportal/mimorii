@@ -1,7 +1,9 @@
+use std::fmt;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use reqwest::blocking::Client;
+use reqwest::StatusCode;
+use reqwest::blocking::{Client, Response};
 use reqwest::header::USER_AGENT;
 
 use crate::config::AgentConfig;
@@ -12,13 +14,35 @@ pub struct ApiClient {
     config: AgentConfig,
 }
 
+#[derive(Debug)]
+pub struct PayloadRejected {
+    status: StatusCode,
+}
+
+impl fmt::Display for PayloadRejected {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "Mimorii rejected the heartbeat with {}",
+            self.status
+        )
+    }
+}
+
+impl std::error::Error for PayloadRejected {}
+
 impl ApiClient {
     pub fn new(config: AgentConfig) -> Result<Self> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(8))
             .timeout(Duration::from_secs(20))
+            .pool_idle_timeout(Duration::from_secs(4))
             .build()?;
         Ok(Self { client, config })
+    }
+
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
     }
 
     pub fn verify(&self) -> Result<()> {
@@ -34,9 +58,7 @@ impl ApiClient {
             .header(USER_AGENT, user_agent())
             .send()
             .context("could not reach the Mimorii server")?;
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            bail!("agent key was rejected");
-        }
+        reject_unauthorized(&response)?;
         response
             .error_for_status()?
             .json()
@@ -52,14 +74,28 @@ impl ApiClient {
             .json(heartbeat)
             .send()
             .context("could not send the agent heartbeat")?;
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            bail!("agent key was rejected");
+        reject_unauthorized(&response)?;
+        let status = response.status();
+        if matches!(
+            status,
+            StatusCode::BAD_REQUEST
+                | StatusCode::PAYLOAD_TOO_LARGE
+                | StatusCode::UNPROCESSABLE_ENTITY
+        ) {
+            return Err(PayloadRejected { status }.into());
         }
         response
             .error_for_status()?
             .json()
             .context("heartbeat response is invalid")
     }
+}
+
+fn reject_unauthorized(response: &Response) -> Result<()> {
+    if response.status() == StatusCode::UNAUTHORIZED {
+        bail!("agent key was rejected");
+    }
+    Ok(())
 }
 
 fn user_agent() -> String {

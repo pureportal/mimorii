@@ -1,14 +1,18 @@
 #[cfg(test)]
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::thread::{self, sleep};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
-use crate::api::ApiClient;
-use crate::config::{AgentConfig, ConfigRefresh, ConfigWatcher, collection_path, config_path};
-use crate::models::{AgentTask, HeartbeatRequest, HeartbeatResponse};
+use crate::api::{ApiClient, PayloadRejected};
+use crate::config::{
+    AgentConfig, ConfigRefresh, ConfigWatcher, collection_path, config_path, state_path,
+};
+use crate::models::{AgentTask, HeartbeatRequest, HeartbeatResponse, TaskResult};
+use crate::runtime_state::RuntimeStatus;
 use crate::snapshot_store::SnapshotStore;
 
 const DEFAULT_COLLECTION_INTERVAL_SECONDS: u64 = 30;
@@ -16,6 +20,8 @@ const MINIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 15;
 const MAXIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 3_600;
 const TRIGGER_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const CONFIGURATION_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const TASK_CONCURRENCY: usize = 8;
+const MAX_UPLOAD_BATCHES_PER_CYCLE: usize = 10;
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const NATIVE_CAPABILITIES: &[&str] = &[
     "http", "tcp", "dns", "icmp", "wan", "host", "disk", "docker", "database",
@@ -50,6 +56,8 @@ pub(crate) fn run_until_stopped(
 ) -> Result<()> {
     let mut watcher = ConfigWatcher::new(config_path()?);
     let store = SnapshotStore::new(collection_path()?);
+    let mut status = RuntimeStatus::new(state_path()?, reporter);
+    let mut client = None;
     let mut collection = None;
     let mut next_trigger = Instant::now();
     reporter.info("Mimorii agent started");
@@ -58,39 +66,54 @@ pub(crate) fn run_until_stopped(
         match watcher.refresh() {
             ConfigRefresh::Applied => {
                 reporter.info("configuration applied");
+                client = match watcher.active().cloned().map(ApiClient::new).transpose() {
+                    Ok(client) => client,
+                    Err(error) => {
+                        status.failed(&format!(
+                            "could not prepare the server connection: {error:#}"
+                        ));
+                        None
+                    }
+                };
                 next_trigger = Instant::now();
             }
-            ConfigRefresh::Rejected(error) if watcher.active().is_some() => reporter.error(
+            ConfigRefresh::Rejected(error) if watcher.active().is_some() => status.failed(
                 &format!("configuration update rejected; keeping active configuration: {error}"),
             ),
-            ConfigRefresh::Rejected(error) => reporter.error(&format!(
-                "configuration unavailable; waiting for a valid configuration: {error}"
-            )),
+            ConfigRefresh::Rejected(error) => {
+                status.failed(&format!(
+                    "configuration unavailable; waiting for a valid configuration: {error}"
+                ));
+                status.persist();
+            }
             ConfigRefresh::Unchanged => {}
         }
 
-        if let Some(config) = watcher.active().cloned() {
-            if collection.is_none() {
-                collection = Some(CollectionWorker::start(store.clone())?);
-            }
-            if Instant::now() >= next_trigger {
-                let worker = collection.as_mut().unwrap();
-                match cycle(&config, &store, |seconds, enabled| {
+        if let Some(client) = client.as_ref()
+            && Instant::now() >= next_trigger
+        {
+            let worker = match collection.as_mut() {
+                Some(worker) => worker,
+                None => collection.insert(CollectionWorker::start(store.clone())?),
+            };
+            record_cycle(
+                &mut status,
+                cycle(client, &store, |seconds, enabled| {
                     worker.configure(seconds, enabled)
-                }) {
-                    Ok(outcome) => {
-                        if let Err(error) = outcome.heartbeat {
-                            reporter.error(&format!("trigger transfer failed: {error:#}"));
-                        }
-                    }
-                    Err(error) => reporter.error(&format!("trigger poll failed: {error:#}")),
-                }
-                worker.ensure_running()?;
-                next_trigger = Instant::now() + TRIGGER_POLL_INTERVAL;
+                }),
+            );
+            for error in worker.take_errors()? {
+                status.failed(&format!("local collection failed: {error:#}"));
             }
+            match store.pending() {
+                Ok(count) => status.set_pending_snapshots(count),
+                Err(error) => status.failed(&format!("local collection is unreadable: {error:#}")),
+            }
+            status.persist();
+            next_trigger = Instant::now() + TRIGGER_POLL_INTERVAL;
         }
 
-        let wait = if watcher.active().is_some() {
+        let wait = if client.is_some() {
             let until_trigger = next_trigger.saturating_duration_since(Instant::now());
             CONFIGURATION_POLL_INTERVAL.min(until_trigger.max(Duration::from_millis(1)))
         } else {
@@ -106,20 +129,37 @@ pub(crate) fn run_until_stopped(
     }
 }
 
+fn record_cycle(status: &mut RuntimeStatus<'_>, outcome: Result<CycleOutcome>) {
+    match outcome {
+        Ok(outcome) => {
+            status.contacted();
+            match outcome.heartbeat {
+                Ok(Some(_)) => {
+                    status.uploaded();
+                    status.succeeded();
+                }
+                Ok(None) => status.succeeded(),
+                Err(error) => status.failed(&format!("trigger transfer failed: {error:#}")),
+            }
+        }
+        Err(error) => status.failed(&format!("trigger poll failed: {error:#}")),
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn run_configured_cycle(
     path: &Path,
     store: &SnapshotStore,
     configure_collection: impl FnOnce(u64, bool) -> Result<()>,
 ) -> Result<CycleOutcome> {
-    let config = AgentConfig::load_from(path)?;
-    cycle(&config, store, configure_collection)
+    let client = ApiClient::new(AgentConfig::load_from(path)?)?;
+    cycle(&client, store, configure_collection)
 }
 
 pub(crate) fn run_once() -> Result<()> {
-    let config = AgentConfig::load()?;
+    let client = ApiClient::new(AgentConfig::load()?)?;
     let store = SnapshotStore::new(collection_path()?);
-    let outcome = cycle(&config, &store, |_, enabled| {
+    let outcome = cycle(&client, &store, |_, enabled| {
         if enabled {
             store.append(&crate::collector::collect()?)?;
         }
@@ -136,22 +176,23 @@ pub(crate) fn run_once() -> Result<()> {
 }
 
 pub(crate) fn run_check_runner_loop(config: AgentConfig) -> Result<()> {
+    let client = ApiClient::new(config)?;
     println!("Mimorii check runner started");
     loop {
-        match check_runner_cycle(&config) {
+        match check_runner_cycle(&client) {
             Ok(Some(response)) => println!(
                 "trigger accepted at {} with {} result(s)",
                 response.accepted_at, response.accepted_results
             ),
             Ok(None) => {}
-            Err(error) => eprintln!("check runner cycle failed: {error}"),
+            Err(error) => eprintln!("check runner cycle failed: {error:#}"),
         }
         sleep(TRIGGER_POLL_INTERVAL);
     }
 }
 
-pub(crate) fn run_check_runner_once(config: &AgentConfig) -> Result<()> {
-    match check_runner_cycle(config)? {
+pub(crate) fn run_check_runner_once(config: AgentConfig) -> Result<()> {
+    match check_runner_cycle(&ApiClient::new(config)?)? {
         Some(response) => println!(
             "trigger accepted at {} with {} result(s)",
             response.accepted_at, response.accepted_results
@@ -161,8 +202,7 @@ pub(crate) fn run_check_runner_once(config: &AgentConfig) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn check_runner_cycle(config: &AgentConfig) -> Result<Option<HeartbeatResponse>> {
-    let client = ApiClient::new(config.clone())?;
+pub(crate) fn check_runner_cycle(client: &ApiClient) -> Result<Option<HeartbeatResponse>> {
     let registration = client.heartbeat(&HeartbeatRequest {
         agent_version: AGENT_VERSION,
         snapshots: Vec::new(),
@@ -177,11 +217,12 @@ pub(crate) fn check_runner_cycle(config: &AgentConfig) -> Result<Option<Heartbea
     if poll.tasks.is_empty() {
         return Ok(None);
     }
-    let results = poll
-        .tasks
-        .iter()
-        .map(|task| crate::checks::execute_network(task, &config.target_policy))
-        .collect::<Result<Vec<_>>>()?;
+    let policy = &client.config().target_policy;
+    let results = execute_tasks(&poll.tasks, |task| {
+        crate::checks::execute_network(task, policy)
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>>>()?;
     client
         .heartbeat(&HeartbeatRequest {
             agent_version: AGENT_VERSION,
@@ -193,17 +234,17 @@ pub(crate) fn check_runner_cycle(config: &AgentConfig) -> Result<Option<Heartbea
 }
 
 pub(crate) fn cycle(
-    config: &AgentConfig,
+    client: &ApiClient,
     store: &SnapshotStore,
     configure_collection: impl FnOnce(u64, bool) -> Result<()>,
 ) -> Result<CycleOutcome> {
-    let client = ApiClient::new(config.clone())?;
     let poll = client.poll(100)?;
     validate_collection_interval(poll.collection_interval_seconds)?;
     configure_collection(
         poll.collection_interval_seconds,
         poll.collect_host_telemetry,
     )?;
+    let policy = &client.config().target_policy;
     if !poll.collect_host_telemetry {
         store.clear()?;
         if poll.tasks.is_empty() {
@@ -212,11 +253,9 @@ pub(crate) fn cycle(
             });
         }
         let snapshot = crate::collector::collect()?;
-        let results = poll
-            .tasks
-            .iter()
-            .map(|task| crate::checks::execute(task, &snapshot, &config.target_policy))
-            .collect();
+        let results = execute_tasks(&poll.tasks, |task| {
+            crate::checks::execute(task, &snapshot, policy)
+        });
         let heartbeat = client
             .heartbeat(&HeartbeatRequest {
                 agent_version: AGENT_VERSION,
@@ -227,12 +266,12 @@ pub(crate) fn cycle(
             .map(Some);
         return Ok(CycleOutcome { heartbeat });
     }
-    if poll.tasks.is_empty() && store.load()?.is_empty() {
+    if poll.tasks.is_empty() && store.pending()? == 0 {
         return Ok(CycleOutcome {
             heartbeat: Ok(None),
         });
     }
-    let heartbeat = transfer_trigger(&client, &poll.tasks, store, &config.target_policy).map(Some);
+    let heartbeat = transfer_trigger(client, &poll.tasks, store).map(Some);
     Ok(CycleOutcome { heartbeat })
 }
 
@@ -240,24 +279,50 @@ fn transfer_trigger(
     client: &ApiClient,
     tasks: &[AgentTask],
     store: &SnapshotStore,
-    target_policy: &crate::target_policy::TargetPolicy,
 ) -> Result<HeartbeatResponse> {
-    let mut batch = store.load()?;
-    if batch.is_empty() {
+    if store.pending()? == 0 {
         store.append(&crate::collector::collect()?)?;
-        batch = store.load()?;
     }
-    let latest_snapshot = batch.snapshots().last().unwrap();
-    let results = tasks
-        .iter()
-        .map(|task| crate::checks::execute(task, latest_snapshot, target_policy))
-        .collect();
-    let response = client.heartbeat(&HeartbeatRequest {
+    let latest_snapshot = store
+        .latest()?
+        .context("collected telemetry is unavailable")?;
+    let policy = &client.config().target_policy;
+    let results = execute_tasks(tasks, |task| {
+        crate::checks::execute(task, &latest_snapshot, policy)
+    });
+    let mut response = upload_batch(client, store, results)?;
+    for _ in 1..MAX_UPLOAD_BATCHES_PER_CYCLE {
+        if store.pending()? == 0 {
+            break;
+        }
+        let next = upload_batch(client, store, Vec::new())?;
+        response.accepted_at = next.accepted_at;
+        response.accepted_snapshots += next.accepted_snapshots;
+    }
+    Ok(response)
+}
+
+fn upload_batch(
+    client: &ApiClient,
+    store: &SnapshotStore,
+    results: Vec<TaskResult>,
+) -> Result<HeartbeatResponse> {
+    let batch = store.load()?;
+    let response = match client.heartbeat(&HeartbeatRequest {
         agent_version: AGENT_VERSION,
         snapshots: batch.snapshots().to_vec(),
         results,
         capabilities: NATIVE_CAPABILITIES.to_vec(),
-    })?;
+    }) {
+        Err(error) if error.is::<PayloadRejected>() => {
+            store.acknowledge(&batch)?;
+            return Err(error.context(format!(
+                "discarded {} snapshot(s) that Mimorii cannot accept",
+                batch.snapshots().len()
+            )));
+        }
+        result => result?,
+    };
     if response.accepted_snapshots != batch.snapshots().len() {
         bail!(
             "Mimorii accepted {} of {} collected snapshots",
@@ -269,6 +334,35 @@ fn transfer_trigger(
     Ok(response)
 }
 
+pub(crate) fn execute_tasks<T: Sync, R: Send>(
+    tasks: &[T],
+    execute: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
+    let next = AtomicUsize::new(0);
+    let mut completed = thread::scope(|scope| {
+        let workers = (0..TASK_CONCURRENCY.min(tasks.len()))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut completed = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(task) = tasks.get(index) else {
+                            return completed;
+                        };
+                        completed.push((index, execute(task)));
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("a check worker panicked"))
+            .collect::<Vec<_>>()
+    });
+    completed.sort_by_key(|(index, _)| *index);
+    completed.into_iter().map(|(_, result)| result).collect()
+}
+
 pub(crate) struct CycleOutcome {
     pub(crate) heartbeat: Result<Option<HeartbeatResponse>>,
 }
@@ -277,7 +371,7 @@ pub(crate) struct CollectionWorker {
     pub(crate) interval: Duration,
     pub(crate) enabled: bool,
     command_sender: Sender<CollectionCommand>,
-    pub(crate) error_receiver: Receiver<anyhow::Error>,
+    error_receiver: Receiver<anyhow::Error>,
 }
 
 struct CollectionCommand {
@@ -319,11 +413,14 @@ impl CollectionWorker {
         Ok(())
     }
 
-    fn ensure_running(&self) -> Result<()> {
-        match self.error_receiver.try_recv() {
-            Ok(error) => Err(error),
-            Err(TryRecvError::Empty) => Ok(()),
-            Err(TryRecvError::Disconnected) => bail!("local agent stopped"),
+    fn take_errors(&self) -> Result<Vec<anyhow::Error>> {
+        let mut errors = Vec::new();
+        loop {
+            match self.error_receiver.try_recv() {
+                Ok(error) => errors.push(error),
+                Err(TryRecvError::Empty) => return Ok(errors),
+                Err(TryRecvError::Disconnected) => bail!("local agent stopped"),
+            }
         }
     }
 }
@@ -342,8 +439,9 @@ fn collect_locally(
                 Err(RecvTimeoutError::Timeout) => {
                     let result =
                         crate::collector::collect().and_then(|snapshot| store.append(&snapshot));
-                    if let Err(error) = result {
-                        let _ = error_sender.send(error);
+                    if let Err(error) = result
+                        && error_sender.send(error).is_err()
+                    {
                         return;
                     }
                     None
