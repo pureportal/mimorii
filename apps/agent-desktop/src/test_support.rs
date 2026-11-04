@@ -10,16 +10,20 @@ static TEMPORARY_PATH_ID: AtomicUsize = AtomicUsize::new(0);
 pub struct MockResponse {
     status: u16,
     headers: Vec<(String, String)>,
-    body: String,
+    body: Vec<u8>,
     delay: Duration,
 }
 
 impl MockResponse {
     pub fn new(status: u16, body: impl Into<String>) -> Self {
+        Self::bytes(status, body.into().into_bytes())
+    }
+
+    pub fn bytes(status: u16, body: Vec<u8>) -> Self {
         Self {
             status,
             headers: Vec::new(),
-            body: body.into(),
+            body,
             delay: Duration::ZERO,
         }
     }
@@ -75,11 +79,9 @@ pub fn http_server(responses: Vec<MockResponse>) -> MockServer {
                 .collect::<String>();
             headers.push_str(&format!("Content-Length: {}\r\n", response.body.len()));
             headers.push_str("Connection: close\r\n");
-            let payload = format!(
-                "HTTP/1.1 {} {}\r\n{}\r\n{}",
-                response.status, reason, headers, response.body
-            );
-            let _ = stream.write_all(payload.as_bytes());
+            let head = format!("HTTP/1.1 {} {}\r\n{}\r\n", response.status, reason, headers);
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&response.body);
         }
     });
     MockServer {

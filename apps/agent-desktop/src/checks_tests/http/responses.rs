@@ -322,6 +322,21 @@ fn http_response_bodies_are_bounded() {
 }
 
 #[test]
+fn http_response_bodies_that_are_not_utf8_are_still_checked() {
+    let mut body = b"caf\xe9 status: ready".to_vec();
+    body.extend(std::iter::repeat_n(b'x', 600 * 1024));
+    let server = http_server(vec![MockResponse::bytes(200, body)]);
+
+    let result = crate::checks::tests::execute(
+        &http_task(&server.url, json!({ "responseContains": "status: ready" })),
+        &snapshot(),
+    );
+
+    assert_result(&result, CheckState::Up, None, Some(200));
+    assert_eq!(result.metrics["responseBytes"], 512 * 1024);
+}
+
+#[test]
 fn http_check_follows_relative_redirects_when_enabled() {
     let server = http_server(vec![
         MockResponse::new(302, "").header("Location", "/final"),
@@ -360,6 +375,25 @@ fn http_check_can_observe_redirects_without_following_them() {
     assert_result(&result, CheckState::Up, None, Some(302));
     assert!(server.requests.recv_timeout(Duration::from_secs(1)).is_ok());
     assert!(server.requests.try_recv().is_err());
+}
+
+#[test]
+fn http_redirect_chains_share_the_check_timeout() {
+    let server = http_server(vec![
+        MockResponse::new(302, "")
+            .header("Location", "/final")
+            .delayed(Duration::from_millis(1_200)),
+        MockResponse::new(200, "ready").delayed(Duration::from_millis(1_200)),
+    ]);
+    let result = crate::checks::tests::execute(
+        &http_task(
+            &format!("{}/start", server.url),
+            json!({ "followRedirects": true }),
+        ),
+        &snapshot(),
+    );
+
+    assert_result(&result, CheckState::Down, Some("Check timed out"), None);
 }
 
 #[test]

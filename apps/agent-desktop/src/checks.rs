@@ -290,14 +290,19 @@ fn http_with_resolver(
         bail!("HTTP method is not allowed");
     }
     let started = Instant::now();
+    let deadline = started + Duration::from_millis(task.timeout_ms);
     let mut send_secret = true;
     for redirect in 0..=3 {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            bail!("HTTP check timed out");
+        }
         let (protocol, hostname, port) = http_target(&url)?;
         target_policy.authorize_request(protocol, hostname, port)?;
         let addresses = target_policy.authorize_addresses(resolve(hostname, port)?)?;
         let mut client = Client::builder()
-            .timeout(Duration::from_millis(task.timeout_ms))
-            .connect_timeout(Duration::from_millis(task.timeout_ms))
+            .timeout(remaining)
+            .connect_timeout(remaining)
             .no_proxy()
             .redirect(Policy::none())
             .danger_accept_invalid_certs(!config.validate_tls)
@@ -384,10 +389,12 @@ fn http_with_resolver(
             continue;
         }
         let latency = elapsed_ms(started);
-        let mut body = String::new();
-        response.take(MAX_BODY_BYTES).read_to_string(&mut body)?;
+        let mut body = Vec::new();
+        response.take(MAX_BODY_BYTES).read_to_end(&mut body)?;
+        let response_bytes = body.len();
+        let body = String::from_utf8_lossy(&body);
         let mut metrics = BTreeMap::new();
-        metrics.insert("responseBytes".to_owned(), json!(body.len()));
+        metrics.insert("responseBytes".to_owned(), json!(response_bytes));
         if let Some(value) = server {
             metrics.insert("server".to_owned(), json!(value));
         }
