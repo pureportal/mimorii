@@ -1,11 +1,17 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use bollard::Docker;
 use bollard::query_parameters::{ListContainersOptionsBuilder, StatsOptionsBuilder};
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream};
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::models::{ContainerRuntimeSnapshot, ContainerSnapshot};
+
+const REQUEST_CONCURRENCY: usize = 16;
+const CPU_SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub fn collect() -> Option<ContainerRuntimeSnapshot> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -22,36 +28,39 @@ async fn collect_async() -> Result<ContainerRuntimeSnapshot> {
         .list_containers(Some(
             ListContainersOptionsBuilder::default().all(true).build(),
         ))
-        .await?;
-    let mut containers = Vec::with_capacity(summaries.len());
-    for summary in summaries {
-        let summary = json(summary)?;
-        let Some(id) = string(&summary, "/id") else {
-            continue;
-        };
-        let inspect = json(docker.inspect_container(&id, None).await?)?;
-        let stats = if string(&summary, "/state").as_deref() == Some("running") {
-            docker
-                .stats(
-                    &id,
-                    Some(
-                        StatsOptionsBuilder::default()
-                            .stream(false)
-                            .one_shot(true)
-                            .build(),
-                    ),
-                )
-                .next()
-                .await
-                .transpose()?
-                .map(json)
-                .transpose()?
-                .unwrap_or(Value::Null)
-        } else {
-            Value::Null
-        };
-        containers.push(container(id, &summary, &inspect, &stats));
+        .await?
+        .into_iter()
+        .map(json)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|summary| Some((string(&summary, "/id")?, summary)))
+        .collect::<Vec<_>>();
+    let running = summaries
+        .iter()
+        .filter(|(_, summary)| string(summary, "/state").as_deref() == Some("running"))
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    let previous = stats(&docker, &running).await;
+    if !running.is_empty() {
+        tokio::time::sleep(CPU_SAMPLE_INTERVAL).await;
     }
+    let ids = summaries
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    let (inspections, current) = tokio::join!(inspect(&docker, &ids), stats(&docker, &running));
+    let mut containers = summaries
+        .iter()
+        .filter_map(|(id, summary)| {
+            Some(container(
+                id.clone(),
+                summary,
+                inspections.get(id.as_str())?,
+                previous.get(id.as_str()).unwrap_or(&Value::Null),
+                current.get(id.as_str()).unwrap_or(&Value::Null),
+            ))
+        })
+        .collect::<Vec<_>>();
     containers.sort_by_key(|container| container.name.to_lowercase());
     Ok(ContainerRuntimeSnapshot {
         engine_version: string(&version, "/version").unwrap_or_else(|| "unknown".to_owned()),
@@ -59,12 +68,46 @@ async fn collect_async() -> Result<ContainerRuntimeSnapshot> {
     })
 }
 
-fn container(id: String, summary: &Value, inspect: &Value, stats: &Value) -> ContainerSnapshot {
+async fn stats<'a>(docker: &Docker, ids: &[&'a str]) -> HashMap<&'a str, Value> {
+    stream::iter(ids.iter().copied())
+        .map(|id| async move {
+            let options = StatsOptionsBuilder::default()
+                .stream(false)
+                .one_shot(true)
+                .build();
+            let sample = docker.stats(id, Some(options)).next().await?.ok()?;
+            Some((id, json(sample).ok()?))
+        })
+        .buffer_unordered(REQUEST_CONCURRENCY)
+        .filter_map(|sample| async move { sample })
+        .collect()
+        .await
+}
+
+async fn inspect<'a>(docker: &Docker, ids: &[&'a str]) -> HashMap<&'a str, Value> {
+    stream::iter(ids.iter().copied())
+        .map(|id| async move {
+            let inspection = docker.inspect_container(id, None).await.ok()?;
+            Some((id, json(inspection).ok()?))
+        })
+        .buffer_unordered(REQUEST_CONCURRENCY)
+        .filter_map(|inspection| async move { inspection })
+        .collect()
+        .await
+}
+
+fn container(
+    id: String,
+    summary: &Value,
+    inspect: &Value,
+    previous: &Value,
+    stats: &Value,
+) -> ContainerSnapshot {
     let labels = summary.pointer("/labels").and_then(Value::as_object);
     let cpu_delta = number(stats, "/cpu_stats/cpu_usage/total_usage")
-        .saturating_sub(number(stats, "/precpu_stats/cpu_usage/total_usage"));
+        .saturating_sub(number(previous, "/cpu_stats/cpu_usage/total_usage"));
     let system_delta = number(stats, "/cpu_stats/system_cpu_usage")
-        .saturating_sub(number(stats, "/precpu_stats/system_cpu_usage"));
+        .saturating_sub(number(previous, "/cpu_stats/system_cpu_usage"));
     let online_cpus = number(stats, "/cpu_stats/online_cpus").max(1);
     let cpu_percent = if system_delta == 0 {
         0.0
@@ -204,9 +247,12 @@ mod tests {
             "restart_count": 2,
             "state": { "health": { "status": "healthy" }, "started_at": "2026-08-23T10:00:00Z" }
         });
+        let previous = json!({
+            "cpu_stats": { "cpu_usage": { "total_usage": 100 }, "system_cpu_usage": 500 }
+        });
         let stats = json!({
             "cpu_stats": { "cpu_usage": { "total_usage": 300 }, "system_cpu_usage": 1000, "online_cpus": 2 },
-            "precpu_stats": { "cpu_usage": { "total_usage": 100 }, "system_cpu_usage": 500 },
+            "precpu_stats": { "cpu_usage": { "total_usage": 0 }, "system_cpu_usage": 0 },
             "memory_stats": { "usage": 50, "limit": 100 },
             "networks": { "eth0": { "rx_bytes": 10, "tx_bytes": 20 } },
             "blkio_stats": { "io_service_bytes_recursive": [
@@ -214,7 +260,13 @@ mod tests {
             ] }
         });
 
-        let value = super::container("container-1".to_owned(), &summary, &inspect, &stats);
+        let value = super::container(
+            "container-1".to_owned(),
+            &summary,
+            &inspect,
+            &previous,
+            &stats,
+        );
 
         assert_eq!(value.name, "api");
         assert_eq!(value.health, "healthy");
