@@ -134,6 +134,7 @@ impl TargetPolicy {
     }
 
     fn allows_ip(&self, address: IpAddr) -> bool {
+        let address = address.to_canonical();
         self.allowed_cidrs.is_empty()
             || self
                 .allowed_cidrs

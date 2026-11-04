@@ -189,3 +189,31 @@ fn invalid_hostname_patterns_are_rejected() {
         assert!(policy.validate().is_err(), "{pattern} should be rejected");
     }
 }
+
+#[test]
+fn ipv4_mapped_ipv6_answers_are_checked_as_ipv4_addresses() {
+    let ipv6_only = TargetPolicy {
+        allowed_cidrs: vec![IpNet::from_str("::/0").unwrap()],
+        ..TargetPolicy::default()
+    };
+    assert!(
+        ipv6_only
+            .authorize_addresses(vec![address("::ffff:127.0.0.1")])
+            .is_err()
+    );
+    assert!(
+        ipv6_only
+            .authorize_addresses(vec![address("2001:db8::1")])
+            .is_ok()
+    );
+
+    let private_network = TargetPolicy {
+        allowed_cidrs: vec![IpNet::from_str("10.0.0.0/8").unwrap()],
+        ..TargetPolicy::default()
+    };
+    assert!(
+        private_network
+            .authorize_addresses(vec![address("::ffff:10.1.2.3")])
+            .is_ok()
+    );
+}
