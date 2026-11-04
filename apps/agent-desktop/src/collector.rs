@@ -7,7 +7,9 @@ use std::time::Duration;
 #[cfg(windows)]
 use anyhow::Context;
 use anyhow::Result;
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{
+    DiskRefreshKind, Disks, MemoryRefreshKind, Networks, ProcessRefreshKind, RefreshKind, System,
+};
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::FILETIME;
 #[cfg(windows)]
@@ -24,10 +26,10 @@ use crate::models::{DiskSnapshot, HostSnapshot, TechnologySnapshot};
 use crate::time_now;
 
 pub fn collect() -> Result<HostSnapshot> {
-    let mut system = System::new_all();
+    let mut system = System::new_with_specifics(system_refresh());
     let cpu_percent = sample_cpu_percent(&mut system)?;
     let (swap_used_bytes, swap_total_bytes) = swap_bytes(&system)?;
-    let disks = Disks::new_with_refreshed_list();
+    let disks = Disks::new_with_refreshed_list_specifics(DiskRefreshKind::nothing().with_storage());
     let networks = Networks::new_with_refreshed_list();
     let technologies = collect_technologies(&system);
     Ok(HostSnapshot {
@@ -68,7 +70,17 @@ pub fn collect() -> Result<HostSnapshot> {
         technologies,
         container_runtime: containers::collect(),
         observed_at: time_now(),
-    })
+    }
+    .bounded())
+}
+
+fn system_refresh() -> RefreshKind {
+    let refresh = RefreshKind::nothing()
+        .with_memory(MemoryRefreshKind::everything())
+        .with_processes(ProcessRefreshKind::nothing());
+    #[cfg(not(windows))]
+    let refresh = refresh.with_cpu(sysinfo::CpuRefreshKind::nothing().with_cpu_usage());
+    refresh
 }
 
 #[cfg(not(windows))]

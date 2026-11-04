@@ -71,6 +71,60 @@ pub struct HostSnapshot {
     pub observed_at: String,
 }
 
+const MAX_DISKS: usize = 128;
+const MAX_MOUNT_CHARACTERS: usize = 260;
+const MAX_CONTAINERS: usize = 500;
+const MAX_CONTAINER_PORTS: usize = 128;
+
+impl HostSnapshot {
+    pub fn bounded(mut self) -> Self {
+        self.hostname = bounded_text(&self.hostname, 255, "unknown");
+        self.platform = bounded_text(&self.platform, 100, std::env::consts::OS);
+        self.cpu_percent = if self.cpu_percent.is_finite() {
+            self.cpu_percent.clamp(0.0, 100.0)
+        } else {
+            0.0
+        };
+        if !self.load_average.is_finite() || self.load_average < 0.0 {
+            self.load_average = 0.0;
+        }
+        self.disks.retain(|disk| {
+            !disk.mount.is_empty() && disk.mount.chars().count() <= MAX_MOUNT_CHARACTERS
+        });
+        self.disks.truncate(MAX_DISKS);
+        if let Some(runtime) = self.container_runtime.as_mut() {
+            runtime.engine_version = bounded_text(&runtime.engine_version, 100, "unknown");
+            runtime.containers.truncate(MAX_CONTAINERS);
+            for container in &mut runtime.containers {
+                container.name = bounded_text(&container.name, 255, "unknown");
+                container.image = bounded_text(&container.image, 500, "unknown");
+                if !container.cpu_percent.is_finite() || container.cpu_percent < 0.0 {
+                    container.cpu_percent = 0.0;
+                }
+                container.compose_project = bounded_label(container.compose_project.take());
+                container.compose_service = bounded_label(container.compose_service.take());
+                container.ports.truncate(MAX_CONTAINER_PORTS);
+            }
+        }
+        self
+    }
+}
+
+fn bounded_text(value: &str, maximum: usize, fallback: &str) -> String {
+    let value = value.trim();
+    if value.is_empty() {
+        fallback.to_owned()
+    } else {
+        value.chars().take(maximum).collect()
+    }
+}
+
+fn bounded_label(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().chars().take(255).collect::<String>())
+        .filter(|value| !value.is_empty())
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTask {

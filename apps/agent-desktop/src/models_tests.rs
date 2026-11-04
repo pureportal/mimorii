@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use super::{
-    AgentPollResponse, AgentTask, CheckState, CheckType, DiskSnapshot, FaviconResult,
-    HeartbeatRequest, HeartbeatResponse, HostSnapshot, TaskResult, TechnologySnapshot,
+    AgentPollResponse, AgentTask, CheckState, CheckType, ContainerRuntimeSnapshot,
+    ContainerSnapshot, DiskSnapshot, FaviconResult, HeartbeatRequest, HeartbeatResponse,
+    HostSnapshot, TaskResult, TechnologySnapshot,
 };
 
 fn snapshot() -> HostSnapshot {
@@ -159,4 +160,65 @@ fn deserializes_heartbeat_acknowledgements() {
     assert_eq!(response.accepted_at, "2026-08-12T20:00:02Z");
     assert_eq!(response.accepted_snapshots, 4);
     assert_eq!(response.accepted_results, 3);
+}
+
+#[test]
+fn bounded_snapshots_stay_within_server_validation_limits() {
+    let container = ContainerSnapshot {
+        id: "a".repeat(64),
+        name: "n".repeat(300),
+        image: "registry.example/app:1".to_owned(),
+        state: "running".to_owned(),
+        health: "none".to_owned(),
+        restart_count: 0,
+        cpu_percent: f64::NAN,
+        memory_used_bytes: 0,
+        memory_limit_bytes: 0,
+        network_received_bytes: 0,
+        network_transmitted_bytes: 0,
+        block_read_bytes: 0,
+        block_written_bytes: 0,
+        compose_project: Some(" ".to_owned()),
+        compose_service: Some("api".to_owned()),
+        ports: (0..300).map(|port| format!("{port}/tcp")).collect(),
+        started_at: None,
+    };
+    let mut value = snapshot();
+    value.hostname = String::new();
+    value.cpu_percent = f32::NAN;
+    value.load_average = -1.0;
+    value.disks = (0..200)
+        .map(|index| DiskSnapshot {
+            mount: format!("/mnt/{index}"),
+            used_bytes: 1,
+            total_bytes: 2,
+        })
+        .chain([DiskSnapshot {
+            mount: format!("/{}", "x".repeat(300)),
+            used_bytes: 1,
+            total_bytes: 2,
+        }])
+        .collect();
+    value.container_runtime = Some(ContainerRuntimeSnapshot {
+        engine_version: "27.0".to_owned(),
+        containers: vec![container; 600],
+    });
+
+    let bounded = value.bounded();
+
+    assert_eq!(bounded.hostname, "unknown");
+    assert_eq!(bounded.cpu_percent, 0.0);
+    assert_eq!(bounded.load_average, 0.0);
+    assert_eq!(bounded.disks.len(), 128);
+    assert!(bounded.disks.iter().all(|disk| disk.mount.len() <= 260));
+    let runtime = bounded.container_runtime.unwrap();
+    assert_eq!(runtime.containers.len(), 500);
+    let container = &runtime.containers[0];
+    assert_eq!(container.name.chars().count(), 255);
+    assert_eq!(container.cpu_percent, 0.0);
+    assert_eq!(container.compose_project, None);
+    assert_eq!(container.compose_service.as_deref(), Some("api"));
+    assert_eq!(container.ports.len(), 128);
+    let serialized = serde_json::to_value(&runtime.containers[0]).unwrap();
+    assert!(serialized["cpuPercent"].is_number());
 }
