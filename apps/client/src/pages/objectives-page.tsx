@@ -13,7 +13,7 @@ import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
-import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
@@ -122,13 +122,31 @@ export function ObjectivesPage() {
                 <div className="mt-5 grid grid-cols-3 gap-3">
                   <Metric label="Target" value={`${objective.targetPercent}%`} />
                   <Metric label="P95 latency" value={formatLatency(objective.latencyP95Ms)} />
-                  <Metric label="Budget" value={formatBudget(objective.remainingBudgetMinutes)} />
-                </div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-ink/6">
-                  <div
-                    className={`h-full rounded-full ${objective.status === "breached" ? "bg-danger" : objective.status === "at-risk" ? "bg-warning" : "bg-success"}`}
-                    style={{ width: `${consumed}%` }}
+                  <Metric
+                    label="Budget left"
+                    value={formatBudget(objective.remainingBudgetMinutes)}
                   />
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span id={`${objective.id}-budget`} className="font-medium text-muted">
+                      Budget used
+                    </span>
+                    <span className="font-semibold">{Math.round(objective.burnRate * 100)}%</span>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-labelledby={`${objective.id}-budget`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(consumed)}
+                    className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink/6"
+                  >
+                    <div
+                      className={`h-full rounded-full ${objective.status === "breached" ? "bg-danger" : objective.status === "at-risk" ? "bg-warning" : "bg-success"}`}
+                      style={{ width: `${consumed}%` }}
+                    />
+                  </div>
                 </div>
                 {canManage ? (
                   <div className="mt-4 flex justify-end gap-2 border-t border-line pt-4">
@@ -337,9 +355,14 @@ function ObjectiveDialog({
               defaultValue={objective?.latencyTargetMs ?? ""}
             />
           </Field>
-          <Button type="submit" disabled={saving}>
-            <Gauge /> {objective ? "Save goal" : "Add goal"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              <Gauge /> {objective ? "Save goal" : "Add goal"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

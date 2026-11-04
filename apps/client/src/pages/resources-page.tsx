@@ -9,13 +9,14 @@ import { ResourceImage } from "../components/resource-image";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatRelative } from "../lib/format";
+import { resourceKindLabels } from "../lib/resource-option-labels";
 
 export function ResourcesPage() {
   const { activeTeam } = useAuth();
@@ -181,7 +182,7 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
               </div>
             </div>
             <p className="mt-1 truncate text-sm text-muted">
-              {resource.agent?.platform ?? resource.kind}
+              {resource.agent?.platform ?? resourceKindLabels[resource.kind]}
             </p>
           </div>
         </div>
@@ -450,14 +451,14 @@ function QuickResourceDialog({
             </details>
           ) : null}
           <FieldError>{error}</FieldError>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="coral" disabled={busy}>
               {busy ? "Adding…" : "Add resource"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

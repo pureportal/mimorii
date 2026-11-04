@@ -8,12 +8,12 @@ import { TeamLogoField } from "../components/team-logo-field";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
-import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
 import { ApiError, api, jsonBody } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { formatCount } from "../lib/format";
+import { formatCount, formatInitials } from "../lib/format";
 
 interface Member {
   id: string;
@@ -174,7 +174,7 @@ function TeamDetailsPage() {
                   <article key={member.id} className="p-4">
                     <div className="flex items-start gap-3">
                       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-lavender-soft font-display text-xs font-black text-violet-strong">
-                        {member.name.slice(0, 2).toUpperCase()}
+                        {formatInitials(member.name)}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -194,7 +194,7 @@ function TeamDetailsPage() {
                           onChange={(event) =>
                             void updateRole(member, event.target.value as TeamRole)
                           }
-                          className="h-10 w-32 text-xs"
+                          className="h-10 w-36"
                         >
                           <option value="owner">Owner</option>
                           <option value="admin">Admin</option>
@@ -234,7 +234,7 @@ function TeamDetailsPage() {
                       <td className="px-5 py-4 sm:px-0">
                         <div className="flex items-center gap-3">
                           <span className="grid size-9 place-items-center rounded-full bg-lavender-soft font-display text-xs font-black text-violet-strong">
-                            {member.name.slice(0, 2).toUpperCase()}
+                            {formatInitials(member.name)}
                           </span>
                           <span className="font-semibold">{member.name}</span>
                           {member.role === "owner" ? (
@@ -251,7 +251,7 @@ function TeamDetailsPage() {
                             onChange={(event) =>
                               void updateRole(member, event.target.value as TeamRole)
                             }
-                            className="h-9 w-28 text-xs"
+                            className="h-9 w-36"
                           >
                             <option value="owner">Owner</option>
                             <option value="admin">Admin</option>
@@ -488,14 +488,14 @@ function InviteDialog({
               </Select>
             </Field>
             <FieldError>{error}</FieldError>
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => close(false)}>
                 Cancel
               </Button>
               <Button type="submit" variant="coral" disabled={busy}>
                 {busy ? "Creating…" : "Create invite"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>
@@ -573,14 +573,14 @@ function CreateTeamDialog({
             onValidationErrorChange={setLogoError}
           />
           <FieldError>{error ? <span role="alert">{error}</span> : null}</FieldError>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="coral" disabled={busy || !logoReady}>
               {busy ? "Creating…" : "Create team"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

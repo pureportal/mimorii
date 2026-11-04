@@ -19,12 +19,13 @@ import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
-import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Select, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
+import { formatCount, formatDateTimeRange } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export type OperationsView = "incidents" | "maintenance";
@@ -113,7 +114,7 @@ export function OperationsPage({ view }: { view: OperationsView }) {
       >
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={activeIncidents ? "investigating" : "resolved"}>
-            {activeIncidents} active incidents
+            {formatCount(activeIncidents, "active incident")}
           </StatusBadge>
           <StatusBadge status={activeMaintenance ? "active" : "completed"}>
             {activeMaintenance} active maintenance
@@ -271,8 +272,10 @@ function MaintenanceList({
                 <StatusBadge status={window.status} />
               </div>
               <p className="mt-2 text-sm text-muted">
-                {new Date(window.nextStartsAt ?? window.startsAt).toLocaleString()} –{" "}
-                {new Date(window.nextEndsAt ?? window.endsAt).toLocaleString()}
+                {formatDateTimeRange(
+                  window.nextStartsAt ?? window.startsAt,
+                  window.nextEndsAt ?? window.endsAt
+                )}
               </p>
               <p className="mt-2 text-xs text-muted">
                 {window.resources
@@ -402,10 +405,15 @@ function IncidentDialog({
               <Textarea id="incident-message" name="message" required maxLength={2_000} />
             </Field>
           ) : null}
-          <Button type="submit" variant="coral" disabled={saving}>
-            {incident ? <Pencil /> : <Radio />}
-            {incident ? "Save incident" : "Declare incident"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              {incident ? <Pencil /> : <Radio />}
+              {incident ? "Save incident" : "Declare incident"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -470,9 +478,14 @@ function IncidentUpdateDialog({
             <FieldLabel htmlFor="incident-update-message">Update</FieldLabel>
             <Textarea id="incident-update-message" name="message" maxLength={2_000} />
           </Field>
-          <Button type="submit" disabled={saving}>
-            <Send /> Publish update
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              <Send /> Publish update
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -625,10 +638,15 @@ function MaintenanceDialog({
             />
             Suppress notifications
           </label>
-          <Button type="submit" disabled={saving}>
-            {maintenance ? <Pencil /> : <Clock3 />}
-            {maintenance ? "Save maintenance" : "Schedule maintenance"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              {maintenance ? <Pencil /> : <Clock3 />}
+              {maintenance ? "Save maintenance" : "Schedule maintenance"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

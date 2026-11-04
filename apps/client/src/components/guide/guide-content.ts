@@ -664,7 +664,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "Read a goal",
         items: [
           "The state shows whether the goal is healthy, at risk, or breached.",
-          "Budget is the remaining allowed downtime; burn shows how quickly that allowance is being used.",
+          "Budget left is the remaining allowed downtime; budget used shows how much of that allowance is gone.",
         ],
       },
     ],

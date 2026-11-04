@@ -15,7 +15,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { api, jsonBody } from "../lib/api";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
@@ -197,9 +197,14 @@ export function NotificationPolicyDialog({
               <option key={field} value={field} />
             ))}
           </datalist>
-          <Button type="submit" disabled={saving}>
-            <Route /> {policy ? "Save rule" : "Add rule"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              <Route /> {policy ? "Save rule" : "Add rule"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

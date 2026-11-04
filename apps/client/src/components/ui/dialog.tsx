@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { useRef, type ComponentProps, type ReactNode } from "react";
+import { useRef, type ComponentProps, type HTMLAttributes, type ReactNode } from "react";
 import { useAndroidBackHandler } from "../../lib/android-back";
 import { cn } from "../../lib/cn";
 
@@ -36,7 +36,7 @@ export function DialogContent({
         className={cn(
           drawer
             ? "fixed inset-y-0 left-0 z-50 flex w-[min(22rem,calc(100vw-2.5rem))] max-w-none flex-col overflow-hidden rounded-r-[1.75rem] border-y-0 border-l-0 border-r border-line bg-surface p-0 pt-[var(--safe-area-top)] pr-[var(--safe-area-right)] pb-[var(--safe-area-bottom)] pl-[var(--safe-area-left)] shadow-[18px_0_44px_-22px_rgba(0,0,0,.9)] outline-none"
-            : "safe-dialog fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,760px)] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl border border-line bg-surface p-6 shadow-2xl outline-none",
+            : "safe-dialog fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,760px)] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-3xl border border-line bg-surface p-6 shadow-2xl outline-none [scrollbar-color:var(--color-line)_transparent] [scrollbar-width:thin]",
           className
         )}
         {...props}
@@ -80,5 +80,17 @@ export function DialogHeader({
         </DialogPrimitive.Description>
       ) : null}
     </div>
+  );
+}
+
+export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        "sticky -bottom-6 z-10 -mx-6 -mb-6 mt-2 flex flex-wrap justify-end gap-2 border-t border-line bg-surface px-6 py-4",
+        className
+      )}
+      {...props}
+    />
   );
 }

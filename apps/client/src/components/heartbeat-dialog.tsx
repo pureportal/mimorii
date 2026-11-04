@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { api, jsonBody } from "../lib/api";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
@@ -146,9 +146,14 @@ export function HeartbeatDialog({
             />
             Enabled
           </label>
-          <Button type="submit" disabled={saving || resources.length === 0}>
-            <Radio /> {heartbeat ? "Save heartbeat" : "Add heartbeat"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving || resources.length === 0}>
+              <Radio /> {heartbeat ? "Save heartbeat" : "Add heartbeat"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

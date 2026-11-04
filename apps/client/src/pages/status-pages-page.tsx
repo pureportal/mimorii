@@ -14,7 +14,7 @@ import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
-import { Dialog, DialogContent, DialogHeader } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldLabel } from "../components/ui/field";
 import { Input } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
@@ -394,9 +394,14 @@ function StatusPageDialog({
               Show uptime
             </label>
           </div>
-          <Button type="submit" disabled={saving}>
-            {page ? "Save status page" : "Create status page"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              {page ? "Save status page" : "Create status page"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api, jsonBody } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, PasswordInput, Select, Textarea } from "./ui/input";
 
@@ -177,9 +177,14 @@ export function NotificationChannelDialog({
             />
             Enabled
           </label>
-          <Button type="submit" disabled={saving}>
-            <BellRing /> {channel ? "Save channel" : "Add channel"}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral" disabled={saving}>
+              <BellRing /> {channel ? "Save channel" : "Add channel"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

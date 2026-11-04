@@ -12,7 +12,7 @@ import {
 import { useState, type FormEvent } from "react";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
@@ -235,7 +235,14 @@ export function DashboardItemDialog({
             </Field>
           ) : null}
 
-          <Button type="submit">{item ? "Save panel" : "Add panel"}</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="coral">
+              {item ? "Save panel" : "Add panel"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

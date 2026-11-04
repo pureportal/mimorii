@@ -26,7 +26,7 @@ import {
 } from "./check-form-fields";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input, PasswordInput, Select } from "./ui/input";
 
@@ -317,14 +317,14 @@ export function CheckDialog({
           />
 
           <FieldError>{error}</FieldError>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="coral" disabled={busy || resources.length === 0}>
               {busy ? "Saving…" : "Save check"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
