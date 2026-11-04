@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 2,
+  "configurations": [
+    {
+      "kind": "task",
+      "id": "mimorii-local-api",
+      "name": "Mimorii API",
+      "primary": false,
+      "command": "pnpm run dev:api",
+      "workingDirectory": ".",
+      "environment": {},
+      "hotReload": false,
+      "ports": [
+        4310
+      ],
+      "urls": [
+        "http://localhost:4310",
+        "http://localhost:4310/docs"
+      ],
+      "healthCheck": null,
+      "restartPolicy": {
+        "onCrash": false,
+        "maxRestarts": 5,
+        "windowMs": 60000,
+        "backoffMs": 1000,
+        "maxBackoffMs": 30000
+      }
+    },
+    {
+      "kind": "task",
+      "id": "mimorii-local-client",
+      "name": "Mimorii Web",
+      "primary": false,
+      "command": "pnpm run dev:client",
+      "workingDirectory": ".",
+      "environment": {},
+      "hotReload": false,
+      "ports": [
+        5180
+      ],
+      "urls": [
+        "http://localhost:5180"
+      ],
+      "healthCheck": null,
+      "restartPolicy": {
+        "onCrash": false,
+        "maxRestarts": 5,
+        "windowMs": 60000,
+        "backoffMs": 1000,
+        "maxBackoffMs": 30000
+      }
+    },
+    {
+      "kind": "task",
+      "id": "mimorii-local-agent-desktop",
+      "name": "Mimorii Agent",
+      "primary": false,
+      "command": "pnpm run dev:agent-desktop",
+      "workingDirectory": ".",
+      "environment": {},
+      "hotReload": false,
+      "ports": [],
+      "urls": [],
+      "healthCheck": null,
+      "restartPolicy": {
+        "onCrash": false,
+        "maxRestarts": 5,
+        "windowMs": 60000,
+        "backoffMs": 1000,
+        "maxBackoffMs": 30000
+      }
+    },
+    {
+      "kind": "composite",
+      "id": "mimorii-local-development",
+      "name": "Mimorii Development",
+      "primary": true,
+      "children": [
+        "mimorii-local-api",
+        "mimorii-local-client",
+        "mimorii-local-agent-desktop"
+      ],
+      "startOrder": "parallel"
+    },
+    {
+      "kind": "task",
+      "id": "mimorii-compose",
+      "name": "Mimorii Docker Compose",
+      "primary": false,
+      "command": "docker compose up --build -d",
+      "workingDirectory": ".",
+      "environment": {},
+      "hotReload": false,
+      "ports": [
+        4310
+      ],
+      "urls": [
+        "http://localhost:4310",
+        "http://localhost:4310/docs"
+      ],
+      "healthCheck": null,
+      "restartPolicy": {
+        "onCrash": false,
+        "maxRestarts": 5,
+        "windowMs": 60000,
+        "backoffMs": 1000,
+        "maxBackoffMs": 30000
+      }
+    },
+    {
+      "kind": "task",
+      "id": "mimorii-postgres",
+      "name": "Mimorii PostgreSQL",
+      "primary": false,
+      "command": "docker compose up postgres -d",
+      "workingDirectory": ".",
+      "environment": {},
+      "hotReload": false,
+      "ports": [
+        5432
+      ],
+      "urls": [],
+      "healthCheck": null,
+      "restartPolicy": {
+        "onCrash": false,
+        "maxRestarts": 5,
+        "windowMs": 60000,
+        "backoffMs": 1000,
+        "maxBackoffMs": 30000
+      }
+    }
+  ]
+}

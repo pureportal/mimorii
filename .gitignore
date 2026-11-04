@@ -3,7 +3,7 @@ dist/
 target/
 apps/agent-desktop/installer/windows/bin/
 apps/agent-desktop/installer/windows/obj/
-.machdoch/
+**/.machdoch/local/
 secrets/
 **/google-services.json
 **/firebase-service-account*.json
