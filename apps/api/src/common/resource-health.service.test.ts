@@ -10,7 +10,7 @@ const resourceRow = {
   agent_kind: "desktop",
   agent_last_seen_at: "2026-08-25T11:59:30.000Z",
   agent_collection_interval_seconds: 30,
-  latest_metrics_json: null,
+  agent_timed_out: false,
 } as const;
 
 const checkRow = {
@@ -21,7 +21,7 @@ const checkRow = {
   agent_kind: "desktop",
   agent_last_seen_at: "2026-08-25T11:59:30.000Z",
   agent_collection_interval_seconds: 30,
-  latest_metrics_json: "{}",
+  agent_timed_out: false,
 } as const;
 
 describe("ResourceHealthService", () => {
@@ -61,7 +61,7 @@ describe("ResourceHealthService", () => {
     setNow();
     const health = service([
       resourceRow,
-      { ...checkRow, status: "degraded", latest_metrics_json: '{"agentTimeout":true}' },
+      { ...checkRow, status: "degraded", agent_timed_out: true },
     ]);
 
     await expect(health.forResources("team-1", ["resource-1"])).resolves.toEqual(
@@ -73,7 +73,7 @@ describe("ResourceHealthService", () => {
     setNow();
     const health = service([
       resourceRow,
-      { ...checkRow, status: "pending", latest_metrics_json: '{"agentTimeout":true}' },
+      { ...checkRow, status: "pending", agent_timed_out: true },
     ]);
 
     await expect(health.forResources("team-1", ["resource-1"])).resolves.toEqual(
@@ -105,7 +105,7 @@ describe("ResourceHealthService", () => {
         agent_kind: null,
         agent_last_seen_at: null,
         agent_collection_interval_seconds: null,
-        latest_metrics_json: null,
+        agent_timed_out: false,
       },
     ]);
 

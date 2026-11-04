@@ -22,7 +22,7 @@ interface ResourceHealthRow {
   agent_kind: AgentKind | null;
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
-  latest_metrics_json: string | null;
+  agent_timed_out: boolean;
 }
 
 interface ResourceHealthInput {
@@ -46,21 +46,22 @@ export class ResourceHealthService {
          NULL::text AS check_type,
          a.kind AS agent_kind, a.last_seen_at AS agent_last_seen_at,
          a.collection_interval_seconds AS agent_collection_interval_seconds,
-         NULL::text AS latest_metrics_json
+         FALSE AS agent_timed_out
        FROM resources r
        LEFT JOIN agents a ON a.resource_id = r.id AND a.revoked_at IS NULL
        WHERE r.team_id = ? AND r.id IN (${placeholders})
        UNION ALL
        SELECT c.resource_id, 'check', c.current_status, c.type,
          a.kind, a.last_seen_at, a.collection_interval_seconds,
-         (SELECT cr.metrics_json FROM check_results cr WHERE cr.check_id = c.id
-          ORDER BY cr.checked_at DESC, cr.id DESC LIMIT 1)
+         COALESCE((SELECT cr.metrics_json::jsonb @> '{"agentTimeout": true}'
+          FROM check_results cr WHERE cr.check_id = c.id
+          ORDER BY cr.checked_at DESC, cr.id DESC LIMIT 1), FALSE)
        FROM checks c
        LEFT JOIN agents a ON a.id = c.agent_id
        WHERE c.team_id = ? AND c.resource_id IN (${placeholders})
        UNION ALL
        SELECT hm.resource_id, 'heartbeat', hm.current_status, NULL::text,
-         NULL::text, NULL::timestamptz, NULL::integer, NULL::text
+         NULL::text, NULL::timestamptz, NULL::integer, FALSE
        FROM heartbeat_monitors hm
        WHERE hm.team_id = ? AND hm.resource_id IN (${placeholders})`,
       teamId,
@@ -101,17 +102,7 @@ export class ResourceHealthService {
   }
 
   private reportingDown(row: ResourceHealthRow): boolean {
-    if (row.status !== "pending" && row.latest_metrics_json) {
-      const metrics: unknown = JSON.parse(row.latest_metrics_json);
-      if (
-        typeof metrics === "object" &&
-        metrics !== null &&
-        "agentTimeout" in metrics &&
-        metrics.agentTimeout === true
-      ) {
-        return true;
-      }
-    }
+    if (row.status !== "pending" && row.agent_timed_out) return true;
     return this.agentStatus(row) === "offline";
   }
 
