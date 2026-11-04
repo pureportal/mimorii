@@ -148,7 +148,7 @@ export function ApiTokensCard() {
         <DialogContent>
           <DialogHeader title="API token">Copy this token now. It is shown once.</DialogHeader>
           <div className="flex gap-2">
-            <Input value={created?.token ?? ""} readOnly className="font-mono text-xs" />
+            <Input value={created?.token ?? ""} readOnly className="font-mono" />
             <Button
               variant="outline"
               size="icon"

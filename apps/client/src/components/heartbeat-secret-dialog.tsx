@@ -42,7 +42,7 @@ export function HeartbeatSecretDialog({
             <div key={endpoint.label}>
               <p className="mb-1.5 text-xs font-semibold text-muted">{endpoint.label}</p>
               <div className="flex gap-2">
-                <Input value={endpoint.value} readOnly className="font-mono text-xs" />
+                <Input value={endpoint.value} readOnly className="font-mono" />
                 <Button
                   type="button"
                   variant="outline"
