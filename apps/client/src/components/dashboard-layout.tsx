@@ -74,7 +74,8 @@ export function ProtectedLayout() {
       ?.querySelector('[aria-current="page"]')
       ?.scrollIntoView({ block: "nearest" });
   }, [location.pathname]);
-  if (!session) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  if (!session)
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   if (!activeTeam) {
     const platformAdministration =
       location.pathname.startsWith(appRoutes.platform) && session.user.isGlobalAdmin;
