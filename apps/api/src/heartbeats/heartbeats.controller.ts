@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from "../common/rows.js";
 import {
   CreateHeartbeatMonitorDto,
   HeartbeatSignalDto,
+  HeartbeatReportingDto,
   UpdateHeartbeatMonitorDto,
 } from "./heartbeats.dto.js";
 import { HeartbeatsService } from "./heartbeats.service.js";
@@ -108,6 +109,13 @@ export class HeartbeatsController {
 @Controller("heartbeats")
 export class HeartbeatIngestionController {
   constructor(private readonly heartbeats: HeartbeatsService) {}
+
+  @Post(":token/reporting")
+  @HttpCode(202)
+  @Throttle({ default: { limit: heartbeatRateLimit, ttl: 60_000 } })
+  reporting(@Param("token") token: string, @Body() input: HeartbeatReportingDto) {
+    return this.heartbeats.setReporting(token, input.enabled);
+  }
 
   @Post(":token")
   @HttpCode(202)

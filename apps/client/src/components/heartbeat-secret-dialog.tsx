@@ -9,17 +9,21 @@ import { Input } from "./ui/input";
 export function HeartbeatSecretDialog({
   created,
   onClose,
+  foxytail = false,
 }: {
   created: CreatedHeartbeatMonitor | null;
   onClose: () => void;
+  foxytail?: boolean;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const endpoints = created
-    ? [
-        { label: "Success", value: created.pingUrl },
-        { label: "Start", value: `${created.pingUrl}/start` },
-        { label: "Failure", value: `${created.pingUrl}/fail` },
-      ]
+    ? foxytail
+      ? [{ label: "Enrollment code", value: created.pingToken }]
+      : [
+          { label: "Success", value: created.pingUrl },
+          { label: "Start", value: `${created.pingUrl}/start` },
+          { label: "Failure", value: `${created.pingUrl}/fail` },
+        ]
     : [];
 
   async function copy(label: string, value: string) {
@@ -34,8 +38,10 @@ export function HeartbeatSecretDialog({
   return (
     <Dialog open={Boolean(created)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <DialogHeader title="Heartbeat endpoints">
-          Store these endpoints now. Rotating the token invalidates them.
+        <DialogHeader title={foxytail ? "Foxytail enrollment code" : "Heartbeat endpoints"}>
+          {foxytail
+            ? "Paste this code in Foxytail → Settings → Monitoring."
+            : "Store these endpoints now. Rotating the token invalidates them."}
         </DialogHeader>
         <div className="grid gap-4">
           {endpoints.map((endpoint) => (

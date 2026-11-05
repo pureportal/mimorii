@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { HeartbeatDialog } from "../components/heartbeat-dialog";
+import { FoxytailDialog } from "../components/foxytail-dialog";
 import { HeartbeatHistoryDialog } from "../components/heartbeat-history-dialog";
 import { HeartbeatSecretDialog } from "../components/heartbeat-secret-dialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
@@ -34,6 +35,7 @@ export function HeartbeatsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [formOpen, setFormOpen] = useState(false);
+  const [foxytailOpen, setFoxytailOpen] = useState(searchParams.get("connect") === "foxytail");
   const [selected, setSelected] = useState<HeartbeatMonitorSummary | null>(null);
   const [historyHeartbeat, setHistoryHeartbeat] = useState<HeartbeatMonitorSummary | null>(null);
   const [created, setCreated] = useState<CreatedHeartbeatMonitor | null>(null);
@@ -120,25 +122,45 @@ export function HeartbeatsPage() {
             ))}
           </Select>
         </div>
-        {resources.data?.length ? (
-          <Button
-            variant="coral"
-            onClick={() => {
-              setSelected(null);
-              setFormOpen(true);
-            }}
-          >
-            <Plus /> Add heartbeat
-          </Button>
-        ) : (
-          <Button asChild variant="coral">
-            <Link to={appRoutes.newResource}>
-              <Plus /> Add resource
-            </Link>
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {activeTeam!.role !== "viewer" && (
+            <Button variant="outline" onClick={() => setFoxytailOpen(true)}>
+              Connect Foxytail
+            </Button>
+          )}
+          {resources.data?.length ? (
+            <Button
+              variant="coral"
+              onClick={() => {
+                setSelected(null);
+                setFormOpen(true);
+              }}
+            >
+              <Plus /> Add heartbeat
+            </Button>
+          ) : (
+            <Button asChild variant="coral">
+              <Link to={appRoutes.newResource}>
+                <Plus /> Add resource
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
+      {foxytailOpen && activeTeam!.role !== "viewer" && (
+        <FoxytailDialog
+          key={teamId}
+          teamId={teamId}
+          onSaved={refresh}
+          onClose={() => {
+            setFoxytailOpen(false);
+            const next = new URLSearchParams(searchParams);
+            next.delete("connect");
+            setSearchParams(next, { replace: true });
+          }}
+        />
+      )}
       {filtered.length ? (
         <div data-guide-page="heartbeats-list">
           <div className="grid gap-3 xl:hidden">
@@ -317,8 +339,19 @@ export function HeartbeatsPage() {
           else remove.mutate(confirmation.heartbeat.id);
         }}
       />
-      <HeartbeatSecretDialog created={created} onClose={() => setCreated(null)} />
+      <HeartbeatSecretDialog
+        created={created}
+        foxytail={resources.data?.some(
+          (resource) =>
+            resource.id === created?.heartbeat.resourceId && resource.tags.includes("foxytail")
+        )}
+        onClose={() => setCreated(null)}
+      />
       <HeartbeatHistoryDialog
+        foxytail={resources.data?.some(
+          (resource) =>
+            resource.id === historyHeartbeat?.resourceId && resource.tags.includes("foxytail")
+        )}
         heartbeat={historyHeartbeat}
         teamId={teamId}
         onClose={() => setHistoryHeartbeat(null)}

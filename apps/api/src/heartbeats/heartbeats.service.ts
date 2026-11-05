@@ -256,6 +256,35 @@ export class HeartbeatsService {
     return rows.map((row) => this.mapEvent(row));
   }
 
+  async setReporting(token: string, enabled: boolean) {
+    return this.database.transaction(async () => {
+      const current = await this.database.get<HeartbeatRow>(
+        "SELECT * FROM heartbeat_monitors WHERE token_hash = ? FOR UPDATE",
+        hashSecret(token)
+      );
+      if (!current) throw new NotFoundException("Heartbeat monitor not found");
+      if (Boolean(current.enabled) === enabled) return { accepted: true };
+      const now = new Date();
+      if (current.current_status === "down") {
+        await this.incidents.resolveForHeartbeat(
+          current.id,
+          now.toISOString(),
+          "Reporting paused."
+        );
+      }
+      await this.database.run(
+        `UPDATE heartbeat_monitors SET enabled = ?, current_status = ?, running_since = NULL,
+         next_expected_at = ?, updated_at = ? WHERE id = ?`,
+        enabled ? 1 : 0,
+        enabled ? "pending" : "paused",
+        enabled ? new Date(now.getTime() + current.interval_seconds * 1000).toISOString() : null,
+        now.toISOString(),
+        current.id
+      );
+      return { accepted: true };
+    });
+  }
+
   async signal(token: string, type: SignalType, input: HeartbeatSignalDto = {}) {
     const row = await this.requireToken(token);
     const now = new Date();
@@ -470,7 +499,7 @@ export class HeartbeatsService {
     input: Record<string, unknown> | undefined
   ): Record<string, string | number | boolean | null> {
     const entries = Object.entries(input ?? {});
-    if (entries.length > 20) throw new BadRequestException("Heartbeat metadata is too large");
+    if (entries.length > 64) throw new BadRequestException("Heartbeat metadata is too large");
     const metadata: Record<string, string | number | boolean | null> = {};
     for (const [key, value] of entries) {
       if (!key.trim() || key.length > 64) {

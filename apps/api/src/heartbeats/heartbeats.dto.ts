@@ -68,3 +68,9 @@ export class HeartbeatSignalDto {
   @IsObject()
   metadata?: Record<string, unknown>;
 }
+
+export class HeartbeatReportingDto {
+  @ApiProperty()
+  @IsBoolean()
+  enabled!: boolean;
+}

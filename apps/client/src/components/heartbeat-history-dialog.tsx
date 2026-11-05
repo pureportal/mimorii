@@ -4,16 +4,19 @@ import { ErrorState, LoadingState } from "./page-state";
 import { StatusBadge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { api } from "../lib/api";
+import { FoxytailReportDetails } from "./foxytail-report";
 import { formatMilliseconds, formatRelative } from "../lib/format";
 
 export function HeartbeatHistoryDialog({
   heartbeat,
   teamId,
   onClose,
+  foxytail = false,
 }: {
   heartbeat: HeartbeatMonitorSummary | null;
   teamId: string;
   onClose: () => void;
+  foxytail?: boolean;
 }) {
   const history = useQuery({
     queryKey: ["heartbeat-history", teamId, heartbeat?.id],
@@ -22,6 +25,7 @@ export function HeartbeatHistoryDialog({
         `/teams/${teamId}/heartbeats/${heartbeat!.id}/history?limit=1000`
       ),
     enabled: Boolean(heartbeat),
+    refetchInterval: heartbeat ? 30_000 : false,
   });
 
   return (
@@ -32,7 +36,7 @@ export function HeartbeatHistoryDialog({
         {history.isError ? <ErrorState retry={() => void history.refetch()} /> : null}
         {history.data?.length ? (
           <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-line">
-            {history.data.map((event) => (
+            {history.data.map((event, index) => (
               <div
                 key={event.id}
                 className="grid gap-2 border-b border-line p-4 last:border-b-0 sm:grid-cols-[110px_1fr_auto]"
@@ -40,7 +44,9 @@ export function HeartbeatHistoryDialog({
                 <StatusBadge status={eventStatus(event.type)}>{event.type}</StatusBadge>
                 <div className="min-w-0">
                   {event.message ? <p className="text-sm">{event.message}</p> : null}
-                  {Object.keys(event.metadata).length ? (
+                  {foxytail && Object.keys(event.metadata).length > 0 ? (
+                    <FoxytailReportDetails metadata={event.metadata} latest={index === 0} />
+                  ) : Object.keys(event.metadata).length ? (
                     <p className="mt-1 break-all font-mono text-xs text-muted">
                       {JSON.stringify(event.metadata)}
                     </p>

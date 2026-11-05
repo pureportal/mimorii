@@ -3330,6 +3330,44 @@
         ]
       }
     },
+    "/api/teams/{teamId}/heartbeats/foxytail": {
+      "post": {
+        "operationId": "enroll",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollFoxytailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Heartbeats"
+        ]
+      }
+    },
     "/api/teams/{teamId}/heartbeats": {
       "get": {
         "operationId": "list",
@@ -3596,6 +3634,39 @@
         ],
         "tags": [
           "Heartbeats"
+        ]
+      }
+    },
+    "/api/heartbeats/{token}/reporting": {
+      "post": {
+        "operationId": "reporting",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatReportingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Heartbeat ingestion"
         ]
       }
     },
@@ -4060,6 +4131,94 @@
         ],
         "tags": [
           "Agent transport"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/analytics/overview": {
+      "get": {
+        "operationId": "overview",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/analytics/report": {
+      "get": {
+        "operationId": "report",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Analytics"
         ]
       }
     },
@@ -4621,94 +4780,6 @@
         ]
       }
     },
-    "/api/teams/{teamId}/analytics/overview": {
-      "get": {
-        "operationId": "overview",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Analytics"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/analytics/report": {
-      "get": {
-        "operationId": "report",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "from",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "to",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resourceId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "checkId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Analytics"
-        ]
-      }
-    },
     "/api/teams/{teamId}/audit": {
       "get": {
         "operationId": "list",
@@ -5124,32 +5195,6 @@
         },
         "required": [
           "expectedUpdatedAt"
-        ]
-      },
-      "CreateTeamDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 80
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "UpdateTeamDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 80
-          }
-        },
-        "required": [
-          "name"
         ]
       },
       "DeleteTeamDto": {
@@ -6246,6 +6291,20 @@
           "message"
         ]
       },
+      "EnrollFoxytailDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "default": "Foxytail"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "CreateHeartbeatMonitorDto": {
         "type": "object",
         "properties": {
@@ -6323,6 +6382,17 @@
           }
         }
       },
+      "HeartbeatReportingDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
       "HeartbeatSignalDto": {
         "type": "object",
         "properties": {
@@ -6349,6 +6419,10 @@
             "minLength": 1,
             "maxLength": 100
           },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -6371,7 +6445,6 @@
           }
         },
         "required": [
-          "name",
           "kind"
         ]
       },
