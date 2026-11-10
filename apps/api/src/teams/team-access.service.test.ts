@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
+import { apiTokenTeamRoles } from "../auth/api-token-scope.js";
 import { TeamAccessService } from "./team-access.service.js";
 
 const membership = {
@@ -54,5 +55,42 @@ describe("TeamAccessService", () => {
     await expect(service.require("user-1", "team-1", "admin")).rejects.toBeInstanceOf(
       ForbiddenException
     );
+  });
+
+  it("caps the membership role at the API token team role", async () => {
+    const database = { get: vi.fn().mockResolvedValue({ ...membership, role: "owner" }) };
+    const service = new TeamAccessService(database as never);
+    const tokenRoles = new Map([["team-1", "member" as const]]);
+
+    await apiTokenTeamRoles.run(tokenRoles, async () => {
+      await expect(service.require("user-1", "team-1", "member")).resolves.toMatchObject({
+        role: "member",
+      });
+      await expect(service.require("user-1", "team-1", "admin")).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+    });
+  });
+
+  it("rejects teams outside the API token scope", async () => {
+    const database = { get: vi.fn().mockResolvedValue(membership) };
+    const service = new TeamAccessService(database as never);
+
+    await apiTokenTeamRoles.run(new Map([["team-2", "owner"]]), async () => {
+      await expect(service.require("user-1", "team-1")).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  it("limits listed teams to the API token scope", async () => {
+    const service = new TeamAccessService({} as never);
+    const teams = [
+      { id: "team-1", name: "Operations", role: "admin" as const, createdAt: "2026-09-04" },
+      { id: "team-2", name: "Platform", role: "viewer" as const, createdAt: "2026-09-04" },
+    ];
+
+    expect(service.limitToApiTokenScope(teams)).toEqual(teams);
+    apiTokenTeamRoles.run(new Map([["team-1", "member"]]), () => {
+      expect(service.limitToApiTokenScope(teams)).toEqual([{ ...teams[0], role: "member" }]);
+    });
   });
 });

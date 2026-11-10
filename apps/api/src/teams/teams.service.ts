@@ -63,7 +63,7 @@ export class TeamsService {
          WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
     );
-    return teams.map((team) => this.mapTeam(team));
+    return this.access.limitToApiTokenScope(teams.map((team) => this.mapTeam(team)));
   }
 
   async create(userId: string, input: CreateTeamDto, logoInput?: Buffer): Promise<TeamSummary> {
@@ -350,6 +350,12 @@ export class TeamsService {
       }
       await this.database.run(
         "DELETE FROM team_members WHERE team_id = ? AND user_id = ?",
+        teamId,
+        memberId
+      );
+      await this.database.run(
+        `DELETE FROM api_token_teams WHERE team_id = ?
+         AND api_token_id IN (SELECT id FROM api_tokens WHERE user_id = ?)`,
         teamId,
         memberId
       );

@@ -1,6 +1,9 @@
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
+export const apiTokenAccessLevels = ["read", "write"] as const;
+export type ApiTokenAccess = (typeof apiTokenAccessLevels)[number];
+
 export const termsVersion = "2026-08-13";
 
 export const appRoutes = {
@@ -1227,10 +1230,18 @@ export interface HeartbeatEventSummary {
   receivedAt: string;
 }
 
+export interface ApiTokenTeamSummary {
+  id: string;
+  name: string;
+  role: TeamRole;
+}
+
 export interface ApiTokenSummary {
   id: string;
   name: string;
   prefix: string;
+  access: ApiTokenAccess;
+  teams: ApiTokenTeamSummary[];
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;

@@ -1,13 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
+  apiTokenAccessLevels,
+  teamRoles,
+  type ApiTokenAccess,
+  type TeamRole,
+} from "@mimorii/contracts";
+import { Type } from "class-transformer";
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   Equals,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
+  ValidateNested,
 } from "class-validator";
 
 export class RegisterDto {
@@ -77,11 +90,34 @@ export class ChangePasswordDto {
   newPassword!: string;
 }
 
+export class ApiTokenTeamDto {
+  @ApiProperty({ format: "uuid" })
+  @IsUUID()
+  teamId!: string;
+
+  @ApiProperty({ enum: teamRoles })
+  @IsIn(teamRoles)
+  role!: TeamRole;
+}
+
 export class CreateApiTokenDto {
   @ApiProperty({ minLength: 1, maxLength: 100 })
   @IsString()
   @Length(1, 100)
   name!: string;
+
+  @ApiProperty({ enum: apiTokenAccessLevels })
+  @IsIn(apiTokenAccessLevels)
+  access!: ApiTokenAccess;
+
+  @ApiProperty({ type: [ApiTokenTeamDto], minItems: 1, maxItems: 100 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique((team: ApiTokenTeamDto | null | undefined) => team?.teamId)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTokenTeamDto)
+  teams!: ApiTokenTeamDto[];
 
   @ApiPropertyOptional({ enum: [30, 90, 365], nullable: true, default: 90 })
   @IsOptional()

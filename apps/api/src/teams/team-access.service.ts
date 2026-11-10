@@ -1,14 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import type { TeamRole } from "@mimorii/contracts";
+import type { TeamRole, TeamSummary } from "@mimorii/contracts";
+import { apiTokenTeamRoles } from "../auth/api-token-scope.js";
 import type { MembershipRow } from "../common/rows.js";
+import { lowerTeamRole, teamRoleAtLeast } from "../common/team-roles.js";
 import { DatabaseService } from "../database/database.service.js";
-
-const roleRank: Record<TeamRole, number> = {
-  viewer: 0,
-  member: 1,
-  admin: 2,
-  owner: 3,
-};
 
 interface TeamMembershipRow {
   team_id: string | null;
@@ -35,20 +30,35 @@ export class TeamAccessService {
       teamId
     );
     if (!membership) throw new NotFoundException("Team not found");
+    const role = membership.role ? this.scopedRole(teamId, membership.role) : undefined;
     if (
       !membership.team_id ||
       !membership.user_id ||
-      !membership.role ||
+      !role ||
       !membership.joined_at ||
-      roleRank[membership.role] < roleRank[minimum]
+      !teamRoleAtLeast(role, minimum)
     ) {
       throw new ForbiddenException("You do not have access to this team");
     }
     return {
       team_id: membership.team_id,
       user_id: membership.user_id,
-      role: membership.role,
+      role,
       joined_at: membership.joined_at,
     };
+  }
+
+  limitToApiTokenScope(teams: TeamSummary[]): TeamSummary[] {
+    return teams.flatMap((team) => {
+      const role = this.scopedRole(team.id, team.role);
+      return role ? [{ ...team, role }] : [];
+    });
+  }
+
+  private scopedRole(teamId: string, role: TeamRole): TeamRole | undefined {
+    const tokenRoles = apiTokenTeamRoles.getStore();
+    if (!tokenRoles) return role;
+    const tokenRole = tokenRoles.get(teamId);
+    return tokenRole && lowerTeamRole(role, tokenRole);
   }
 }

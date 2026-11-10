@@ -26,6 +26,7 @@ import {
 } from "@nestjs/swagger";
 import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
+import { AllowApiTokenWithoutTeam } from "../auth/api-token-scope.js";
 import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
@@ -69,6 +70,7 @@ export class TeamsController {
   ) {}
 
   @Get("teams")
+  @AllowApiTokenWithoutTeam()
   list(@CurrentUser() user: AuthenticatedUser) {
     return this.teams.list(user.id);
   }

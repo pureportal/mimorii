@@ -49,8 +49,15 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "oauth_refresh_tokens",
           "user_sessions",
           "check_result_hourly",
+          "api_token_teams",
         ])
       );
+
+      const apiTokenColumns = await database.all<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'api_tokens' AND column_name = 'access'`
+      );
+      expect(apiTokenColumns).toEqual([{ column_name: "access" }]);
 
       const notificationColumns = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
@@ -246,7 +253,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20261104000000");
+      expect(migration?.name).toBe("Migration20261110000000");
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns

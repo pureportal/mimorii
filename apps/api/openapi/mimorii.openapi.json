@@ -4995,6 +4995,28 @@
           "newPassword"
         ]
       },
+      "ApiTokenTeamDto": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "teamId",
+          "role"
+        ]
+      },
       "CreateApiTokenDto": {
         "type": "object",
         "properties": {
@@ -5002,6 +5024,21 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          },
+          "teams": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiTokenTeamDto"
+            }
           },
           "expiresInDays": {
             "type": "number",
@@ -5015,7 +5052,9 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "access",
+          "teams"
         ]
       },
       "CreateSponsorDto": {

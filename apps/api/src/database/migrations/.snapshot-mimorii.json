@@ -458,6 +458,101 @@
     },
     {
       "columns": {
+        "api_token_id": {
+          "name": "api_token_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": ["owner", "admin", "member", "viewer"],
+          "mappedType": "enum"
+        }
+      },
+      "name": "api_token_teams",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": ["api_token_id", "team_id"],
+          "composite": true,
+          "constraint": false,
+          "keyName": "api_token_teams_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": ["team_id"],
+          "composite": false,
+          "constraint": false,
+          "keyName": "idx_api_token_teams_team",
+          "unique": false,
+          "primary": false
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "api_token_teams_api_token_id_fkey": {
+          "columnNames": ["api_token_id"],
+          "constraintName": "api_token_teams_api_token_id_fkey",
+          "localTableName": "public.api_token_teams",
+          "referencedTableName": "public.api_tokens",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        },
+        "api_token_teams_team_id_fkey": {
+          "columnNames": ["team_id"],
+          "constraintName": "api_token_teams_team_id_fkey",
+          "localTableName": "public.api_token_teams",
+          "referencedTableName": "public.teams",
+          "referencedColumnNames": ["id"],
+          "updateRule": "no action",
+          "deleteRule": "cascade"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
         "id": {
           "name": "id",
           "type": "text",
@@ -585,6 +680,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "access": {
+          "name": "access",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": ["read", "write"],
+          "mappedType": "enum"
         }
       },
       "name": "api_tokens",

@@ -2358,16 +2358,49 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(204);
   });
 
-  it("creates, authenticates, expires, and revokes personal API tokens", async () => {
+  it("creates, scopes, and revokes personal API tokens", async () => {
     const account = await register("automation@example.com", "Automation owner");
     const authorization = `Bearer ${account.accessToken}`;
+    const teamId = account.teams[0]!.id;
+    const otherTeam = await request(app.getHttpServer())
+      .post("/api/teams")
+      .set("authorization", authorization)
+      .send({ name: "Automation sandbox" })
+      .expect(201);
+    const outsider = await register("automation-outsider@example.com", "Automation outsider");
+
+    await request(app.getHttpServer())
+      .post("/api/auth/api-tokens")
+      .set("authorization", authorization)
+      .send({ name: "No teams", access: "read", teams: [] })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post("/api/auth/api-tokens")
+      .set("authorization", authorization)
+      .send({
+        name: "Foreign team",
+        access: "read",
+        teams: [{ teamId: outsider.teams[0]!.id, role: "viewer" }],
+      })
+      .expect(400);
+
     const created = await request(app.getHttpServer())
       .post("/api/auth/api-tokens")
       .set("authorization", authorization)
-      .send({ name: "Deployment automation", expiresInDays: 30 })
+      .send({
+        name: "Deployment automation",
+        access: "write",
+        teams: [{ teamId, role: "member" }],
+        expiresInDays: 30,
+      })
       .expect(201);
     expect(created.body).toMatchObject({
-      apiToken: { name: "Deployment automation", expiresAt: expect.any(String) },
+      apiToken: {
+        name: "Deployment automation",
+        access: "write",
+        teams: [{ id: teamId, name: account.teams[0]!.name, role: "member" }],
+        expiresAt: expect.any(String),
+      },
       token: expect.stringMatching(/^mim_pat_/),
     });
     const apiAuthorization = `Bearer ${created.body.token}`;
@@ -2407,27 +2440,88 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .send(toolsListRequest)
       .expect(401);
     await request(app.getHttpServer())
-      .get("/api/auth/me")
+      .get("/api/teams")
       .set("authorization", apiAuthorization)
       .expect(200)
-      .expect(({ body }) => expect(body.user.email).toBe("automation@example.com"));
+      .expect(({ body }) =>
+        expect(body).toEqual([expect.objectContaining({ id: teamId, role: "member" })])
+      );
+    await request(app.getHttpServer())
+      .get(`/api/teams/${otherTeam.body.id}/resources`)
+      .set("authorization", apiAuthorization)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", apiAuthorization)
+      .send({ name: "Automated resource", kind: "service" })
+      .expect(201);
+    await request(app.getHttpServer())
+      .patch(`/api/teams/${teamId}`)
+      .set("authorization", apiAuthorization)
+      .send({ name: "Renamed by token" })
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch(`/api/teams/${teamId}/members/${account.user.id}`)
+      .set("authorization", apiAuthorization)
+      .send({ role: "member" })
+      .expect(403);
+    await request(app.getHttpServer())
+      .get("/api/auth/me")
+      .set("authorization", apiAuthorization)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post("/api/auth/api-tokens")
+      .set("authorization", apiAuthorization)
+      .send({ name: "Self-issued", access: "write", teams: [{ teamId, role: "member" }] })
+      .expect(403);
+
+    const readOnly = await request(app.getHttpServer())
+      .post("/api/auth/api-tokens")
+      .set("authorization", authorization)
+      .send({ name: "Audit export", access: "read", teams: [{ teamId, role: "admin" }] })
+      .expect(201);
+    const readOnlyAuthorization = `Bearer ${readOnly.body.token}`;
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/audit`)
+      .set("authorization", readOnlyAuthorization)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/resources`)
+      .set("authorization", readOnlyAuthorization)
+      .send({ name: "Blocked resource", kind: "service" })
+      .expect(403);
+
     await request(app.getHttpServer())
       .get("/api/auth/api-tokens")
       .set("authorization", authorization)
       .expect(200)
       .expect(({ body }) =>
-        expect(body[0]).toMatchObject({
-          id: created.body.apiToken.id,
-          lastUsedAt: expect.any(String),
-        })
+        expect(body).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: created.body.apiToken.id,
+              lastUsedAt: expect.any(String),
+            }),
+          ])
+        )
       );
     await request(app.getHttpServer())
       .delete(`/api/auth/api-tokens/${created.body.apiToken.id}`)
       .set("authorization", authorization)
       .expect(204);
     await request(app.getHttpServer())
-      .get("/api/auth/me")
+      .get("/api/teams")
       .set("authorization", apiAuthorization)
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post("/api/auth/password")
+      .set("authorization", authorization)
+      .send({ currentPassword: "SecurePassword123", newPassword: "AnotherSecurePassword456" })
+      .expect(204);
+    await request(app.getHttpServer())
+      .get("/api/teams")
+      .set("authorization", readOnlyAuthorization)
       .expect(401);
   });
 
@@ -2757,13 +2851,23 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const ordinaryPersonalToken = await request(app.getHttpServer())
       .post("/api/auth/api-tokens")
       .set("authorization", `Bearer ${ordinary.accessToken}`)
-      .send({ name: "Ordinary automation", expiresInDays: 30 })
+      .send({
+        name: "Ordinary automation",
+        access: "read",
+        teams: [{ teamId: ordinary.teams[0]!.id, role: "viewer" }],
+        expiresInDays: 30,
+      })
       .expect(201);
 
     const personalToken = await request(app.getHttpServer())
       .post("/api/auth/api-tokens")
       .set("authorization", adminAuthorization)
-      .send({ name: "Administrator automation", expiresInDays: 30 })
+      .send({
+        name: "Administrator automation",
+        access: "write",
+        teams: [{ teamId: administrator.teams[0]!.id, role: "owner" }],
+        expiresInDays: 30,
+      })
       .expect(201);
     await request(app.getHttpServer())
       .get("/api/admin/statistics")

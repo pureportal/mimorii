@@ -13,7 +13,10 @@ function setup() {
     run: vi.fn(async (..._parameters: unknown[]) => ({ changes: 1 })),
     transaction: vi.fn(async (action: () => Promise<unknown>) => action()),
   };
-  const access = { require: vi.fn(async () => ({ role: "owner" })) };
+  const access = {
+    require: vi.fn(async () => ({ role: "owner" })),
+    limitToApiTokenScope: vi.fn((teams: unknown[]) => teams),
+  };
   const audit = { record: vi.fn(async () => undefined) };
   const logos = {
     prepare: vi.fn(async (input: Buffer) => Buffer.concat([Buffer.from("prepared:"), input])),
