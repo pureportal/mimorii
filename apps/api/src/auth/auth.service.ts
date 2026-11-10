@@ -196,6 +196,7 @@ export class AuthService {
       user.id
     );
     await this.database.run("DELETE FROM user_sessions WHERE user_id = ?", user.id);
+    await this.database.run("DELETE FROM api_tokens WHERE user_id = ?", user.id);
     await this.audit.record({
       userId: user.id,
       action: "account.password_changed",
