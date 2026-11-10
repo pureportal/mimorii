@@ -856,7 +856,7 @@ export const guideTopics: readonly GuideTopic[] = [
         title: "Personal settings",
         items: [
           "Change your display name or password and manage this device's push notifications.",
-          "Create API tokens, copy each new token once, and revoke tokens you no longer need.",
+          "Create API tokens limited to chosen teams and roles, copy each new token once, and revoke tokens you no longer need.",
         ],
       },
       {

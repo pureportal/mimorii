@@ -1,17 +1,23 @@
 import type { ApiTokenSummary, CreatedApiToken } from "@mimorii/contracts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { api, jsonBody } from "../lib/api";
+import { api } from "../lib/api";
+import {
+  apiTokenAccessLabels,
+  apiTokensQueryKey,
+  teamRoleLabels,
+  useApiTokens,
+} from "../lib/api-tokens";
 import { formatRelative } from "../lib/format";
+import { ApiTokenDialog } from "./api-token-dialog";
 import { ErrorState, LoadingState } from "./page-state";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { ConfirmationDialog } from "./ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
-import { Field, FieldLabel } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { Input } from "./ui/input";
 
 export function ApiTokensCard() {
   const queryClient = useQueryClient();
@@ -19,38 +25,21 @@ export function ApiTokensCard() {
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
   const [copied, setCopied] = useState(false);
   const [revokeToken, setRevokeToken] = useState<ApiTokenSummary | null>(null);
-  const tokens = useQuery({
-    queryKey: ["api-tokens"],
-    queryFn: () => api<ApiTokenSummary[]>("/auth/api-tokens"),
-  });
+  const tokens = useApiTokens();
   const remove = useMutation({
     mutationFn: (id: string) => api(`/auth/api-tokens/${id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+      await queryClient.invalidateQueries({ queryKey: apiTokensQueryKey });
       toast.success("Token revoked");
     },
     onError: (error) => toast.error(error.message),
     onSettled: () => setRevokeToken(null),
   });
 
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const expiresInDays = form.get("expiresInDays");
-    try {
-      const result = await api<CreatedApiToken>("/auth/api-tokens", {
-        method: "POST",
-        ...jsonBody({
-          name: form.get("name"),
-          expiresInDays: expiresInDays === "never" ? null : Number(expiresInDays),
-        }),
-      });
-      setFormOpen(false);
-      setCreated(result);
-      await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Token could not be created");
-    }
+  async function showCreated(token: CreatedApiToken) {
+    setFormOpen(false);
+    setCreated(token);
+    await queryClient.invalidateQueries({ queryKey: apiTokensQueryKey });
   }
 
   return (
@@ -77,6 +66,7 @@ export function ApiTokensCard() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">{token.name}</p>
                     <p className="mt-1 font-mono text-xs text-muted">{token.prefix}…</p>
+                    <p className="mt-1 text-xs text-muted">{tokenScope(token)}</p>
                     <p className="mt-1 text-xs text-muted">
                       Used {formatRelative(token.lastUsedAt)} · Expires{" "}
                       {formatRelative(token.expiresAt)}
@@ -112,29 +102,7 @@ export function ApiTokensCard() {
         }}
       />
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader title="Create API token" />
-          <form className="grid gap-4" onSubmit={create}>
-            <Field>
-              <FieldLabel htmlFor="api-token-name">Name</FieldLabel>
-              <Input id="api-token-name" name="name" required maxLength={100} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="api-token-expiry">Expires</FieldLabel>
-              <Select id="api-token-expiry" name="expiresInDays" defaultValue="90">
-                <option value="30">30 days</option>
-                <option value="90">90 days</option>
-                <option value="365">1 year</option>
-                <option value="never">Never</option>
-              </Select>
-            </Field>
-            <Button type="submit">
-              <KeyRound /> Create token
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ApiTokenDialog open={formOpen} onOpenChange={setFormOpen} onCreated={showCreated} />
 
       <Dialog
         open={Boolean(created)}
@@ -178,4 +146,11 @@ export function ApiTokensCard() {
       </Dialog>
     </>
   );
+}
+
+function tokenScope(token: ApiTokenSummary): string {
+  return [
+    apiTokenAccessLabels[token.access],
+    ...token.teams.map((team) => `${team.name} (${teamRoleLabels[team.role]})`),
+  ].join(" · ");
 }

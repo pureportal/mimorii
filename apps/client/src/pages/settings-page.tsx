@@ -10,10 +10,12 @@ import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, PasswordInput } from "../components/ui/input";
 import { api, getServerUrl, jsonBody, setServerUrl } from "../lib/api";
+import { useApiTokens } from "../lib/api-tokens";
 import { useAuth } from "../lib/auth";
 
 export function SettingsPage() {
   const { session, refreshIdentity, logout } = useAuth();
+  const apiTokens = useApiTokens();
   const [name, setName] = useState(session!.user.name);
   const [profileError, setProfileError] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -134,6 +136,9 @@ export function SettingsPage() {
               />
             </Field>
             <FieldError>{passwordError}</FieldError>
+            {apiTokens.data?.length ? (
+              <p className="text-xs text-muted">Changing your password revokes your API tokens.</p>
+            ) : null}
             <Button type="submit" variant="outline" className="justify-self-end">
               Change password
             </Button>
