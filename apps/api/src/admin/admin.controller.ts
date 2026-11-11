@@ -100,6 +100,12 @@ export class AdminController {
     return this.users.revokeSessions(actor.id, id);
   }
 
+  @Delete("users/:id/two-factor")
+  @HttpCode(204)
+  resetUserTwoFactor(@CurrentUser() actor: AuthenticatedUser, @Param("id") id: string) {
+    return this.users.resetTwoFactor(actor.id, id);
+  }
+
   @Get("settings")
   platformSettings() {
     return this.settings.get();

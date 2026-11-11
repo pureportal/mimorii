@@ -29,8 +29,12 @@ describe("REST authentication guard", () => {
       run: vi.fn(),
     };
     const guard = createGuard(database, verifyAsync);
+    const executionContext = context("Bearer session-jwt");
 
-    await expect(guard.canActivate(context("Bearer session-jwt"))).resolves.toBe(true);
+    await expect(guard.canActivate(executionContext)).resolves.toBe(true);
+    expect(
+      executionContext.switchToHttp().getRequest<AuthenticatedRequest>().authCredential
+    ).toEqual({ type: "session", id: "session-1" });
     expect(database.get).toHaveBeenCalledWith(
       expect.stringContaining("JOIN user_sessions"),
       "user-1",
@@ -90,6 +94,16 @@ describe("REST authentication guard", () => {
     ).rejects.toThrow("API token is read-only");
   });
 
+  it("rejects API tokens of accounts without two-factor authentication", async () => {
+    const database = { get: vi.fn(async () => apiTokenRow("read", false)), run: vi.fn() };
+    const guard = createGuard(database);
+
+    await expect(
+      guard.canActivate(context("Bearer mim_pat_token", { params: { teamId: "team-1" } }))
+    ).rejects.toThrow("Sign in and set up two-factor authentication to use API tokens");
+    expect(database.run).not.toHaveBeenCalled();
+  });
+
   it("limits API tokens to team routes and explicitly allowed routes", async () => {
     const database = { get: vi.fn(async () => apiTokenRow("write")), run: vi.fn() };
     const guard = createGuard(database);
@@ -122,13 +136,14 @@ const userRow = {
   updated_at: "2026-08-01T00:00:00.000Z",
 };
 
-function apiTokenRow(access: "read" | "write") {
+function apiTokenRow(access: "read" | "write", twoFactorEnabled = true) {
   return {
     ...userRow,
     api_token_id: "token-1",
     access,
     team_roles: { "team-1": "member" },
     last_used_at: new Date().toISOString(),
+    two_factor_enabled: twoFactorEnabled,
   };
 }
 

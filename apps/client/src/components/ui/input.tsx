@@ -1,13 +1,14 @@
 import { Eye, EyeOff } from "lucide-react";
 import {
   useState,
+  type ComponentProps,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 import { cn } from "../../lib/cn";
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: ComponentProps<"input">) {
   return (
     <input
       className={cn(

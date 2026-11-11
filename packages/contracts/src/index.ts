@@ -1,3 +1,5 @@
+export * from "./two-factor.js";
+
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
@@ -271,6 +273,7 @@ export interface GlobalAdminUserSummary {
   isGlobalAdmin: boolean;
   disabledAt: string | null;
   lastSignedInAt: string | null;
+  twoFactorEnabledAt: string | null;
   teamCount: number;
   apiTokenCount: number;
   createdAt: string;

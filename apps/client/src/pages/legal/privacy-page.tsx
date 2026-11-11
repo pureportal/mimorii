@@ -55,14 +55,16 @@ export function PrivacyPage() {
           <p>
             Registration stores name, email address, a password hash, account timestamps, the
             accepted Terms version and time, team membership and roles, administrator status,
-            account-disabled time, and last sign-in time. Login creates a renewable session. The
+            account-disabled time, and last sign-in time. Two-factor authentication stores an
+            encrypted authenticator secret, hashed single-use recovery codes, and failed-attempt
+            counters. Login creates a renewable session after the second factor is verified. The
             server stores its refresh credential only as a hash and extends active sessions for up
             to 30 days from their last renewal. Team invitations store the invited email, role,
             inviter, and a hashed token. Authorized global administrators can search account names
-            and email addresses and see account, sign-in, team-count, and API-token-count metadata
-            to administer access and security. The contract basis covers account and team functions;
-            the legitimate interest covers proof of acceptance, account security, and platform
-            administration.
+            and email addresses and see account, sign-in, two-factor, team-count, and
+            API-token-count metadata to administer access and security. The contract basis covers
+            account and team functions; the legitimate interest covers proof of acceptance, account
+            security, and platform administration.
           </p>
         </ProcessingEntry>
 

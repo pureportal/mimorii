@@ -73,6 +73,7 @@ describe("AgentsPage confirmations", () => {
       setActiveTeamId: vi.fn(),
       login: vi.fn(),
       register: vi.fn(),
+      completeSignIn: vi.fn(),
       refreshIdentity: vi.fn(),
       logout: vi.fn(),
     });

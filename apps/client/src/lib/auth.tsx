@@ -1,4 +1,4 @@
-import type { AuthSession, TeamSummary, UserSummary } from "@mimorii/contracts";
+import type { AuthSession, SignInChallenge, TeamSummary, UserSummary } from "@mimorii/contracts";
 import {
   createContext,
   useCallback,
@@ -27,13 +27,14 @@ interface AuthContextValue {
   profileReady: boolean;
   activeTeam: TeamSummary | null;
   setActiveTeamId: (id: string) => void;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<SignInChallenge>;
   register: (
     name: string,
     email: string,
     password: string,
     acceptedTerms: boolean
-  ) => Promise<void>;
+  ) => Promise<SignInChallenge>;
+  completeSignIn: (session: AuthSession) => void;
   refreshIdentity: () => Promise<void>;
   acknowledgeTour: (tourId: string) => Promise<void>;
   logout: () => void;
@@ -63,9 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const authenticate = useCallback(
-    async (path: string, payload: Record<string, string | boolean>) => {
-      const next = await api<AuthSession>(path, { method: "POST", ...jsonBody(payload) });
+  const completeSignIn = useCallback(
+    (next: AuthSession) => {
       storeSession(next);
       setProfileStatus("ready");
       const teamId = next.teams[0]?.id ?? null;
@@ -73,11 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(TEAM_KEY, teamId);
         setActiveTeamIdState(teamId);
       }
-      const registered = path.endsWith("/register");
-      trackSwetrixEvent({
-        ev: registered ? "ACCOUNT_REGISTERED" : "ACCOUNT_SIGNED_IN",
-        unique: registered,
-      });
+      trackSwetrixEvent({ ev: "ACCOUNT_SIGNED_IN" });
     },
     [storeSession]
   );
@@ -164,14 +160,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(TEAM_KEY, id);
         setActiveTeamIdState(id);
       },
-      login: (email, password) => authenticate("/auth/login", { email, password }),
-      register: (name, email, password, acceptedTerms) =>
-        authenticate("/auth/register", { name, email, password, acceptedTerms }),
+      login: (email, password) =>
+        api<SignInChallenge>("/auth/login", { method: "POST", ...jsonBody({ email, password }) }),
+      register: async (name, email, password, acceptedTerms) => {
+        const challenge = await api<SignInChallenge>("/auth/register", {
+          method: "POST",
+          ...jsonBody({ name, email, password, acceptedTerms }),
+        });
+        trackSwetrixEvent({ ev: "ACCOUNT_REGISTERED", unique: true });
+        return challenge;
+      },
+      completeSignIn,
       refreshIdentity,
       acknowledgeTour,
       logout,
     }),
-    [acknowledgeTour, activeTeam, authenticate, logout, profileStatus, refreshIdentity, session]
+    [acknowledgeTour, activeTeam, completeSignIn, logout, profileStatus, refreshIdentity, session]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

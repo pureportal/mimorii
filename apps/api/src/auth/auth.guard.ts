@@ -27,6 +27,7 @@ interface ApiTokenUserRow extends UserRow {
   access: ApiTokenAccess;
   team_roles: Record<string, TeamRole>;
   last_used_at: string | null;
+  two_factor_enabled: boolean;
 }
 
 const readOnlyMethods = new Set(["GET", "HEAD"]);
@@ -75,7 +76,9 @@ export class AuthGuard implements CanActivate {
     if (!user || user.disabled_at || user.token_version !== payload.v)
       throw new UnauthorizedException("Session expired");
 
-    (request as AuthenticatedRequest).user = this.authenticatedUser(user, "session");
+    const authenticatedRequest = request as AuthenticatedRequest;
+    authenticatedRequest.user = this.authenticatedUser(user, "session");
+    authenticatedRequest.authCredential = { type: "session", id: payload.sid };
     return true;
   }
 
@@ -87,6 +90,7 @@ export class AuthGuard implements CanActivate {
     const now = new Date().toISOString();
     const row = await this.database.get<ApiTokenUserRow>(
       `SELECT u.*, at.id AS api_token_id, at.access, at.last_used_at,
+         EXISTS (SELECT 1 FROM user_two_factor tf WHERE tf.user_id = u.id) AS two_factor_enabled,
          COALESCE(
            json_object_agg(att.team_id, att.role) FILTER (WHERE att.team_id IS NOT NULL),
            '{}'::json
@@ -102,6 +106,11 @@ export class AuthGuard implements CanActivate {
       now
     );
     if (!row) throw new UnauthorizedException("API token is expired or revoked");
+    if (!row.two_factor_enabled) {
+      throw new ForbiddenException(
+        "Sign in and set up two-factor authentication to use API tokens"
+      );
+    }
 
     const teamRoles = new Map(Object.entries(row.team_roles));
     if (row.access === "read" && !readOnlyMethods.has(request.method)) {

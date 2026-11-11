@@ -9,6 +9,8 @@ import {
 } from "node:crypto";
 
 const SCRYPT_KEY_LENGTH = 64;
+const PASSWORD_SCRYPT_COST = 32_768;
+const RECOVERY_CODE_SCRYPT_COST = 4_096;
 
 function scrypt(
   password: string,
@@ -24,18 +26,34 @@ function scrypt(
   });
 }
 
-export async function hashPassword(password: string): Promise<string> {
+export function hashPassword(password: string): Promise<string> {
+  return scryptHash(password, PASSWORD_SCRYPT_COST);
+}
+
+export function verifyPassword(password: string, encoded: string): Promise<boolean> {
+  return verifyScryptHash(password, encoded);
+}
+
+export function hashRecoveryCode(code: string): Promise<string> {
+  return scryptHash(code, RECOVERY_CODE_SCRYPT_COST);
+}
+
+export function verifyRecoveryCode(code: string, encoded: string): Promise<boolean> {
+  return verifyScryptHash(code, encoded);
+}
+
+async function scryptHash(value: string, cost: number): Promise<string> {
   const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, SCRYPT_KEY_LENGTH, {
-    N: 32_768,
+  const derived = await scrypt(value, salt, SCRYPT_KEY_LENGTH, {
+    N: cost,
     r: 8,
     p: 1,
     maxmem: 64 * 1024 * 1024,
   });
-  return `scrypt$32768$8$1$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+  return `scrypt$${cost}$8$1$${salt.toString("base64url")}$${derived.toString("base64url")}`;
 }
 
-export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
+async function verifyScryptHash(value: string, encoded: string): Promise<boolean> {
   const [algorithm, cost, blockSize, parallelization, saltValue, hashValue] = encoded.split("$");
   if (
     algorithm !== "scrypt" ||
@@ -48,7 +66,7 @@ export async function verifyPassword(password: string, encoded: string): Promise
     return false;
   }
   const expected = Buffer.from(hashValue, "base64url");
-  const actual = await scrypt(password, Buffer.from(saltValue, "base64url"), expected.length, {
+  const actual = await scrypt(value, Buffer.from(saltValue, "base64url"), expected.length, {
     N: Number(cost),
     r: Number(blockSize),
     p: Number(parallelization),

@@ -7,7 +7,9 @@ import {
 import {
   termsVersion,
   type AuthSession,
+  type SignInChallenge,
   type TeamSummary,
+  type TwoFactorEnrollment,
   type UserSummary,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
@@ -19,6 +21,8 @@ import { createDefaultNotificationPolicy } from "../notifications/default-notifi
 import { PlatformSettingsService } from "../platform-settings/platform-settings.service.js";
 import type { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from "./auth.dto.js";
 import { SessionService } from "./session.service.js";
+import type { TwoFactorChallengeDto } from "./two-factor.dto.js";
+import { TwoFactorService } from "./two-factor.service.js";
 
 interface TeamRow {
   id: string;
@@ -39,10 +43,11 @@ export class AuthService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly settings: PlatformSettingsService,
-    private readonly sessions: SessionService
+    private readonly sessions: SessionService,
+    private readonly twoFactor: TwoFactorService
   ) {}
 
-  async register(input: RegisterDto): Promise<AuthSession> {
+  async register(input: RegisterDto): Promise<SignInChallenge> {
     if (!(await this.settings.registrationEnabled())) {
       throw new ForbiddenException("Registration is closed");
     }
@@ -97,43 +102,29 @@ export class AuthService {
       subjectId: userId,
       metadata: { termsVersion },
     });
-    return this.createSession({
-      id: userId,
-      email,
-      name,
-      tokenVersion: 0,
-      isGlobalAdmin: false,
-      authMethod: "session",
-    });
+    return this.twoFactor.createSignInChallenge({ id: userId, email, tokenVersion: 0 });
   }
 
-  async login(input: LoginDto): Promise<AuthSession> {
+  async login(input: LoginDto): Promise<SignInChallenge> {
     const email = input.email.trim().toLowerCase();
     const user = await this.database.get<UserRow>("SELECT * FROM users WHERE email = ?", email);
     if (!user || !(await verifyPassword(input.password, user.password_hash)) || user.disabled_at) {
       throw new UnauthorizedException("Email or password is incorrect");
     }
-    const signedInAt = new Date().toISOString();
-    await this.database.run(
-      "UPDATE users SET last_signed_in_at = ?, updated_at = ? WHERE id = ?",
-      signedInAt,
-      signedInAt,
-      user.id
-    );
-    await this.audit.record({
-      userId: user.id,
-      action: "account.signed_in",
-      subjectType: "user",
-      subjectId: user.id,
-    });
-    return this.createSession({
+    return this.twoFactor.createSignInChallenge({
       id: user.id,
       email: user.email,
-      name: user.name,
       tokenVersion: user.token_version,
-      isGlobalAdmin: user.is_global_admin,
-      authMethod: "session",
     });
+  }
+
+  async verifyTwoFactor(input: TwoFactorChallengeDto): Promise<AuthSession> {
+    return this.signIn(await this.twoFactor.verifySignIn(input.challengeToken, input.code));
+  }
+
+  async enrollTwoFactor(input: TwoFactorChallengeDto): Promise<TwoFactorEnrollment> {
+    const { user, recoveryCodes } = await this.twoFactor.enroll(input.challengeToken, input.code);
+    return { session: await this.signIn(user), recoveryCodes };
   }
 
   async current(user: AuthenticatedUser): Promise<{ user: UserSummary; teams: TeamSummary[] }> {
@@ -205,7 +196,20 @@ export class AuthService {
     });
   }
 
-  private async createSession(user: AuthenticatedUser): Promise<AuthSession> {
+  private async signIn(user: AuthenticatedUser): Promise<AuthSession> {
+    const signedInAt = new Date().toISOString();
+    await this.database.run(
+      "UPDATE users SET last_signed_in_at = ?, updated_at = ? WHERE id = ?",
+      signedInAt,
+      signedInAt,
+      user.id
+    );
+    await this.audit.record({
+      userId: user.id,
+      action: "account.signed_in",
+      subjectType: "user",
+      subjectId: user.id,
+    });
     return this.session(user, await this.sessions.create(user));
   }
 

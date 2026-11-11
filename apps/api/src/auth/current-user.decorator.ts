@@ -4,6 +4,7 @@ import type { Request } from "express";
 import type { AuthenticatedUser } from "../common/rows.js";
 
 export type AuthCredential =
+  | { type: "session"; id: string }
   | {
       type: "apiToken";
       id: string;
@@ -31,6 +32,11 @@ export interface OptionallyAuthenticatedRequest extends Request {
 export const CurrentUser = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AuthenticatedUser =>
     context.switchToHttp().getRequest<AuthenticatedRequest>().user
+);
+
+export const CurrentCredential = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): AuthCredential | undefined =>
+    context.switchToHttp().getRequest<AuthenticatedRequest>().authCredential
 );
 
 export const OptionalCurrentUser = createParamDecorator(

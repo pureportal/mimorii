@@ -34,6 +34,7 @@ function renderRoute(isGlobalAdmin: boolean | null) {
     setActiveTeamId: vi.fn(),
     login: vi.fn(),
     register: vi.fn(),
+    completeSignIn: vi.fn(),
     refreshIdentity: vi.fn(),
     acknowledgeTour: vi.fn(),
     logout: vi.fn(),

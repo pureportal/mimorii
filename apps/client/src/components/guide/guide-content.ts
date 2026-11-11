@@ -847,15 +847,27 @@ export const guideTopics: readonly GuideTopic[] = [
     title: "Account",
     group: "account",
     summary:
-      "Your profile, API tokens, notification device, password, server connection, privacy, and legal links.",
+      "Your profile, API tokens, notification device, password, two-factor authentication, server connection, privacy, and legal links.",
     to: appRoutes.account,
     exactPaths: [appRoutes.account],
-    keywords: ["profile", "token", "push", "password", "server", "privacy", "api"],
+    keywords: [
+      "profile",
+      "token",
+      "push",
+      "password",
+      "two-factor",
+      "authenticator",
+      "recovery",
+      "server",
+      "privacy",
+      "api",
+    ],
     sections: [
       {
         title: "Personal settings",
         items: [
           "Change your display name or password and manage this device's push notifications.",
+          "Create new recovery codes or move two-factor authentication to a new authenticator app; both require your password and a current code.",
           "Create API tokens limited to chosen teams and roles, copy each new token once, and revoke tokens you no longer need.",
         ],
       },

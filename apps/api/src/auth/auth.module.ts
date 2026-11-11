@@ -12,6 +12,9 @@ import { OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
 import { OAuthController } from "./oauth.controller.js";
 import { OAuthService } from "./oauth.service.js";
 import { SessionService } from "./session.service.js";
+import { TwoFactorSettingsService } from "./two-factor-settings.service.js";
+import { TwoFactorController } from "./two-factor.controller.js";
+import { TwoFactorService } from "./two-factor.service.js";
 
 function jwtSecret(): string {
   const configured = process.env.MIMORII_JWT_SECRET;
@@ -31,7 +34,7 @@ function jwtSecret(): string {
       verifyOptions: { issuer: "mimorii", audience: "mimorii-web" },
     }),
   ],
-  controllers: [AuthController, OAuthController],
+  controllers: [AuthController, OAuthController, TwoFactorController],
   providers: [
     AuthService,
     AuthGuard,
@@ -40,6 +43,8 @@ function jwtSecret(): string {
     OAuthClientMetadataService,
     OAuthService,
     SessionService,
+    TwoFactorService,
+    TwoFactorSettingsService,
     { provide: APP_INTERCEPTOR, useClass: ApiTokenScopeInterceptor },
   ],
   exports: [AuthService, AuthGuard, OptionalAuthGuard, OAuthService, JwtModule],

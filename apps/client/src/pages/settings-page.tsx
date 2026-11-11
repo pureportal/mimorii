@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ApiTokensCard } from "../components/api-tokens-card";
 import { NotificationDeviceCard } from "../components/notification-device-card";
 import { PrivacySettingsButton } from "../components/privacy-controls";
+import { TwoFactorCard } from "../components/two-factor/two-factor-card";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Field, FieldError, FieldLabel } from "../components/ui/field";
@@ -145,6 +146,8 @@ export function SettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <TwoFactorCard />
 
       <Card>
         <CardHeader>

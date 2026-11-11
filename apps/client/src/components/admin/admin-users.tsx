@@ -122,7 +122,13 @@ export function AdminUsers() {
                       ) : null}
                     </div>
                   </div>
-                  <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm">
+                  <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-3 text-sm">
+                    <div>
+                      <dt className="text-[11px] text-muted">Two-factor</dt>
+                      <dd className="mt-1 font-medium">
+                        <TwoFactorState user={user} />
+                      </dd>
+                    </div>
                     <div>
                       <dt className="text-[11px] text-muted">Teams</dt>
                       <dd className="mt-1 font-medium">{user.teamCount.toLocaleString()}</dd>
@@ -155,6 +161,7 @@ export function AdminUsers() {
                 <tr>
                   <th className="px-5 pb-3 font-medium sm:px-0">User</th>
                   <th className="pb-3 font-medium">Access</th>
+                  <th className="pb-3 font-medium">Two-factor</th>
                   <th className="pb-3 font-medium">Teams</th>
                   <th className="pb-3 font-medium">Last sign-in</th>
                   <th className="pb-3" />
@@ -179,6 +186,9 @@ export function AdminUsers() {
                           />
                         ) : null}
                       </div>
+                    </td>
+                    <td className="py-4">
+                      <TwoFactorState user={user} />
                     </td>
                     <td className="py-4 text-muted">{user.teamCount.toLocaleString()}</td>
                     <td className="py-4 text-muted">{formatRelative(user.lastSignedInAt)}</td>
@@ -223,6 +233,7 @@ export function AdminUsers() {
         <AccessDialog
           key={selected.updatedAt}
           user={selected}
+          self={selected.id === session!.user.id}
           open
           onOpenChange={(open) => {
             if (!open) setSelected(null);
@@ -252,13 +263,23 @@ export function AdminUsers() {
   );
 }
 
+function TwoFactorState({ user }: { user: GlobalAdminUserSummary }) {
+  return user.twoFactorEnabledAt ? (
+    <span className="text-success-strong">Enabled</span>
+  ) : (
+    <span className="text-muted">Not set up</span>
+  );
+}
+
 function AccessDialog({
   user,
+  self,
   open,
   onOpenChange,
   onSaved,
 }: {
   user: GlobalAdminUserSummary;
+  self: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => Promise<void>;
@@ -268,6 +289,24 @@ function AccessDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+
+  async function resetTwoFactor() {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/admin/users/${user.id}/two-factor`, { method: "DELETE" });
+      await onSaved();
+      toast.success("Two-factor authentication reset");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Two-factor authentication could not be reset"
+      );
+    } finally {
+      setBusy(false);
+      setResetOpen(false);
+    }
+  }
 
   async function saveAccess() {
     setBusy(true);
@@ -329,6 +368,19 @@ function AccessDialog({
                 <option value="administrator">Global Administrator</option>
               </Select>
             </Field>
+            {user.twoFactorEnabledAt && !self ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
+                <span className="text-sm font-medium">Two-factor authentication</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setResetOpen(true)}
+                >
+                  Reset
+                </Button>
+              </div>
+            ) : null}
             <FieldError>{error}</FieldError>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
@@ -348,6 +400,15 @@ function AccessDialog({
         confirmLabel="Apply restrictions"
         pending={busy}
         onConfirm={() => void saveAccess()}
+      />
+      <ConfirmationDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title={`Reset two-factor authentication for ${user.name}?`}
+        description="They are signed out and must set up a new authenticator at their next sign-in."
+        confirmLabel="Reset two-factor"
+        pending={busy}
+        onConfirm={() => void resetTwoFactor()}
       />
     </>
   );

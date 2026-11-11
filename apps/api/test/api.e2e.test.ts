@@ -12,6 +12,7 @@ import { DatabaseService } from "../src/database/database.service.js";
 import { seedGlobalAdministrator } from "../src/database/seed/global-admin.js";
 import { HeartbeatsService } from "../src/heartbeats/heartbeats.service.js";
 import { NotificationsService } from "../src/notifications/notifications.service.js";
+import { enrollAuthenticator, registerAccount, signIn } from "./fixtures/two-factor.js";
 
 interface Registration {
   accessToken: string;
@@ -119,12 +120,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     if (app) await app.close();
   }, 60_000);
 
-  async function register(email: string, name = "Aiko Tanaka") {
-    const response = await request(app.getHttpServer())
-      .post("/api/auth/register")
-      .send({ name, email, password: "SecurePassword123", acceptedTerms: true });
-    expect(response.status, JSON.stringify(response.body)).toBe(201);
-    return response.body as Registration;
+  async function register(email: string, name = "Aiko Tanaka"): Promise<Registration> {
+    return registerAccount(app, { name, email, password: "SecurePassword123" });
   }
 
   it("publishes health and OpenAPI documents", async () => {
@@ -135,6 +132,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     expect(openapi.body.info.title).toBe("Mimorii API");
     expect(openapi.body.paths["/api/auth/register"]).toBeDefined();
     expect(openapi.body.paths["/api/auth/refresh"]).toBeDefined();
+    expect(openapi.body.paths["/api/auth/two-factor/verify"]).toBeDefined();
+    expect(openapi.body.paths["/api/auth/two-factor/enroll"]).toBeDefined();
     expect(openapi.body.paths["/api/auth/logout"]).toBeDefined();
     expect(openapi.body.paths["/api/auth/api-tokens"]).toBeDefined();
     expect(openapi.body.paths["/api/agent/heartbeat"]).toBeDefined();
@@ -376,11 +375,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         seededUser.email
       );
     const ownerTeamId = owner.teams[0]!.id;
-    const login = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email: seededUser.email, password: seededUser.password })
-      .expect(200);
-    expect(login.body.accessToken).toBeTypeOf("string");
+    const login = await signIn(app, seededUser.email, seededUser.password);
+    expect(login.accessToken).toBeTypeOf("string");
 
     await request(app.getHttpServer())
       .patch("/api/auth/profile")
@@ -502,11 +498,8 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(200)
       .expect(({ body }) => expect(body.user.acknowledgedTourIds).toEqual(["overview", "checks"]));
 
-    const signedInAgain = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email, password: "SecurePassword123" })
-      .expect(200);
-    expect(signedInAgain.body.user.acknowledgedTourIds).toEqual(["overview", "checks"]);
+    const signedInAgain = await signIn(app, email, "SecurePassword123");
+    expect(signedInAgain.user.acknowledgedTourIds).toEqual(["overview", "checks"]);
 
     const stored = await app.get(DatabaseService).get<{ acknowledged_tour_ids: string }>(
       `SELECT acknowledged_tour_ids::TEXT AS acknowledged_tour_ids
@@ -2029,11 +2022,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
   });
 
   it("delivers signed webhook notifications and records delivery state", async () => {
-    const login = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email: "operations@example.com", password: "SecurePassword123" })
-      .expect(200);
-    const account = login.body as Registration;
+    const account: Registration = await signIn(app, "operations@example.com", "SecurePassword123");
     const teamId = account.teams[0]!.id;
     const authorization = `Bearer ${account.accessToken}`;
     const webhookUrl = new URL("/webhook", fixtureUrl).toString();
@@ -2802,17 +2791,23 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       [201, 409]
     );
 
-    const sameNameResponses = await Promise.all([
-      request(app.getHttpServer())
-        .post("/api/auth/register")
-        .send({ ...registration, email: `slug-a-${suffix}@example.com` }),
-      request(app.getHttpServer())
-        .post("/api/auth/register")
-        .send({ ...registration, email: `slug-b-${suffix}@example.com` }),
-    ]);
+    const sameNameEmails = [`slug-a-${suffix}@example.com`, `slug-b-${suffix}@example.com`];
+    const sameNameResponses = await Promise.all(
+      sameNameEmails.map((email) =>
+        request(app.getHttpServer())
+          .post("/api/auth/register")
+          .send({ ...registration, email })
+      )
+    );
     expect(sameNameResponses.map((response) => response.status)).toEqual([201, 201]);
-    expect(sameNameResponses[0]!.body.teams[0].name).toBe(sameNameResponses[1]!.body.teams[0].name);
-    expect(sameNameResponses[0]!.body.teams[0].id).not.toBe(sameNameResponses[1]!.body.teams[0].id);
+    const [firstSameName, secondSameName] = await Promise.all(
+      sameNameResponses.map(
+        async (response, index) =>
+          (await enrollAuthenticator(app, response.body, sameNameEmails[index]!)).session
+      )
+    );
+    expect(firstSameName!.teams[0]!.name).toBe(secondSameName!.teams[0]!.name);
+    expect(firstSameName!.teams[0]!.id).not.toBe(secondSameName!.teams[0]!.id);
   });
 
   it("enforces and performs Global Administrator workflows", async () => {
@@ -2825,12 +2820,9 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     await seedGlobalAdministrator(database, administrator.user.id, {
       NODE_ENV: "development",
     });
-    const signedInAdministrator = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email: administratorEmail, password: "SecurePassword123" })
-      .expect(200);
-    expect(signedInAdministrator.body.user.isGlobalAdmin).toBe(true);
-    const adminAuthorization = `Bearer ${signedInAdministrator.body.accessToken}`;
+    const signedInAdministrator = await signIn(app, administratorEmail, "SecurePassword123");
+    expect(signedInAdministrator.user.isGlobalAdmin).toBe(true);
+    const adminAuthorization = `Bearer ${signedInAdministrator.accessToken}`;
 
     await request(app.getHttpServer()).get("/api/admin/statistics").expect(401);
     await request(app.getHttpServer())
@@ -2943,10 +2935,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         expectedDisabled: true,
       })
       .expect(409);
-    const ordinaryLogin = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email: ordinaryEmail, password: "SecurePassword123" })
-      .expect(200);
+    const ordinaryLogin = await signIn(app, ordinaryEmail, "SecurePassword123");
     await request(app.getHttpServer())
       .patch(`/api/admin/users/${ordinary.user.id}/access`)
       .set("authorization", adminAuthorization)
@@ -2963,7 +2952,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(204);
     await request(app.getHttpServer())
       .get("/api/auth/me")
-      .set("authorization", `Bearer ${ordinaryLogin.body.accessToken}`)
+      .set("authorization", `Bearer ${ordinaryLogin.accessToken}`)
       .expect(401);
     await request(app.getHttpServer())
       .patch(`/api/admin/users/${administrator.user.id}/access`)

@@ -18,6 +18,7 @@ interface AdminUserRow {
   is_global_admin: boolean;
   disabled_at: string | null;
   last_signed_in_at: string | null;
+  two_factor_enabled_at: string | null;
   team_count: number;
   api_token_count: number;
   created_at: string;
@@ -68,6 +69,8 @@ export class AdminUsersService {
     const rows = await this.database.all<AdminUserRow>(
       `SELECT u.id, u.email, u.name, u.is_global_admin, u.disabled_at,
        u.last_signed_in_at, u.created_at, u.updated_at,
+       (SELECT tf.enabled_at FROM user_two_factor tf WHERE tf.user_id = u.id)
+         AS two_factor_enabled_at,
        COUNT(DISTINCT tm.team_id) AS team_count,
        COUNT(DISTINCT at.id) AS api_token_count
        FROM users u
@@ -163,10 +166,45 @@ export class AdminUsersService {
     });
   }
 
+  async resetTwoFactor(actorId: string, targetId: string): Promise<void> {
+    if (actorId === targetId) {
+      throw new ForbiddenException("Replace your own authenticator in account settings");
+    }
+    await this.database.transaction(async () => {
+      const target = await this.database.get<{ id: string }>(
+        "SELECT id FROM users WHERE id = ? FOR UPDATE",
+        targetId
+      );
+      if (!target) throw new NotFoundException("User not found");
+      const removed = await this.database.run(
+        "DELETE FROM user_two_factor WHERE user_id = ?",
+        targetId
+      );
+      if (removed.changes === 0) {
+        throw new BadRequestException("Two-factor authentication is not set up");
+      }
+      await this.database.run(
+        "UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?",
+        new Date().toISOString(),
+        targetId
+      );
+      await this.database.run("DELETE FROM user_sessions WHERE user_id = ?", targetId);
+      await this.database.run("DELETE FROM two_factor_challenges WHERE user_id = ?", targetId);
+      await this.audit.record({
+        userId: actorId,
+        action: "global_admin.user_two_factor_reset",
+        subjectType: "user",
+        subjectId: targetId,
+      });
+    });
+  }
+
   private async get(id: string): Promise<GlobalAdminUserSummary> {
     const row = await this.database.get<AdminUserRow>(
       `SELECT u.id, u.email, u.name, u.is_global_admin, u.disabled_at,
        u.last_signed_in_at, u.created_at, u.updated_at,
+       (SELECT tf.enabled_at FROM user_two_factor tf WHERE tf.user_id = u.id)
+         AS two_factor_enabled_at,
        COUNT(DISTINCT tm.team_id) AS team_count,
        COUNT(DISTINCT at.id) AS api_token_count
        FROM users u
@@ -209,6 +247,7 @@ export class AdminUsersService {
       isGlobalAdmin: row.is_global_admin,
       disabledAt: row.disabled_at,
       lastSignedInAt: row.last_signed_in_at,
+      twoFactorEnabledAt: row.two_factor_enabled_at,
       teamCount: row.team_count,
       apiTokenCount: row.api_token_count,
       createdAt: row.created_at,
