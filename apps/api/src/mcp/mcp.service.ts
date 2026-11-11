@@ -15,6 +15,9 @@ import { mcpResourceUrl } from "../auth/oauth-config.js";
 import { ChecksService } from "../checks/checks.service.js";
 import { HeartbeatsService } from "../heartbeats/heartbeats.service.js";
 import { IncidentsService } from "../incidents/incidents.service.js";
+import { LogAlertsService } from "../logs/log-alerts.service.js";
+import { LogInsightsService } from "../logs/log-insights.service.js";
+import { LogsQueryService } from "../logs/logs-query.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import { ObjectivesService } from "../objectives/objectives.service.js";
 import { ResourcesService } from "../resources/resources.service.js";
@@ -32,7 +35,9 @@ const monitoringInstructions =
   "Use Mimorii tools for questions about current service and infrastructure status. " +
   "Call list_teams before concluding that no monitoring data is available. " +
   "For each relevant team, call get_team_overview; use list_resources and list_checks for resource and check details. " +
-  "Treat returned status values and timestamps as the current monitoring state.";
+  "Treat returned status values and timestamps as the current monitoring state. " +
+  "For application logs, use get_log_volume or get_log_patterns to get an overview and search_logs to read lines; " +
+  "list_log_labels and list_log_fields show what can be filtered. Logs are available only for teams where they are enabled.";
 
 @Injectable()
 export class McpService implements OnApplicationShutdown {
@@ -48,7 +53,10 @@ export class McpService implements OnApplicationShutdown {
     maintenance: MaintenanceService,
     heartbeats: HeartbeatsService,
     analytics: AnalyticsService,
-    objectives: ObjectivesService
+    objectives: ObjectivesService,
+    logs: LogsQueryService,
+    logInsights: LogInsightsService,
+    logAlerts: LogAlertsService
   ) {
     const services: McpToolServices = {
       teams,
@@ -59,6 +67,9 @@ export class McpService implements OnApplicationShutdown {
       heartbeats,
       analytics,
       objectives,
+      logs,
+      logInsights,
+      logAlerts,
     };
     this.handler = createMimoriiMcpHandler(services, (error) => this.logger.error(error.stack));
     this.nodeHandler = toNodeHandler(this.handler, {

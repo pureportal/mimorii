@@ -27,6 +27,89 @@ afterEach(async () => {
 });
 
 describe("Mimorii MCP handler", () => {
+  it("searches logs and requires write access for log alert rules", async () => {
+    const entries = vi.fn(async () => ({
+      entries: [
+        {
+          id: "7",
+          streamId: "stream-1",
+          timestamp: "2026-11-11T10:00:00.000000Z",
+          receivedAt: "2026-11-11T10:00:00.000Z",
+          level: "error" as const,
+          message: `Error 404 - Failed to load ${"x".repeat(3_000)}`,
+          labels: { service: "web" },
+          attributes: { status: 404 },
+        },
+      ],
+      nextCursor: null,
+    }));
+    const create = vi.fn(async () => ({ id: "rule-1" }));
+    const defaults = emptyServices();
+    const handler = createHandler({
+      logs: { ...defaults.logs, entries },
+      logAlerts: { ...defaults.logAlerts, create: create as never },
+    });
+    const teamId = "6f1b7a52-6a5c-4f2e-9a7d-0d3c5b1f2e11";
+
+    const search = await send(
+      handler,
+      auth("user-1"),
+      "tools/call",
+      { name: "search_logs", arguments: { teamId, query: '|= "Error 404"', limit: 10 } },
+      "search_logs"
+    );
+    const result = (await json(search)).result!.structuredContent as {
+      lines: Array<{ message: string }>;
+      explorePath: string;
+    };
+    expect(entries).toHaveBeenCalledWith("user-1", teamId, {
+      query: '|= "Error 404"',
+      from: undefined,
+      to: undefined,
+      limit: 10,
+      direction: "backward",
+      cursor: undefined,
+    });
+    expect(result.lines[0]!.message).toHaveLength(2_001);
+    expect(result.explorePath).toContain("/app/monitoring/logs?");
+
+    const ruleInput = {
+      teamId,
+      name: "Failed loads",
+      query: '|= "Error 404"',
+      windowSeconds: 300,
+      comparison: "atLeast",
+      threshold: 1,
+    };
+    const denied = await send(
+      handler,
+      auth("user-1"),
+      "tools/call",
+      { name: "create_log_alert_rule", arguments: ruleInput },
+      "create_log_alert_rule"
+    );
+    expect((await json(denied)).result!.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+
+    await send(
+      handler,
+      auth("user-1", ["mcp:read", "mcp:write"]),
+      "tools/call",
+      { name: "create_log_alert_rule", arguments: ruleInput },
+      "create_log_alert_rule"
+    );
+    expect(create).toHaveBeenCalledWith("user-1", teamId, {
+      name: "Failed loads",
+      query: '|= "Error 404"',
+      windowSeconds: 300,
+      comparison: "atLeast",
+      threshold: 1,
+      impact: "major",
+      pendingSeconds: 0,
+      autoResolve: true,
+    });
+  });
+
   it("publishes the scoped operational tool surface", async () => {
     const handler = createHandler();
     const response = await send(handler, auth("user-1"), "tools/list", {});
@@ -56,6 +139,15 @@ describe("Mimorii MCP handler", () => {
       "add_incident_update",
       "list_maintenance",
       "get_maintenance",
+      "search_logs",
+      "get_log_volume",
+      "get_log_patterns",
+      "list_log_labels",
+      "list_log_fields",
+      "get_log_context",
+      "list_log_alert_rules",
+      "test_log_alert_rule",
+      "create_log_alert_rule",
     ]);
     expect(body.result).toMatchObject({ ttlMs: 300_000, cacheScope: "public" });
     expect(discoveryBody.result).toMatchObject({
@@ -66,6 +158,7 @@ describe("Mimorii MCP handler", () => {
     expect(discoveryBody.result!.instructions).toContain("get_team_overview");
     expect(discoveryBody.result!.instructions).toContain("list_resources");
     expect(discoveryBody.result!.instructions).toContain("list_checks");
+    expect(discoveryBody.result!.instructions).toContain("search_logs");
     expect(tools.find((tool) => tool.name === "list_resources")!.description).toContain(
       "current status"
     );
@@ -81,7 +174,7 @@ describe("Mimorii MCP handler", () => {
     expect(JSON.stringify(overviewMetadata)).not.toContain("openai/");
     expect(JSON.stringify(overviewMetadata)).not.toContain("ui/resourceUri");
     for (const tool of tools.filter(
-      (item) => !item.name.includes("update") && item.name !== "create_incident"
+      (item) => !item.name.includes("update") && !item.name.startsWith("create_")
     )) {
       expect(tool.annotations).toMatchObject({
         readOnlyHint: true,
@@ -357,7 +450,9 @@ describe("Mimorii MCP handler", () => {
   it("keeps concurrent caller identities isolated", async () => {
     const list = vi.fn(async (userId: string): Promise<TeamSummary[]> => {
       if (userId === "user-a") await new Promise((resolve) => setTimeout(resolve, 10));
-      return [{ id: teamId, name: userId, role: "viewer", createdAt: "2026-01-01" }];
+      return [
+        { id: teamId, name: userId, role: "viewer", logsEnabled: false, createdAt: "2026-01-01" },
+      ];
     });
     const handler = createHandler({ teams: { list } });
 
@@ -605,7 +700,7 @@ describe("Mimorii MCP handler", () => {
     const listResponse = await handler.fetch(listRequest, { authInfo: auth("user-1") });
     expect(listResponse.status).toBe(200);
     const legacyTools = (await json(listResponse)).result!.tools!;
-    expect(legacyTools).toHaveLength(19);
+    expect(legacyTools).toHaveLength(28);
     expect(mcpMetadata(legacyTools.find((tool) => tool.name === "get_team_overview")!)).toEqual({
       ui: { resourceUri: teamOverviewAppUri, visibility: ["model", "app"] },
     });
@@ -644,6 +739,9 @@ function createHandler(overrides: Partial<McpToolServices> = {}): McpHttpHandler
     heartbeats: overrides.heartbeats ?? defaults.heartbeats,
     analytics: overrides.analytics ?? defaults.analytics,
     objectives: overrides.objectives ?? defaults.objectives,
+    logs: overrides.logs ?? defaults.logs,
+    logInsights: overrides.logInsights ?? defaults.logInsights,
+    logAlerts: overrides.logAlerts ?? defaults.logAlerts,
   };
   const handler = createMimoriiMcpHandler(services);
   handlers.push(handler);
@@ -672,6 +770,9 @@ function emptyServices(): McpToolServices {
     },
     analytics: { overview: unavailable, report: unavailable },
     objectives: { list: vi.fn(async () => []) },
+    logs: { entries: unavailable, volume: unavailable, labels: unavailable, context: unavailable },
+    logInsights: { patterns: unavailable, fields: unavailable },
+    logAlerts: { list: unavailable, preview: unavailable, create: unavailable },
   };
 }
 
@@ -845,6 +946,8 @@ function incidentSummary(status: "investigating" | "resolved", updateCount = 0):
     checkId: null,
     checkName: null,
     heartbeatId: null,
+    logAlertRuleId: null,
+    logAlertRuleName: null,
     title: "Database unavailable",
     impact: "major",
     status,

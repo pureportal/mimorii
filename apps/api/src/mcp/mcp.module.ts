@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { ChecksModule } from "../checks/checks.module.js";
 import { HeartbeatsModule } from "../heartbeats/heartbeats.module.js";
 import { IncidentsModule } from "../incidents/incidents.module.js";
+import { LogsModule } from "../logs/logs.module.js";
 import { MaintenanceModule } from "../maintenance/maintenance.module.js";
 import { ObjectivesModule } from "../objectives/objectives.module.js";
 import { ResourcesModule } from "../resources/resources.module.js";
@@ -22,6 +23,7 @@ import { McpService } from "./mcp.service.js";
     ChecksModule,
     HeartbeatsModule,
     IncidentsModule,
+    LogsModule,
     MaintenanceModule,
     ObjectivesModule,
   ],

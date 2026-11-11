@@ -8,18 +8,23 @@ const readCapabilities = [
   "Checks and heartbeat history",
   "Incidents and maintenance",
   "Availability and service objectives",
+  "Log search, volume, patterns, and fields for teams with logs",
+  "Log alert rules and rule tests",
 ];
 
 const writeCapabilities = [
   "Update resource details",
   "Create incidents",
   "Publish incident updates",
+  "Create log alert rules",
 ];
 
 const promptExamples = [
   "Summarize the current health of my team.",
   "Show availability for the last 30 days.",
   "Which service objectives are at risk?",
+  "What errors did the checkout service log in the last hour?",
+  "Alert me when the web logs contain Error 404 - Failed to load.",
 ];
 
 export function McpPage() {

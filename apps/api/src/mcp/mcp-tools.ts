@@ -1,4 +1,3 @@
-import { HttpException, Logger } from "@nestjs/common";
 import {
   incidentImpacts,
   incidentStatuses,
@@ -6,10 +5,9 @@ import {
   type CheckSummary,
   type IncidentSummary,
 } from "@mimorii/contracts";
-import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
+import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import type { AnalyticsService } from "../analytics/analytics.service.js";
-import type { McpScope } from "../auth/oauth-config.js";
 import type { ChecksService } from "../checks/checks.service.js";
 import type { HeartbeatsService } from "../heartbeats/heartbeats.service.js";
 import type { IncidentsService } from "../incidents/incidents.service.js";
@@ -18,8 +16,20 @@ import type { ObjectivesService } from "../objectives/objectives.service.js";
 import type { ResourcesService } from "../resources/resources.service.js";
 import type { TeamsService } from "../teams/teams.service.js";
 import { teamOverviewAppMetadata } from "./mcp-app.js";
+import {
+  logWriteToolNames,
+  registerMcpLogTools,
+  type McpLogToolServices,
+} from "./mcp-log-tools.js";
+import {
+  executeMutation,
+  executeTool,
+  internalMutationAnnotations,
+  notifyingMutationAnnotations,
+  readOnlyAnnotations,
+} from "./mcp-tool-helpers.js";
 
-export interface McpToolServices {
+export interface McpToolServices extends McpLogToolServices {
   teams: Pick<TeamsService, "list">;
   resources: Pick<ResourcesService, "list" | "get" | "update">;
   checks: Pick<ChecksService, "list" | "get" | "history">;
@@ -30,7 +40,6 @@ export interface McpToolServices {
   objectives: Pick<ObjectivesService, "list">;
 }
 
-const logger = new Logger("McpTools");
 const identifier = z.uuid();
 const offsetSchema = z.number().int().min(0).max(10_000).default(0);
 const limitSchema = z.number().int().min(1).max(100).default(50);
@@ -62,24 +71,12 @@ const availabilityReportInputSchema = z
   .refine(({ from, to }) => !from || !to || new Date(from).getTime() < new Date(to).getTime(), {
     message: "Report start must be before its end",
   });
-const writeToolNames = new Set(["update_resource", "create_incident", "add_incident_update"]);
-const readOnlyAnnotations = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
-const internalMutationAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: false,
-} as const;
-const notifyingMutationAnnotations = {
-  ...internalMutationAnnotations,
-  openWorldHint: true,
-} as const;
-
+const writeToolNames = new Set([
+  "update_resource",
+  "create_incident",
+  "add_incident_update",
+  ...logWriteToolNames,
+]);
 export function requiresMcpWriteScope(toolName: string | undefined): boolean {
   return toolName !== undefined && writeToolNames.has(toolName);
 }
@@ -432,43 +429,8 @@ export function registerMcpTools(
     ({ teamId, maintenanceId }) =>
       executeTool(() => services.maintenance.get(userId, teamId, maintenanceId))
   );
-}
 
-async function executeMutation(
-  scopes: readonly string[],
-  action: () => Promise<unknown>
-): Promise<CallToolResult> {
-  if (!scopes.includes("mcp:write" satisfies McpScope)) {
-    return toolError("OAuth scope mcp:write is required");
-  }
-  return executeTool(action);
-}
-
-async function executeTool(action: () => Promise<unknown>): Promise<CallToolResult> {
-  try {
-    const result = await action();
-    return {
-      content: [{ type: "text", text: JSON.stringify(result) }],
-      structuredContent: structuredResult(result),
-    };
-  } catch (error) {
-    if (error instanceof HttpException && error.getStatus() < 500) {
-      return toolError(error.message);
-    }
-    logger.error(error instanceof Error ? error.stack : String(error));
-    return toolError("Request failed");
-  }
-}
-
-function toolError(message: string): CallToolResult {
-  return { isError: true, content: [{ type: "text", text: message }] };
-}
-
-function structuredResult(value: unknown): Record<string, unknown> {
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return { value };
+  registerMcpLogTools(server, userId, scopes, services);
 }
 
 function page<T>(items: T[], start: number, pageSize: number) {
