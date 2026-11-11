@@ -15,12 +15,15 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 - Scheduled jobs and backups through heartbeat URLs
 - Services inside private networks through Linux and Windows agents
 - Android device availability, battery, memory, storage, connectivity, power, and thermal state
+- Application logs sent as JSON, NDJSON, plain text, Loki push requests, or OpenTelemetry (JSON or protobuf) from Alloy, Promtail, Fluent Bit, Vector, the OpenTelemetry Collector, or plain HTTP, for teams where a global administrator enabled logs
 
 ## From signal to response
 
 Mimorii keeps check history and turns failures into an operational timeline. You can:
 
 - investigate and update incidents in one place
+- search, filter, group into patterns, and live-tail logs with autocomplete and team-shared saved searches, and open incidents when a log pattern appears or stops appearing
+- ask an AI assistant connected through MCP to search logs, summarize patterns, and create log alert rules
 - schedule recurring maintenance and suppress planned alerts
 - route notifications by event, resource, severity, or team
 - notify people by email, signed webhook, browser push, or Android push
