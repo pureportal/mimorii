@@ -68,6 +68,7 @@ describe("AgentsPage confirmations", () => {
         id: "team-1",
         name: "Operations",
         role: "owner",
+        logsEnabled: false,
         createdAt: "2026-08-13T07:00:00.000Z",
       },
       setActiveTeamId: vi.fn(),

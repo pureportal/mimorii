@@ -181,6 +181,7 @@ function authSession(accessToken: string, expiresAt: number) {
         id: "team-1",
         name: "Operations",
         role: "owner" as const,
+        logsEnabled: false,
         createdAt: "2026-08-14T08:00:00.000Z",
       },
     ],

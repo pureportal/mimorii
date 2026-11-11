@@ -41,6 +41,8 @@ const incident: IncidentSummary = {
   checkId: null,
   checkName: null,
   heartbeatId: null,
+  logAlertRuleId: null,
+  logAlertRuleName: null,
   title: "Elevated API errors",
   impact: "major",
   status: "investigating",
@@ -72,6 +74,7 @@ describe("OperationsPage incident updates", () => {
         id: "team-1",
         name: "Operations",
         role: "owner",
+        logsEnabled: false,
         createdAt: "2026-08-20T08:00:00.000Z",
       },
     });

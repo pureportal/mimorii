@@ -46,6 +46,7 @@ function session(expiresAt: number, refreshExpiresAt: number) {
         id: "team-1",
         name: "Operations",
         role: "owner",
+        logsEnabled: false,
         createdAt: "2026-08-14T08:00:00.000Z",
       },
     ],

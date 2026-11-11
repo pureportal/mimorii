@@ -96,6 +96,14 @@ export function PrivacyPage() {
             shell commands.
           </p>
           <p>
+            Logs are available only for teams where a global administrator enabled them. Senders
+            chosen by the team submit log lines, timestamps, levels, labels, and attributes with a
+            source token, and the line content is stored as sent. Logs are kept for the retention
+            period chosen by the team, from 1 to 90 days. When logs are disabled for a team, its
+            stored logs are deleted 14 days later unless logs are enabled again before then. Log
+            alert rules can copy a matching line into the resulting incident and its notifications.
+          </p>
+          <p>
             Email notifications disclose the recipient address and notification content to the SMTP
             service configured by the operator. Webhooks disclose incident, resource, or delivery
             data to the endpoint selected by the team. The codebase does not prescribe an SMTP

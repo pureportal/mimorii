@@ -1,5 +1,5 @@
 import type { IncidentSummary } from "@mimorii/contracts";
-import { Activity, ArrowUpRight, Pencil, Send } from "lucide-react";
+import { Activity, ArrowUpRight, Pencil, ScrollText, Send } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../lib/app-navigation";
@@ -85,10 +85,15 @@ function IncidentCard({
               <StatusBadge status={incident.impact} />
             </div>
             <p className="mt-2 text-xs text-muted">
-              {incident.resources
-                .map((resource) => resourceNames.get(resource.id) ?? resource.name)
-                .join(", ")}{" "}
-              · {formatRelative(incident.startedAt)} · {formatDuration(incident.durationSeconds)}
+              {[
+                incident.resources
+                  .map((resource) => resourceNames.get(resource.id) ?? resource.name)
+                  .join(", "),
+                formatRelative(incident.startedAt),
+                formatDuration(incident.durationSeconds),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           </div>
 
@@ -102,6 +107,19 @@ function IncidentCard({
                   <Activity />
                   <span className="text-muted">Check</span>
                   <span className="max-w-48 truncate">{incident.checkName}</span>
+                  <ArrowUpRight className="shrink-0" />
+                </Link>
+              </Button>
+            ) : null}
+            {incident.logAlertRuleId && incident.logAlertRuleName ? (
+              <Button asChild variant="outline" size="sm" className="max-w-full justify-start">
+                <Link
+                  to={appRoutes.logAlert(incident.logAlertRuleId)}
+                  aria-label={`Open log alert rule ${incident.logAlertRuleName}`}
+                >
+                  <ScrollText />
+                  <span className="text-muted">Log alert</span>
+                  <span className="max-w-48 truncate">{incident.logAlertRuleName}</span>
                   <ArrowUpRight className="shrink-0" />
                 </Link>
               </Button>

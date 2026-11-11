@@ -16,8 +16,20 @@ vi.mock("../lib/api", () => ({
 vi.mock("../lib/auth", () => ({ useAuth: vi.fn() }));
 
 const teams: TeamSummary[] = [
-  { id: "team-ops", name: "Operations", role: "owner", createdAt: "2026-11-01T00:00:00.000Z" },
-  { id: "team-qa", name: "Quality", role: "viewer", createdAt: "2026-11-01T00:00:00.000Z" },
+  {
+    id: "team-ops",
+    name: "Operations",
+    role: "owner",
+    logsEnabled: false,
+    createdAt: "2026-11-01T00:00:00.000Z",
+  },
+  {
+    id: "team-qa",
+    name: "Quality",
+    role: "viewer",
+    logsEnabled: false,
+    createdAt: "2026-11-01T00:00:00.000Z",
+  },
 ];
 
 const createdToken: CreatedApiToken = {

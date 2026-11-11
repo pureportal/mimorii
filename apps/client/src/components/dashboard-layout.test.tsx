@@ -33,6 +33,7 @@ describe("ProtectedLayout navigation", () => {
             id: "team-1",
             name: "Operations",
             role: "owner",
+            logsEnabled: false,
             createdAt: "2026-08-13T08:00:00.000Z",
           },
         ],
@@ -42,6 +43,7 @@ describe("ProtectedLayout navigation", () => {
         id: "team-1",
         name: "Operations",
         role: "owner",
+        logsEnabled: false,
         createdAt: "2026-08-13T08:00:00.000Z",
       },
       setActiveTeamId: vi.fn(),
@@ -73,6 +75,31 @@ describe("ProtectedLayout navigation", () => {
     expect(within(desktop).getByRole("link", { name: "Agents" })).toBeVisible();
     expect(within(desktop).queryByText("Analytics")).not.toBeInTheDocument();
     expect(screen.getByTestId("sponsor-favicon")).toBeInTheDocument();
+  });
+
+  it("shows Logs as unavailable for teams without the feature", () => {
+    renderLayout(appRoutes.resource("resource-1"));
+
+    const desktop = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(desktop).queryByRole("link", { name: /Logs/ })).not.toBeInTheDocument();
+    const logs = within(desktop).getByText("Logs").closest("[aria-disabled]");
+    expect(logs).toHaveAttribute("aria-disabled", "true");
+    expect(logs).toHaveTextContent("Not enabled for this team");
+  });
+
+  it("links Logs and its sections for enabled teams", () => {
+    const auth = useAuthMock();
+    useAuthMock.mockReturnValue({
+      ...auth,
+      activeTeam: { ...auth.activeTeam!, logsEnabled: true },
+    });
+    renderLayout(appRoutes.resource("resource-1"));
+
+    const desktop = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(desktop).getByRole("link", { name: "Logs" })).toHaveAttribute(
+      "href",
+      appRoutes.logs
+    );
   });
 
   it("keeps primary mobile tasks visible and opens a grouped navigation drawer", () => {

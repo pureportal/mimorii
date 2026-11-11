@@ -11,10 +11,12 @@ import {
   Gauge,
   Globe2,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   Network,
   RadioTower,
+  ScrollText,
   Settings,
   ShieldCheck,
   Siren,
@@ -52,6 +54,7 @@ const navigationIcons: Record<NavigationItemId, LucideIcon> = {
   checks: Activity,
   heartbeats: RadioTower,
   agents: Bot,
+  logs: ScrollText,
   incidents: Siren,
   maintenance: CalendarClock,
   alerting: BellRing,
@@ -123,7 +126,9 @@ export function ProtectedLayout() {
     );
   }
 
-  const groups = visibleNavigationGroups(activeTeam.role, session.user.isGlobalAdmin);
+  const groups = visibleNavigationGroups(activeTeam.role, session.user.isGlobalAdmin, {
+    logs: activeTeam.logsEnabled,
+  });
   const context = navigationContext(location.pathname);
 
   return (
@@ -292,6 +297,7 @@ function DesktopNavigationItem({
 }) {
   const Icon = navigationIcons[item.id];
   const active = isNavigationItemActive(pathname, item);
+  if (item.disabled) return <DisabledNavigationItem item={item} className="h-9" />;
   return (
     <div>
       <Link
@@ -333,6 +339,26 @@ function DesktopNavigationItem({
           {nestedLabel}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function DisabledNavigationItem({ item, className }: { item: NavigationItem; className: string }) {
+  const Icon = navigationIcons[item.id];
+  return (
+    <div
+      aria-disabled="true"
+      data-guide-nav={item.id}
+      title="Not enabled for this team"
+      className={cn(
+        "flex cursor-not-allowed items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted/45",
+        className
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" />
+      <span className="min-w-0 truncate">{item.label}</span>
+      <span className="sr-only">Not enabled for this team</span>
+      <Lock className="ml-auto size-3.5 shrink-0" aria-hidden="true" />
     </div>
   );
 }
@@ -444,6 +470,9 @@ function MobileNavigation({
                   {group.items.map((item) => {
                     const Icon = navigationIcons[item.id];
                     const active = isNavigationItemActive(location.pathname, item);
+                    if (item.disabled) {
+                      return <DisabledNavigationItem key={item.id} item={item} className="h-10" />;
+                    }
                     return (
                       <Link
                         key={item.id}

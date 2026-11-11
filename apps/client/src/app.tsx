@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LoadingState } from "./components/page-state";
 import { GlobalAdminRoute } from "./components/global-admin-route";
+import { LogsRoute } from "./components/logs/logs-route";
 import { AndroidClientLayout } from "./components/android-client-layout";
 import { PublicLayout } from "./components/public-layout";
 import { appPaths } from "./lib/app-navigation";
@@ -29,6 +30,15 @@ const InvitePage = lazy(() =>
 );
 const LandingPage = lazy(() =>
   import("./pages/landing-page").then((module) => ({ default: module.LandingPage }))
+);
+const LogsPage = lazy(() =>
+  import("./pages/logs-page").then((module) => ({ default: module.LogsPage }))
+);
+const LogAlertsPage = lazy(() =>
+  import("./pages/log-alerts-page").then((module) => ({ default: module.LogAlertsPage }))
+);
+const LogSourcesPage = lazy(() =>
+  import("./pages/log-sources-page").then((module) => ({ default: module.LogSourcesPage }))
 );
 const McpPage = lazy(() =>
   import("./pages/mcp-page").then((module) => ({ default: module.McpPage }))
@@ -132,6 +142,11 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route path={appPaths.checks} element={<ChecksPage />} />
           <Route path={appPaths.heartbeats} element={<HeartbeatsPage />} />
           <Route path={appPaths.agents} element={<AgentsPage />} />
+          <Route element={<LogsRoute />}>
+            <Route path={appPaths.logs} element={<LogsPage />} />
+            <Route path={appPaths.logAlerts} element={<LogAlertsPage />} />
+            <Route path={appPaths.logSources} element={<LogSourcesPage />} />
+          </Route>
           <Route path={appPaths.incidents} element={<OperationsPage view="incidents" />} />
           <Route path={appPaths.maintenance} element={<OperationsPage view="maintenance" />} />
           <Route path={appPaths.alertChannels} element={<NotificationsPage section="channels" />} />
@@ -149,6 +164,7 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route element={<GlobalAdminRoute />}>
             <Route path={appPaths.platform} element={<GlobalAdminPage section="overview" />} />
             <Route path={appPaths.platformUsers} element={<GlobalAdminPage section="users" />} />
+            <Route path={appPaths.platformTeams} element={<GlobalAdminPage section="teams" />} />
             <Route
               path={appPaths.platformSponsorships}
               element={<GlobalAdminPage section="sponsorships" />}

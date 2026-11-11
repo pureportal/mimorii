@@ -380,6 +380,47 @@ export const guideTopics: readonly GuideTopic[] = [
     ],
   },
   {
+    id: "logs",
+    title: "Logs",
+    group: "monitoring",
+    summary:
+      "Search, filter, and tail the logs your services send, and open incidents when a pattern appears.",
+    to: appRoutes.logs,
+    exactPaths: [appRoutes.logs, appRoutes.logAlerts, appRoutes.logSources],
+    keywords: ["logs", "loki", "logql", "search", "tail", "pattern", "opentelemetry", "fluent bit"],
+    navigationId: "logs",
+    sections: [
+      {
+        title: "Explore",
+        items: [
+          'Filter by labels and level, search line text, or switch to Code to write a query such as {service="web"} |= "Error 404".',
+          "Drag across the volume chart to zoom, open a line for its labels and fields, or show the lines around it.",
+          "Live follows new lines as they arrive; Display changes time, labels, wrapping, JSON formatting, order, and deduplication.",
+        ],
+      },
+      {
+        title: "Alert rules and sources",
+        items: [
+          "An alert rule counts matching lines in a time window and opens an incident when the condition is met.",
+          "Team administrators add sources, each with its own token and fixed labels, and choose how long logs are kept.",
+          "Sources accept JSON, plain text, Loki push requests, and OpenTelemetry logs in JSON.",
+        ],
+      },
+    ],
+    tour: [
+      {
+        target: '[data-guide-page="logs-query"]',
+        title: "Build a query",
+        content: "Add label and line filters, pick a time range, or follow new lines with Live.",
+      },
+      {
+        target: '[data-guide-page="logs-lines"]',
+        title: "Read the lines",
+        content: "Open a line for its labels, attributes, parsed fields, and surrounding context.",
+      },
+    ],
+  },
+  {
     id: "incidents",
     title: "Incidents",
     group: "operations",
@@ -898,6 +939,7 @@ export const guideTopics: readonly GuideTopic[] = [
     exactPaths: [
       appRoutes.platform,
       appRoutes.platformUsers,
+      appRoutes.platformTeams,
       appRoutes.platformSponsorships,
       appRoutes.platformSettings,
       appRoutes.platformAudit,
@@ -912,6 +954,7 @@ export const guideTopics: readonly GuideTopic[] = [
         items: [
           "Installation-wide counts for accounts, teams, resources, checks, incidents, and sponsorships.",
           "Search accounts, enable or disable access, grant global administration, and revoke sessions and API tokens.",
+          "Turn logs on or off for individual teams; logs of a disabled team are deleted after 14 days.",
         ],
       },
       {

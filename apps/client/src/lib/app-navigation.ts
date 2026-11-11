@@ -10,6 +10,9 @@ export const appPaths = {
   checks: relativeAppPath(appRoutes.checks),
   heartbeats: relativeAppPath(appRoutes.heartbeats),
   agents: relativeAppPath(appRoutes.agents),
+  logs: relativeAppPath(appRoutes.logs),
+  logAlerts: relativeAppPath(appRoutes.logAlerts),
+  logSources: relativeAppPath(appRoutes.logSources),
   incidents: relativeAppPath(appRoutes.incidents),
   maintenance: relativeAppPath(appRoutes.maintenance),
   alertChannels: relativeAppPath(appRoutes.alertChannels),
@@ -26,6 +29,7 @@ export const appPaths = {
   account: relativeAppPath(appRoutes.account),
   platform: relativeAppPath(appRoutes.platform),
   platformUsers: relativeAppPath(appRoutes.platformUsers),
+  platformTeams: relativeAppPath(appRoutes.platformTeams),
   platformSponsorships: relativeAppPath(appRoutes.platformSponsorships),
   platformSettings: relativeAppPath(appRoutes.platformSettings),
   platformAudit: relativeAppPath(appRoutes.platformAudit),
@@ -37,6 +41,7 @@ export type NavigationItemId =
   | "checks"
   | "heartbeats"
   | "agents"
+  | "logs"
   | "incidents"
   | "maintenance"
   | "alerting"
@@ -51,7 +56,12 @@ export type NavigationItemId =
 export interface NavigationSubitem {
   label: string;
   to: string;
+  teamAdmin?: boolean;
 }
+
+export type NavigationFeature = "logs";
+
+export type NavigationFeatures = Record<NavigationFeature, boolean>;
 
 export interface NavigationItem {
   id: NavigationItemId;
@@ -61,6 +71,8 @@ export interface NavigationItem {
   exact?: boolean;
   teamAdmin?: boolean;
   globalAdmin?: boolean;
+  feature?: NavigationFeature;
+  disabled?: boolean;
   children?: readonly NavigationSubitem[];
 }
 
@@ -78,6 +90,18 @@ export const navigationGroups: readonly NavigationGroup[] = [
       { id: "checks", label: "Checks", to: appRoutes.checks, exact: true },
       { id: "heartbeats", label: "Heartbeats", to: appRoutes.heartbeats, exact: true },
       { id: "agents", label: "Agents", to: appRoutes.agents, exact: true },
+      {
+        id: "logs",
+        label: "Logs",
+        to: appRoutes.logs,
+        matchRoot: appRoutes.logs,
+        feature: "logs",
+        children: [
+          { label: "Explore", to: appRoutes.logs },
+          { label: "Alert rules", to: appRoutes.logAlerts },
+          { label: "Sources", to: appRoutes.logSources, teamAdmin: true },
+        ],
+      },
     ],
   },
   {
@@ -147,6 +171,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         children: [
           { label: "Overview", to: appRoutes.platform },
           { label: "Users", to: appRoutes.platformUsers },
+          { label: "Teams", to: appRoutes.platformTeams },
           { label: "Sponsorships", to: appRoutes.platformSponsorships },
           { label: "Settings", to: appRoutes.platformSettings },
           { label: "Audit log", to: appRoutes.platformAudit },
@@ -172,15 +197,20 @@ export interface NavigationContext {
 
 export function visibleNavigationGroups(
   teamRole: "owner" | "admin" | "member" | "viewer",
-  isGlobalAdmin: boolean
+  isGlobalAdmin: boolean,
+  features: NavigationFeatures
 ): NavigationGroup[] {
   const teamAdmin = teamRole === "owner" || teamRole === "admin";
   return navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => (!item.teamAdmin || teamAdmin) && (!item.globalAdmin || isGlobalAdmin)
-      ),
+      items: group.items
+        .filter((item) => (!item.teamAdmin || teamAdmin) && (!item.globalAdmin || isGlobalAdmin))
+        .map((item) => ({
+          ...item,
+          disabled: Boolean(item.feature && !features[item.feature]),
+          children: item.children?.filter((child) => !child.teamAdmin || teamAdmin),
+        })),
     }))
     .filter((group) => group.items.length > 0);
 }

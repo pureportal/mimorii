@@ -4,7 +4,6 @@ import {
   type ComponentProps,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
 } from "react";
 import { cn } from "../../lib/cn";
 
@@ -49,7 +48,7 @@ export function PasswordInput({
   );
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return (
     <textarea
       className={cn(

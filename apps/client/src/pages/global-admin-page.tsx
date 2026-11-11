@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AdminAudit } from "../components/admin/admin-audit";
 import { AdminSettings } from "../components/admin/admin-settings";
 import { AdminSponsorships } from "../components/admin/admin-sponsorships";
+import { AdminTeams } from "../components/admin/admin-teams";
 import { AdminUsers } from "../components/admin/admin-users";
 import { ErrorState, LoadingState } from "../components/page-state";
 import { SectionTabs } from "../components/section-tabs";
@@ -10,11 +11,18 @@ import { Card, CardContent } from "../components/ui/card";
 import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 
-export type PlatformSection = "overview" | "users" | "sponsorships" | "settings" | "audit";
+export type PlatformSection =
+  | "overview"
+  | "users"
+  | "teams"
+  | "sponsorships"
+  | "settings"
+  | "audit";
 
 const sections = [
   { label: "Overview", to: appRoutes.platform },
   { label: "Users", to: appRoutes.platformUsers },
+  { label: "Teams", to: appRoutes.platformTeams },
   { label: "Sponsorships", to: appRoutes.platformSponsorships },
   { label: "Settings", to: appRoutes.platformSettings },
   { label: "Audit log", to: appRoutes.platformAudit },
@@ -42,6 +50,7 @@ export function GlobalAdminPage({ section }: { section: PlatformSection }) {
           <PlatformOverview statistics={statistics.data} />
         ) : null}
         {section === "users" ? <AdminUsers /> : null}
+        {section === "teams" ? <AdminTeams /> : null}
         {section === "sponsorships" ? <AdminSponsorships /> : null}
         {section === "settings" ? <AdminSettings /> : null}
         {section === "audit" ? <AdminAudit /> : null}
