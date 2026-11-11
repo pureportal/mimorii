@@ -42,6 +42,12 @@ export class UpdateGlobalUserAccessDto {
   expectedDisabled!: boolean;
 }
 
+export class UpdateTeamLogsDto {
+  @ApiProperty()
+  @IsBoolean()
+  enabled!: boolean;
+}
+
 export class UpdatePlatformSettingsDto {
   @ApiProperty()
   @IsBoolean()

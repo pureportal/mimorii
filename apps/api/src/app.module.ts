@@ -16,6 +16,7 @@ import databaseConfig from "./mikro-orm.config.js";
 import { HealthModule } from "./health/health.module.js";
 import { HeartbeatsModule } from "./heartbeats/heartbeats.module.js";
 import { IncidentsModule } from "./incidents/incidents.module.js";
+import { LogsModule } from "./logs/logs.module.js";
 import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { McpModule } from "./mcp/mcp.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
@@ -56,6 +57,7 @@ import { TeamsModule } from "./teams/teams.module.js";
     HeartbeatsModule,
     AgentsModule,
     IncidentsModule,
+    LogsModule,
     MaintenanceModule,
     McpModule,
     NotificationsModule,

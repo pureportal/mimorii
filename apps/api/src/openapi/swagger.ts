@@ -15,11 +15,17 @@ export function createOpenApiDocument(app: INestApplication) {
       { type: "http", scheme: "bearer", description: "Unique agent enrollment key" },
       "agent-key"
     )
+    .addBearerAuth(
+      { type: "http", scheme: "bearer", description: "Log source token" },
+      "log-source-token"
+    )
     .addTag("Authentication")
     .addTag("Teams")
     .addTag("Resources")
     .addTag("Checks")
     .addTag("Agents")
+    .addTag("Logs")
+    .addTag("Log ingestion")
     .addTag("Analytics")
     .addTag("Sponsors")
     .addTag("Global administration")

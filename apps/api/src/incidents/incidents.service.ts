@@ -26,6 +26,7 @@ interface IncidentRow {
   source: "automatic" | "manual";
   check_id: string | null;
   heartbeat_id: string | null;
+  log_alert_rule_id: string | null;
   title: string;
   impact: IncidentImpact;
   status: IncidentStatus;
@@ -38,6 +39,7 @@ interface IncidentRow {
 
 interface IncidentSummaryRow extends IncidentRow {
   check_name: string | null;
+  log_alert_rule_name: string | null;
 }
 
 interface IncidentUpdateRow {
@@ -76,6 +78,19 @@ interface HeartbeatContext {
   heartbeat_name: string;
   resource_name: string;
 }
+
+interface LogAlertContext {
+  id: string;
+  team_id: string;
+  name: string;
+  impact: IncidentImpact;
+  resource_id: string | null;
+  resource_name: string | null;
+}
+
+const incidentSummaryColumns = "i.*, c.name AS check_name, lar.name AS log_alert_rule_name";
+const incidentSummaryJoins = `LEFT JOIN checks c ON c.id = i.check_id
+  LEFT JOIN log_alert_rules lar ON lar.id = i.log_alert_rule_id`;
 
 @Injectable()
 export class IncidentsService {
@@ -120,8 +135,8 @@ export class IncidentsService {
     if (options.status === "active") clauses.push("i.status != 'resolved'");
     if (options.status === "resolved") clauses.push("i.status = 'resolved'");
     const rows = await this.database.all<IncidentSummaryRow>(
-      `SELECT i.*, c.name AS check_name FROM incidents i
-       LEFT JOIN checks c ON c.id = i.check_id
+      `SELECT ${incidentSummaryColumns} FROM incidents i
+       ${incidentSummaryJoins}
        WHERE ${clauses.join(" AND ")}
        ORDER BY i.started_at DESC LIMIT ?`,
       teamId,
@@ -492,6 +507,95 @@ export class IncidentsService {
     });
   }
 
+  async openForLogAlert(ruleId: string, message: string, startedAt: string): Promise<void> {
+    const context = await this.logAlertContext(ruleId);
+    const existing = await this.database.get(
+      "SELECT id FROM incidents WHERE log_alert_rule_id = ? AND status != 'resolved'",
+      ruleId
+    );
+    if (existing) return;
+    const id = randomUUID();
+    const title = context.resource_name
+      ? `${context.resource_name}: ${context.name}`
+      : context.name;
+    const resourceIds = context.resource_id ? [context.resource_id] : [];
+    const suppressed = context.resource_id
+      ? await this.maintenance.suppressesNotifications(context.resource_id, new Date(startedAt))
+      : false;
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `INSERT INTO incidents
+         (id, team_id, source, log_alert_rule_id, title, impact, status, started_at,
+          notifications_suppressed, created_at, updated_at)
+         VALUES (?, ?, 'automatic', ?, ?, ?, 'investigating', ?, ?, ?, ?)`,
+        id,
+        context.team_id,
+        ruleId,
+        title,
+        context.impact,
+        startedAt,
+        suppressed ? 1 : 0,
+        startedAt,
+        startedAt
+      );
+      await this.replaceResources(id, resourceIds);
+      await this.insertUpdate(id, "investigating", message, null, startedAt);
+      if (!suppressed) {
+        await this.notifications.enqueue(context.team_id, "incident.opened", {
+          source: "log",
+          severity: "warning",
+          incidentId: id,
+          logAlertRuleId: ruleId,
+          title,
+          message,
+          impact: context.impact,
+          status: "investigating",
+          resourceId: context.resource_id,
+          resourceIds,
+          dedupeKey: `log-alert:${ruleId}`,
+          path: appRoutes.logAlert(ruleId),
+          occurredAt: startedAt,
+        });
+      }
+    });
+  }
+
+  async resolveForLogAlert(ruleId: string, resolvedAt: string, message: string): Promise<void> {
+    const incident = await this.database.get<IncidentRow>(
+      `SELECT * FROM incidents WHERE log_alert_rule_id = ? AND status != 'resolved'
+       ORDER BY started_at DESC LIMIT 1`,
+      ruleId
+    );
+    if (!incident) return;
+    await this.database.transaction(async () => {
+      await this.database.run(
+        "UPDATE incidents SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE id = ?",
+        resolvedAt,
+        resolvedAt,
+        incident.id
+      );
+      await this.insertUpdate(incident.id, "resolved", message, null, resolvedAt);
+      const resourceIds = (await this.resources(incident.id)).map((resource) => resource.id);
+      if (!incident.notifications_suppressed) {
+        await this.notifications.enqueue(incident.team_id, "incident.resolved", {
+          source: "log",
+          severity: "info",
+          incidentId: incident.id,
+          logAlertRuleId: ruleId,
+          title: incident.title,
+          message,
+          impact: incident.impact,
+          status: "resolved",
+          resourceId: resourceIds[0],
+          resourceIds,
+          dedupeKey: `log-alert:${ruleId}`,
+          path: appRoutes.logAlert(ruleId),
+          occurredAt: resolvedAt,
+        });
+      }
+    });
+  }
+
   private async releaseSuppression(id: string): Promise<void> {
     await this.database.transaction(async () => {
       const incident = await this.database.get<IncidentRow>(
@@ -507,7 +611,13 @@ export class IncidentsService {
       );
       if (stillSuppressed) return;
       const occurredAt = new Date().toISOString();
-      const source = incident.check_id ? "check" : incident.heartbeat_id ? "heartbeat" : "manual";
+      const source = incident.check_id
+        ? "check"
+        : incident.heartbeat_id
+          ? "heartbeat"
+          : incident.log_alert_rule_id
+            ? "log"
+            : "manual";
       const check = incident.check_id
         ? await this.database.get<{ type: string }>(
             "SELECT type FROM checks WHERE id = ?",
@@ -526,6 +636,7 @@ export class IncidentsService {
         checkId: incident.check_id,
         checkType: check?.type,
         heartbeatId: incident.heartbeat_id,
+        logAlertRuleId: incident.log_alert_rule_id,
         title: incident.title,
         message: "The incident is still active after maintenance.",
         impact: incident.impact,
@@ -537,8 +648,14 @@ export class IncidentsService {
           ? `check:${incident.check_id}`
           : incident.heartbeat_id
             ? `heartbeat:${incident.heartbeat_id}`
-            : `incident:${id}`,
-        path: resourceIds[0] ? appRoutes.resource(resourceIds[0]) : appRoutes.incidents,
+            : incident.log_alert_rule_id
+              ? `log-alert:${incident.log_alert_rule_id}`
+              : `incident:${id}`,
+        path: incident.log_alert_rule_id
+          ? appRoutes.logAlert(incident.log_alert_rule_id)
+          : resourceIds[0]
+            ? appRoutes.resource(resourceIds[0])
+            : appRoutes.incidents,
         occurredAt,
       });
     });
@@ -548,9 +665,9 @@ export class IncidentsService {
     if (resourceIds.length === 0) return [];
     const placeholders = resourceIds.map(() => "?").join(",");
     const rows = await this.database.all<IncidentSummaryRow>(
-      `SELECT DISTINCT i.*, c.name AS check_name FROM incidents i
+      `SELECT DISTINCT ${incidentSummaryColumns} FROM incidents i
        JOIN incident_resources ir ON ir.incident_id = i.id
-       LEFT JOIN checks c ON c.id = i.check_id
+       ${incidentSummaryJoins}
        WHERE ir.resource_id IN (${placeholders})
        AND (i.status != 'resolved' OR i.resolved_at >= ?)
        ORDER BY i.started_at DESC LIMIT 100`,
@@ -582,6 +699,17 @@ export class IncidentsService {
     return row;
   }
 
+  private async logAlertContext(ruleId: string): Promise<LogAlertContext> {
+    const row = await this.database.get<LogAlertContext>(
+      `SELECT lar.id, lar.team_id, lar.name, lar.impact, lar.resource_id,
+       r.name AS resource_name FROM log_alert_rules lar
+       LEFT JOIN resources r ON r.id = lar.resource_id WHERE lar.id = ?`,
+      ruleId
+    );
+    if (!row) throw new NotFoundException("Log alert rule not found");
+    return row;
+  }
+
   private async validateResources(teamId: string, resourceIds: string[]): Promise<string[]> {
     const ids = [...new Set(resourceIds)];
     if (ids.length === 0) throw new BadRequestException("Select at least one resource");
@@ -597,8 +725,8 @@ export class IncidentsService {
 
   private async requireRow(teamId: string, id: string): Promise<IncidentSummaryRow> {
     const row = await this.database.get<IncidentSummaryRow>(
-      `SELECT i.*, c.name AS check_name FROM incidents i
-       LEFT JOIN checks c ON c.id = i.check_id
+      `SELECT ${incidentSummaryColumns} FROM incidents i
+       ${incidentSummaryJoins}
        WHERE i.id = ? AND i.team_id = ?`,
       id,
       teamId
@@ -710,6 +838,8 @@ export class IncidentsService {
       checkId: row.check_id,
       checkName: row.check_name,
       heartbeatId: row.heartbeat_id,
+      logAlertRuleId: row.log_alert_rule_id,
+      logAlertRuleName: row.log_alert_rule_name,
       title: row.title,
       impact: row.impact,
       status: row.status,

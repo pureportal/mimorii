@@ -84,8 +84,20 @@ describe("TeamAccessService", () => {
   it("limits listed teams to the API token scope", async () => {
     const service = new TeamAccessService({} as never);
     const teams = [
-      { id: "team-1", name: "Operations", role: "admin" as const, createdAt: "2026-09-04" },
-      { id: "team-2", name: "Platform", role: "viewer" as const, createdAt: "2026-09-04" },
+      {
+        id: "team-1",
+        name: "Operations",
+        role: "admin" as const,
+        logsEnabled: false,
+        createdAt: "2026-09-04",
+      },
+      {
+        id: "team-2",
+        name: "Platform",
+        role: "viewer" as const,
+        logsEnabled: false,
+        createdAt: "2026-09-04",
+      },
     ];
 
     expect(service.limitToApiTokenScope(teams)).toEqual(teams);

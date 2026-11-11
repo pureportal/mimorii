@@ -3,10 +3,13 @@ import { RequestMethod, ValidationPipe, type INestApplication } from "@nestjs/co
 import { NestFactory } from "@nestjs/core";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import compression from "compression";
 import helmet from "helmet";
 import {
   json,
+  raw,
   static as serveStatic,
+  text,
   urlencoded,
   type Express,
   type NextFunction,
@@ -28,7 +31,9 @@ export async function createApplication(): Promise<INestApplication> {
     ],
   });
   app.use(helmet({ contentSecurityPolicy: false }));
+  app.use("/api/teams/:teamId/logs", compression({ threshold: 2_048 }));
   app.use("/api/agent/heartbeat", json({ limit: "32mb" }));
+  configureLogIngestionParsers(app);
   app.use(json({ limit: "256kb" }));
   app.use(urlencoded({ extended: false, limit: "32kb" }));
   app.useGlobalPipes(
@@ -57,6 +62,22 @@ export async function createApplication(): Promise<INestApplication> {
   setupSwagger(app);
   configureClientApplication(app);
   return app;
+}
+
+function configureLogIngestionParsers(app: INestApplication): void {
+  const limit = "8mb";
+  app.use(["/api/logs/push", "/api/loki/api/v1/push", "/api/otlp/v1/logs"], json({ limit }));
+  app.use(
+    "/api/logs/push",
+    text({
+      type: ["text/plain", "application/x-ndjson", "application/jsonl", "application/x-jsonlines"],
+      limit,
+    })
+  );
+  app.use(
+    ["/api/loki/api/v1/push", "/api/otlp/v1/logs"],
+    raw({ type: ["application/x-protobuf", "application/protobuf"], limit })
+  );
 }
 
 function configureSponsorshipCors(app: INestApplication): void {

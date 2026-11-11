@@ -1,3 +1,5 @@
+export * from "./log-query.js";
+export * from "./logs.js";
 export * from "./two-factor.js";
 
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;
@@ -21,6 +23,10 @@ export const appRoutes = {
   heartbeatsForResource: (resourceId: string) =>
     `/app/monitoring/heartbeats?resourceId=${encodeURIComponent(resourceId)}`,
   agents: "/app/monitoring/agents",
+  logs: "/app/monitoring/logs",
+  logAlerts: "/app/monitoring/logs/alerts",
+  logAlert: (id: string) => `/app/monitoring/logs/alerts?ruleId=${encodeURIComponent(id)}`,
+  logSources: "/app/monitoring/logs/sources",
   incidents: "/app/operations/incidents",
   maintenance: "/app/operations/maintenance",
   alertChannels: "/app/operations/alerting/channels",
@@ -37,6 +43,7 @@ export const appRoutes = {
   account: "/app/account",
   platform: "/app/platform",
   platformUsers: "/app/platform/users",
+  platformTeams: "/app/platform/teams",
   platformSponsorships: "/app/platform/sponsorships",
   platformSettings: "/app/platform/settings",
   platformAudit: "/app/platform/audit-log",
@@ -317,6 +324,7 @@ export interface TeamSummary {
   name: string;
   role: TeamRole;
   logoUpdatedAt?: string | null;
+  logsEnabled: boolean;
   createdAt: string;
 }
 
@@ -588,6 +596,8 @@ export interface IncidentSummary {
   checkId: string | null;
   checkName: string | null;
   heartbeatId: string | null;
+  logAlertRuleId: string | null;
+  logAlertRuleName: string | null;
   title: string;
   impact: IncidentImpact;
   status: IncidentStatus;

@@ -26,6 +26,7 @@ interface TeamRow {
   name: string;
   role: TeamRole;
   logo_updated_at: string | null;
+  logs_enabled: boolean;
   created_at: string;
 }
 
@@ -57,9 +58,11 @@ export class TeamsService {
 
   async list(userId: string): Promise<TeamSummary[]> {
     const teams = await this.database.all<TeamRow>(
-      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at, t.created_at
+      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at,
+         COALESCE(logs.enabled, FALSE) AS logs_enabled, t.created_at
          FROM teams t JOIN team_members m ON m.team_id = t.id
          LEFT JOIN team_logos logo ON logo.team_id = t.id
+         LEFT JOIN team_log_settings logs ON logs.team_id = t.id
          WHERE m.user_id = ? ORDER BY LOWER(t.name)`,
       userId
     );
@@ -98,7 +101,7 @@ export class TeamsService {
       subjectType: "team",
       subjectId: id,
     });
-    return { id, name, role: "owner", logoUpdatedAt, createdAt: now };
+    return { id, name, role: "owner", logoUpdatedAt, logsEnabled: false, createdAt: now };
   }
 
   async update(
@@ -371,9 +374,11 @@ export class TeamsService {
 
   private async getSummary(userId: string, teamId: string): Promise<TeamSummary> {
     const row = await this.database.get<TeamRow>(
-      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at, t.created_at
+      `SELECT t.id, t.name, m.role, logo.updated_at AS logo_updated_at,
+       COALESCE(logs.enabled, FALSE) AS logs_enabled, t.created_at
        FROM teams t JOIN team_members m ON m.team_id = t.id
        LEFT JOIN team_logos logo ON logo.team_id = t.id
+       LEFT JOIN team_log_settings logs ON logs.team_id = t.id
        WHERE t.id = ? AND m.user_id = ?`,
       teamId,
       userId
@@ -388,6 +393,7 @@ export class TeamsService {
       name: team.name,
       role: team.role,
       logoUpdatedAt: team.logo_updated_at,
+      logsEnabled: team.logs_enabled,
       createdAt: team.created_at,
     };
   }

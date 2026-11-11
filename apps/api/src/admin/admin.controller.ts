@@ -43,8 +43,10 @@ import {
   UpdateGlobalUserAccessDto,
   UpdatePlatformSettingsDto,
   UpdateSponsorDto,
+  UpdateTeamLogsDto,
 } from "./admin.dto.js";
 import { AdminSponsorshipsService } from "./admin-sponsorships.service.js";
+import { AdminTeamsService } from "./admin-teams.service.js";
 import { AdminUsersService } from "./admin-users.service.js";
 import { AdminService } from "./admin.service.js";
 import { GlobalAdminGuard } from "./global-admin.guard.js";
@@ -66,6 +68,7 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly users: AdminUsersService,
+    private readonly teams: AdminTeamsService,
     private readonly sponsorships: AdminSponsorshipsService,
     private readonly settings: PlatformSettingsService
   ) {}
@@ -104,6 +107,25 @@ export class AdminController {
   @HttpCode(204)
   resetUserTwoFactor(@CurrentUser() actor: AuthenticatedUser, @Param("id") id: string) {
     return this.users.resetTwoFactor(actor.id, id);
+  }
+
+  @Get("teams")
+  teamList(
+    @Query("search") search?: string,
+    @Query("logs") logs?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string
+  ) {
+    return this.teams.list({ search, logs, limit, offset });
+  }
+
+  @Patch("teams/:id/logs")
+  updateTeamLogs(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() input: UpdateTeamLogsDto
+  ) {
+    return this.teams.setLogs(actor.id, id, input.enabled);
   }
 
   @Get("settings")
