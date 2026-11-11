@@ -213,37 +213,49 @@ async function seedApiTokens(context: SeedContext): Promise<void> {
       name: "Local automation",
       expiresAt: at(context, days(90)),
       lastUsedAt: at(context, -hours(1)),
+      access: "write",
     },
     {
       key: "permanent",
       name: "Dashboard integration",
       expiresAt: null,
       lastUsedAt: null,
+      access: "read",
     },
     {
       key: "expired",
       name: "Expired deployment",
       expiresAt: at(context, -days(1)),
       lastUsedAt: at(context, -days(10)),
+      access: "read",
     },
-  ];
+  ] as const;
   for (const [index, token] of tokens.entries()) {
     const value = seedSecret(context, "mim_pat", token.key);
+    const tokenId = seedId(context, `api-token:${token.key}`);
     await context.database.run(
       `INSERT INTO api_tokens
-       (id, user_id, name, token_prefix, token_hash, expires_at, last_used_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       (id, user_id, name, token_prefix, token_hash, access, expires_at, last_used_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, token_prefix = excluded.token_prefix,
-       token_hash = excluded.token_hash, expires_at = excluded.expires_at,
+       token_hash = excluded.token_hash, access = excluded.access, expires_at = excluded.expires_at,
        last_used_at = excluded.last_used_at`,
-      seedId(context, `api-token:${token.key}`),
+      tokenId,
       context.userId,
       token.name,
       value.slice(0, 16),
       hashSecret(value),
+      token.access,
       token.expiresAt,
       token.lastUsedAt,
       at(context, -days(40 - index * 5))
+    );
+    await context.database.run(
+      `INSERT INTO api_token_teams (api_token_id, team_id, role) VALUES (?, ?, ?)
+       ON CONFLICT (api_token_id, team_id) DO UPDATE SET role = excluded.role`,
+      tokenId,
+      context.teamId,
+      token.access === "write" ? "admin" : "viewer"
     );
   }
 }
