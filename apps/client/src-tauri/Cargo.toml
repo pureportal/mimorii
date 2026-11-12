@@ -1,6 +1,6 @@
 [package]
 name = "mimorii-client"
-version = "15.1.0"
+version = "15.2.0"
 description = "Mimorii desktop and mobile client"
 authors = ["Mimorii contributors"]
 edition = "2024"
