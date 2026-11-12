@@ -5,6 +5,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -46,6 +47,8 @@ import {
   UpdateTeamLogsDto,
 } from "./admin.dto.js";
 import { AdminSponsorshipsService } from "./admin-sponsorships.service.js";
+import { AdminPasswordResetDto } from "../auth/auth.dto.js";
+import { PasswordResetService } from "../auth/password-reset.service.js";
 import { AdminTeamsService } from "./admin-teams.service.js";
 import { AdminUsersService } from "./admin-users.service.js";
 import { AdminService } from "./admin.service.js";
@@ -69,6 +72,7 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly users: AdminUsersService,
     private readonly teams: AdminTeamsService,
+    private readonly passwordResets: PasswordResetService,
     private readonly sponsorships: AdminSponsorshipsService,
     private readonly settings: PlatformSettingsService
   ) {}
@@ -101,6 +105,17 @@ export class AdminController {
   @HttpCode(204)
   revokeUserSessions(@CurrentUser() actor: AuthenticatedUser, @Param("id") id: string) {
     return this.users.revokeSessions(actor.id, id);
+  }
+
+  @Post("users/:id/password-reset")
+  @HttpCode(200)
+  @Header("Cache-Control", "no-store")
+  issuePasswordReset(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() input: AdminPasswordResetDto
+  ) {
+    return this.passwordResets.issueByAdministrator(actor.id, id, input.sendEmail);
   }
 
   @Delete("users/:id/two-factor")

@@ -11,6 +11,7 @@ import { OptionalAuthGuard } from "./optional-auth.guard.js";
 import { OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
 import { OAuthController } from "./oauth.controller.js";
 import { OAuthService } from "./oauth.service.js";
+import { PasswordResetService } from "./password-reset.service.js";
 import { SessionService } from "./session.service.js";
 import { TwoFactorSettingsService } from "./two-factor-settings.service.js";
 import { TwoFactorController } from "./two-factor.controller.js";
@@ -43,10 +44,18 @@ function jwtSecret(): string {
     OAuthClientMetadataService,
     OAuthService,
     SessionService,
+    PasswordResetService,
     TwoFactorService,
     TwoFactorSettingsService,
     { provide: APP_INTERCEPTOR, useClass: ApiTokenScopeInterceptor },
   ],
-  exports: [AuthService, AuthGuard, OptionalAuthGuard, OAuthService, JwtModule],
+  exports: [
+    AuthService,
+    AuthGuard,
+    OptionalAuthGuard,
+    OAuthService,
+    PasswordResetService,
+    JwtModule,
+  ],
 })
 export class AuthModule {}

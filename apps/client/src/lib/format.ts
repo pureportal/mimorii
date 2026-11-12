@@ -51,6 +51,10 @@ const dateTimeRangeFormat = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short",
 });
 
+export function formatDateTime(value: string): string {
+  return dateTimeRangeFormat.format(new Date(value));
+}
+
 export function formatDateTimeRange(start: string, end: string): string {
   return dateTimeRangeFormat.formatRange(new Date(start), new Date(end));
 }

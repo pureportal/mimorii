@@ -20,6 +20,9 @@ import {
   ChangePasswordDto,
   CreateApiTokenDto,
   LoginDto,
+  PasswordResetCompleteDto,
+  PasswordResetRequestDto,
+  PasswordResetTokenDto,
   RefreshSessionDto,
   RegisterDto,
   TourAcknowledgementParamsDto,
@@ -27,13 +30,15 @@ import {
 } from "./auth.dto.js";
 import { AuthService } from "./auth.service.js";
 import { CurrentUser } from "./current-user.decorator.js";
+import { PasswordResetService } from "./password-reset.service.js";
 
 @ApiTags("Authentication")
 @Controller("auth")
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
-    private readonly apiTokens: ApiTokensService
+    private readonly apiTokens: ApiTokensService,
+    private readonly passwordResets: PasswordResetService
   ) {}
 
   @Post("register")
@@ -51,6 +56,30 @@ export class AuthController {
   @ApiOkResponse({ description: "Authenticated session" })
   login(@Body() input: LoginDto) {
     return this.auth.login(input);
+  }
+
+  @Post("password-reset")
+  @HttpCode(202)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
+  async requestPasswordReset(@Body() input: PasswordResetRequestDto) {
+    await this.passwordResets.request(input.email);
+  }
+
+  @Post("password-reset/inspect")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
+  inspectPasswordReset(@Body() input: PasswordResetTokenDto) {
+    return this.passwordResets.inspect(input.token);
+  }
+
+  @Post("password-reset/complete")
+  @HttpCode(204)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Header("Cache-Control", "no-store")
+  async completePasswordReset(@Body() input: PasswordResetCompleteDto) {
+    await this.passwordResets.complete(input);
   }
 
   @Post("refresh")

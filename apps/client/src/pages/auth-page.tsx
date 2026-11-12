@@ -122,7 +122,17 @@ export function AuthPage({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
+                  <div className="flex items-center justify-between gap-3">
+                    <FieldLabel htmlFor="password">Password</FieldLabel>
+                    {mode === "login" ? (
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-semibold text-violet-strong"
+                      >
+                        Forgot password?
+                      </Link>
+                    ) : null}
+                  </div>
                   <PasswordInput
                     id="password"
                     name="password"

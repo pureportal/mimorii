@@ -10,6 +10,7 @@ import { ConfirmationDialog } from "../ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogHeader } from "../ui/dialog";
 import { Field, FieldError, FieldLabel } from "../ui/field";
 import { Input, Select } from "../ui/input";
+import { AdminPasswordResetSection } from "./admin-password-reset";
 import { api, jsonBody } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { formatCount, formatRelative } from "../../lib/format";
@@ -368,6 +369,7 @@ function AccessDialog({
                 <option value="administrator">Global Administrator</option>
               </Select>
             </Field>
+            {self ? null : <AdminPasswordResetSection userId={user.id} />}
             {user.twoFactorEnabledAt && !self ? (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
                 <span className="text-sm font-medium">Two-factor authentication</span>

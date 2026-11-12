@@ -5,6 +5,7 @@ import {
   type ApiTokenAccess,
   type TeamRole,
 } from "@mimorii/contracts";
+import { applyDecorators } from "@nestjs/common";
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
@@ -34,12 +35,7 @@ export class RegisterDto {
   @Length(3, 320)
   email!: string;
 
-  @ApiProperty({ minLength: 12, maxLength: 128 })
-  @IsString()
-  @Length(12, 128)
-  @Matches(/[a-z]/, { message: "Password must include a lowercase letter" })
-  @Matches(/[A-Z]/, { message: "Password must include an uppercase letter" })
-  @Matches(/[0-9]/, { message: "Password must include a number" })
+  @StrongPassword()
   password!: string;
 
   @ApiProperty({ enum: [true] })
@@ -81,12 +77,7 @@ export class ChangePasswordDto {
   @Length(1, 128)
   currentPassword!: string;
 
-  @ApiProperty({ minLength: 12, maxLength: 128 })
-  @IsString()
-  @Length(12, 128)
-  @Matches(/[a-z]/, { message: "Password must include a lowercase letter" })
-  @Matches(/[A-Z]/, { message: "Password must include an uppercase letter" })
-  @Matches(/[0-9]/, { message: "Password must include a number" })
+  @StrongPassword()
   newPassword!: string;
 }
 
@@ -130,4 +121,46 @@ export class RefreshSessionDto {
   @IsString()
   @Length(32, 128)
   refreshToken!: string;
+}
+
+function StrongPassword(): PropertyDecorator {
+  return applyDecorators(
+    ApiProperty({ minLength: 12, maxLength: 128 }),
+    IsString(),
+    Length(12, 128),
+    Matches(/[a-z]/, { message: "Password must include a lowercase letter" }),
+    Matches(/[A-Z]/, { message: "Password must include an uppercase letter" }),
+    Matches(/[0-9]/, { message: "Password must include a number" })
+  );
+}
+
+export class PasswordResetRequestDto {
+  @ApiProperty({ example: "aiko@example.com" })
+  @IsEmail()
+  @Length(3, 320)
+  email!: string;
+}
+
+export class PasswordResetTokenDto {
+  @ApiProperty()
+  @IsString()
+  @Length(20, 200)
+  token!: string;
+}
+
+export class PasswordResetCompleteDto extends PasswordResetTokenDto {
+  @StrongPassword()
+  password!: string;
+
+  @ApiPropertyOptional({ description: "Authenticator code or recovery code" })
+  @IsOptional()
+  @IsString()
+  @Length(6, 32)
+  code?: string;
+}
+
+export class AdminPasswordResetDto {
+  @ApiProperty()
+  @IsBoolean()
+  sendEmail!: boolean;
 }

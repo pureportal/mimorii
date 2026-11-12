@@ -40,6 +40,12 @@ const LogAlertsPage = lazy(() =>
 const LogSourcesPage = lazy(() =>
   import("./pages/log-sources-page").then((module) => ({ default: module.LogSourcesPage }))
 );
+const ForgotPasswordPage = lazy(() =>
+  import("./pages/password-reset-pages").then((module) => ({ default: module.ForgotPasswordPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import("./pages/password-reset-pages").then((module) => ({ default: module.ResetPasswordPage }))
+);
 const McpPage = lazy(() =>
   import("./pages/mcp-page").then((module) => ({ default: module.McpPage }))
 );
@@ -126,6 +132,8 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           />
           <Route path="/login" element={<AuthPage mode="login" compact={androidClient} />} />
           <Route path="/register" element={<AuthPage mode="register" compact={androidClient} />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/mcp" element={<McpPage />} />
           <Route path="/sponsors" element={<SponsorsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

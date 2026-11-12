@@ -1,5 +1,6 @@
 export * from "./log-query.js";
 export * from "./logs.js";
+export * from "./password-reset.js";
 export * from "./two-factor.js";
 
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;

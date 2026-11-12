@@ -261,7 +261,17 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20261112000000");
+      expect(migration?.name).toBe("Migration20261113000000");
+
+      const releaseColumns = await database.all<{ table_name: string; column_name: string }>(
+        `SELECT table_name, column_name FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND ((table_name = 'password_reset_tokens' AND column_name = 'token_hash'))
+         ORDER BY table_name, column_name`
+      );
+      expect(releaseColumns).toEqual([
+        { table_name: "password_reset_tokens", column_name: "token_hash" },
+      ]);
 
       const teamSlugColumn = await database.all<{ column_name: string }>(
         `SELECT column_name FROM information_schema.columns
