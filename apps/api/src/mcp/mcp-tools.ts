@@ -179,7 +179,8 @@ export function registerMcpTools(
     "update_resource",
     {
       title: "Update resource",
-      description: "Update a resource's name, kind, description, or tags.",
+      description:
+        "Update a resource's name, kind, description, tags, or log query. The log query is a stream selector such as {service=\"checkout\"} that links the resource's logs to its incidents; null removes it.",
       inputSchema: z
         .object({
           teamId: identifier,
@@ -188,25 +189,28 @@ export function registerMcpTools(
           kind: z.enum(resourceKinds).optional(),
           description: z.string().trim().max(500).optional(),
           tags: z.array(z.string().trim().min(1).max(32)).max(12).optional(),
+          logQuery: z.string().trim().min(1).max(2_000).nullable().optional(),
         })
         .strict()
         .refine(
-          ({ name, kind, description, tags }) =>
+          ({ name, kind, description, tags, logQuery }) =>
             name !== undefined ||
             kind !== undefined ||
             description !== undefined ||
-            tags !== undefined,
+            tags !== undefined ||
+            logQuery !== undefined,
           { message: "Provide at least one resource field to update" }
         ),
       annotations: internalMutationAnnotations,
     },
-    ({ teamId, resourceId, name, kind, description, tags }) =>
+    ({ teamId, resourceId, name, kind, description, tags, logQuery }) =>
       executeMutation(scopes, () =>
         services.resources.update(userId, teamId, resourceId, {
           name,
           kind,
           description,
           tags,
+          logQuery,
         })
       )
   );

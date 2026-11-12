@@ -9,6 +9,7 @@ import {
 } from "@mimorii/contracts";
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import type { IncidentLogsService } from "../logs/incident-logs.service.js";
 import type { LogAlertsService } from "../logs/log-alerts.service.js";
 import type { LogInsightsService } from "../logs/log-insights.service.js";
 import type { LogsQueryService } from "../logs/logs-query.service.js";
@@ -23,6 +24,7 @@ export interface McpLogToolServices {
   logs: Pick<LogsQueryService, "entries" | "volume" | "labels" | "context">;
   logInsights: Pick<LogInsightsService, "patterns" | "fields">;
   logAlerts: Pick<LogAlertsService, "list" | "preview" | "create">;
+  incidentLogs: Pick<IncidentLogsService, "forIncident">;
 }
 
 export const logWriteToolNames = ["create_log_alert_rule"] as const;
@@ -177,6 +179,43 @@ export function registerMcpLogTools(
           before: context.before.map(compactEntry),
           line: compactEntry(context.entry),
           after: context.after.map(compactEntry),
+        };
+      })
+  );
+
+  server.registerTool(
+    "get_incident_logs",
+    {
+      title: "Get incident logs",
+      description: `Get the log volume and most severe log patterns around an incident, from 15 minutes before it started until 15 minutes after it ended. Covers the log alert rule that opened it and its resources that have a log query; unlinkedResources lists resources without one, which update_resource can link after list_log_labels shows matching labels. Use this to gather evidence before investigating or fixing an incident. ${teamOnlyNote}`,
+      inputSchema: z.object({ teamId: identifier, incidentId: identifier }).strict(),
+      annotations: readOnlyAnnotations,
+    },
+    ({ teamId, incidentId }) =>
+      executeTool(async () => {
+        const logs = await services.incidentLogs.forIncident(userId, teamId, incidentId);
+        return {
+          from: logs.from,
+          to: logs.to,
+          streams: logs.streams.map((stream) => ({
+            label: stream.label,
+            query: stream.query,
+            total: stream.volume.total,
+            levels: stream.volume.levels,
+            busiest: stream.volume.buckets
+              .filter((bucket) => bucket.total > 0)
+              .toSorted((left, right) => right.total - left.total)
+              .slice(0, 5),
+            patterns: stream.patterns.map((pattern) => ({
+              pattern: pattern.pattern,
+              count: pattern.count,
+              levels: pattern.levels,
+              firstSeen: pattern.firstSeen,
+              lastSeen: pattern.lastSeen,
+              sample: pattern.sample,
+            })),
+          })),
+          unlinkedResources: logs.unlinkedResources,
         };
       })
   );

@@ -114,6 +114,7 @@ function resource(id: string, name: string): ResourceSummary {
     kind: "service",
     description: null,
     tags: [],
+    logQuery: null,
     agent: null,
     status: "okay",
     checksPassing: 1,

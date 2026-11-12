@@ -105,6 +105,11 @@ export function OperationsPage({ view }: { view: OperationsView }) {
   const activeMaintenance =
     maintenance.data?.filter((window) => window.status === "active").length ?? 0;
   const resourceNames = resourceOptionLabels(resources.data ?? []);
+  const loggedResourceIds = activeTeam!.logsEnabled
+    ? new Set(
+        (resources.data ?? []).flatMap((resource) => (resource.logQuery ? [resource.id] : []))
+      )
+    : null;
 
   return (
     <div className="space-y-6">
@@ -160,6 +165,7 @@ export function OperationsPage({ view }: { view: OperationsView }) {
           <IncidentList
             incidents={incidents.data ?? []}
             resourceNames={resourceNames}
+            loggedResourceIds={loggedResourceIds}
             canManage={canManage}
             onEdit={(incident) => {
               setEditingIncident(incident);

@@ -5,6 +5,7 @@ import { responseAbortSignal } from "../common/abort-signal.js";
 import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
+import { IncidentLogsService } from "./incident-logs.service.js";
 import { LogInsightsService } from "./log-insights.service.js";
 import { LogSettingsService } from "./log-settings.service.js";
 import {
@@ -24,7 +25,8 @@ export class LogsController {
   constructor(
     private readonly logs: LogsQueryService,
     private readonly insights: LogInsightsService,
-    private readonly settings: LogSettingsService
+    private readonly settings: LogSettingsService,
+    private readonly incidentLogs: IncidentLogsService
   ) {}
 
   @Get()
@@ -65,6 +67,21 @@ export class LogsController {
     @Res({ passthrough: true }) response: Response
   ) {
     return this.insights.fields(user.id, teamId, input, responseAbortSignal(response));
+  }
+
+  @Get("incidents/:incidentId")
+  incident(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Param("incidentId") incidentId: string,
+    @Res({ passthrough: true }) response: Response
+  ) {
+    return this.incidentLogs.forIncident(
+      user.id,
+      teamId,
+      incidentId,
+      responseAbortSignal(response)
+    );
   }
 
   @Get("labels")

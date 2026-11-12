@@ -30,11 +30,13 @@ export const LogVolumeChart = memo(function LogVolumeChart({
   selectedLevels,
   onToggleLevel,
   onZoom,
+  highlight,
 }: {
   volume: LogVolume;
   selectedLevels: LogLevel[];
   onToggleLevel: (level: LogLevel) => void;
   onZoom: (from: Date, to: Date) => void;
+  highlight?: { from: string; to: string };
 }) {
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const points = useMemo<VolumePoint[]>(
@@ -51,6 +53,13 @@ export const LogVolumeChart = memo(function LogVolumeChart({
     (level) => volume.levels[level] || selectedLevels.includes(level)
   );
   const multiDay = Date.parse(volume.to) - Date.parse(volume.from) > 86_400_000;
+  const highlighted = highlight
+    ? points.filter(
+        (point) =>
+          Date.parse(point.key) + volume.stepSeconds * 1_000 > Date.parse(highlight.from) &&
+          Date.parse(point.key) < Date.parse(highlight.to)
+      )
+    : [];
 
   function finishSelection() {
     if (!selection) return;
@@ -133,6 +142,15 @@ export const LogVolumeChart = memo(function LogVolumeChart({
               cursor={{ fill: "var(--color-ink)", fillOpacity: 0.05 }}
               content={<VolumeTooltip points={points} stepSeconds={volume.stepSeconds} />}
             />
+            {highlighted.length ? (
+              <ReferenceArea
+                x1={highlighted[0]!.key}
+                x2={highlighted.at(-1)!.key}
+                fill="var(--color-coral)"
+                fillOpacity={0.12}
+                stroke="none"
+              />
+            ) : null}
             {presentLevels.map((level) => (
               <Bar
                 key={level}

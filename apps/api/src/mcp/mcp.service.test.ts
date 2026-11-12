@@ -71,6 +71,74 @@ describe("Mimorii MCP handler", () => {
       cursor: undefined,
     });
     expect(result.lines[0]!.message).toHaveLength(2_001);
+
+    const incidentId = "0d7c2f3a-8b1e-4c5d-9e6f-1a2b3c4d5e6f";
+    const forIncident = vi.fn(async () => ({
+      from: "2026-11-10T09:45:00.000Z",
+      to: "2026-11-10T10:45:00.000Z",
+      streams: [
+        {
+          label: "Checkout",
+          query: '{service="checkout"}',
+          volume: {
+            from: "2026-11-10T09:45:00.000Z",
+            to: "2026-11-10T10:45:00.000Z",
+            stepSeconds: 60,
+            total: 7,
+            levels: { error: 5, info: 2 },
+            buckets: [
+              { start: "2026-11-10T10:00:00.000Z", total: 0, levels: {} },
+              { start: "2026-11-10T10:01:00.000Z", total: 7, levels: { error: 5, info: 2 } },
+            ],
+          },
+          patterns: [
+            {
+              pattern: "Payment timeout after <_> ms",
+              count: 5,
+              levels: { error: 5 },
+              firstSeen: "2026-11-10T10:01:00.000Z",
+              lastSeen: "2026-11-10T10:01:30.000Z",
+              sample: "Payment timeout after 2000 ms",
+              trend: [0, 5],
+            },
+          ],
+        },
+      ],
+      unlinkedResources: [{ id: "resource-2", name: "Payments" }],
+    }));
+    const incidentHandler = createHandler({ incidentLogs: { forIncident } });
+    const incidentLogs = await send(
+      incidentHandler,
+      auth("user-1"),
+      "tools/call",
+      { name: "get_incident_logs", arguments: { teamId, incidentId } },
+      "get_incident_logs"
+    );
+    expect(forIncident).toHaveBeenCalledWith("user-1", teamId, incidentId);
+    expect((await json(incidentLogs)).result!.structuredContent).toEqual({
+      from: "2026-11-10T09:45:00.000Z",
+      to: "2026-11-10T10:45:00.000Z",
+      streams: [
+        {
+          label: "Checkout",
+          query: '{service="checkout"}',
+          total: 7,
+          levels: { error: 5, info: 2 },
+          busiest: [{ start: "2026-11-10T10:01:00.000Z", total: 7, levels: { error: 5, info: 2 } }],
+          patterns: [
+            {
+              pattern: "Payment timeout after <_> ms",
+              count: 5,
+              levels: { error: 5 },
+              firstSeen: "2026-11-10T10:01:00.000Z",
+              lastSeen: "2026-11-10T10:01:30.000Z",
+              sample: "Payment timeout after 2000 ms",
+            },
+          ],
+        },
+      ],
+      unlinkedResources: [{ id: "resource-2", name: "Payments" }],
+    });
     expect(result.explorePath).toContain("/app/monitoring/logs?");
 
     const ruleInput = {
@@ -145,6 +213,7 @@ describe("Mimorii MCP handler", () => {
       "list_log_labels",
       "list_log_fields",
       "get_log_context",
+      "get_incident_logs",
       "list_log_alert_rules",
       "test_log_alert_rule",
       "create_log_alert_rule",
@@ -700,7 +769,7 @@ describe("Mimorii MCP handler", () => {
     const listResponse = await handler.fetch(listRequest, { authInfo: auth("user-1") });
     expect(listResponse.status).toBe(200);
     const legacyTools = (await json(listResponse)).result!.tools!;
-    expect(legacyTools).toHaveLength(28);
+    expect(legacyTools).toHaveLength(29);
     expect(mcpMetadata(legacyTools.find((tool) => tool.name === "get_team_overview")!)).toEqual({
       ui: { resourceUri: teamOverviewAppUri, visibility: ["model", "app"] },
     });
@@ -742,6 +811,7 @@ function createHandler(overrides: Partial<McpToolServices> = {}): McpHttpHandler
     logs: overrides.logs ?? defaults.logs,
     logInsights: overrides.logInsights ?? defaults.logInsights,
     logAlerts: overrides.logAlerts ?? defaults.logAlerts,
+    incidentLogs: overrides.incidentLogs ?? defaults.incidentLogs,
   };
   const handler = createMimoriiMcpHandler(services);
   handlers.push(handler);
@@ -773,6 +843,7 @@ function emptyServices(): McpToolServices {
     logs: { entries: unavailable, volume: unavailable, labels: unavailable, context: unavailable },
     logInsights: { patterns: unavailable, fields: unavailable },
     logAlerts: { list: unavailable, preview: unavailable, create: unavailable },
+    incidentLogs: { forIncident: unavailable },
   };
 }
 
@@ -891,6 +962,7 @@ function resource(name: string, requestedTeamId: string, index = 0): ResourceSum
     kind: "service",
     description: null,
     tags: [],
+    logQuery: null,
     agent: null,
     status: "up",
     checksPassing: 1,

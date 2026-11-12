@@ -13,6 +13,8 @@ import { ResourceHealthService } from "../common/resource-health.service.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
+import { logStreamMatchers, parseLogQueryInput } from "../logs/log-query-sql.js";
+import { LogSearchService } from "../logs/log-search.service.js";
 import type { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
 
 interface ResourceRow {
@@ -22,6 +24,7 @@ interface ResourceRow {
   kind: ResourceKind;
   description: string | null;
   tags_json: string;
+  log_query: string | null;
   agent_id: string | null;
   agent_kind: AgentKind | null;
   agent_platform: string | null;
@@ -42,7 +45,8 @@ export class ResourcesService {
     private readonly access: TeamAccessService,
     private readonly maintenance: MaintenanceService,
     private readonly audit: AuditService,
-    private readonly health: ResourceHealthService
+    private readonly health: ResourceHealthService,
+    private readonly logSearch: LogSearchService
   ) {}
 
   async list(userId: string, teamId: string): Promise<ResourceSummary[]> {
@@ -82,16 +86,18 @@ export class ResourcesService {
     const id = randomUUID();
     const now = new Date().toISOString();
     const tags = this.tags(input.tags);
+    const logQuery = await this.logQuery(input.logQuery);
     await this.database.run(
       `INSERT INTO resources
-       (id, team_id, name, kind, description, tags_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, team_id, name, kind, description, tags_json, log_query, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.name.trim(),
       input.kind,
       input.description?.trim() || null,
       JSON.stringify(tags),
+      logQuery ?? null,
       now,
       now
     );
@@ -117,16 +123,19 @@ export class ResourcesService {
       kind: ResourceKind;
       description: string | null;
       tags_json: string;
+      log_query: string | null;
     }>("SELECT * FROM resources WHERE team_id = ? AND id = ?", teamId, id);
     if (!current) throw new NotFoundException("Resource not found");
+    const logQuery = await this.logQuery(input.logQuery);
 
     await this.database.run(
-      `UPDATE resources SET name = ?, kind = ?, description = ?, tags_json = ?,
+      `UPDATE resources SET name = ?, kind = ?, description = ?, tags_json = ?, log_query = ?,
        updated_at = ? WHERE id = ? AND team_id = ?`,
       input.name?.trim() ?? current.name,
       input.kind ?? current.kind,
       input.description === undefined ? current.description : input.description.trim() || null,
       input.tags === undefined ? current.tags_json : JSON.stringify(this.tags(input.tags)),
+      logQuery === undefined ? current.log_query : logQuery,
       new Date().toISOString(),
       id,
       teamId
@@ -213,6 +222,7 @@ export class ResourcesService {
       kind: row.kind,
       description: row.description,
       tags: JSON.parse(row.tags_json) as string[],
+      logQuery: row.log_query,
       agent: row.agent_id
         ? {
             id: row.agent_id,
@@ -231,6 +241,18 @@ export class ResourcesService {
       imageUpdatedAt: row.image_updated_at,
       createdAt: row.created_at,
     };
+  }
+
+  private async logQuery(value: string | null | undefined): Promise<string | null | undefined> {
+    if (value === undefined) return undefined;
+    const text = value?.trim();
+    if (!text) return null;
+    const query = parseLogQueryInput(text);
+    if (!logStreamMatchers(query).length) {
+      throw new BadRequestException("Log query must select streams by label");
+    }
+    await this.logSearch.validate(query);
+    return text;
   }
 
   private tags(tags: string[] | undefined): string[] {

@@ -10,6 +10,7 @@ const resource: ResourceSummary = {
   kind: "host",
   description: null,
   tags: [],
+  logQuery: null,
   agent: null,
   status: "okay",
   checksPassing: 1,

@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { resourceKinds, type ResourceKind } from "@mimorii/contracts";
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Length } from "class-validator";
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  MaxLength,
+  ValidateIf,
+} from "class-validator";
 
 export class CreateResourceDto {
   @ApiProperty({ minLength: 1, maxLength: 100 })
@@ -24,6 +33,13 @@ export class CreateResourceDto {
   @ArrayMaxSize(12)
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2_000 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(2_000)
+  logQuery?: string | null;
 }
 
 export class UpdateResourceDto extends PartialType(CreateResourceDto) {}

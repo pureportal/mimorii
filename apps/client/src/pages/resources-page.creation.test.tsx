@@ -34,6 +34,7 @@ const website: ResourceSummary = {
   kind: "service",
   description: null,
   tags: [],
+  logQuery: null,
   agent: null,
   status: "pending",
   checksPassing: 0,

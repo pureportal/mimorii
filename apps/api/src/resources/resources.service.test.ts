@@ -4,6 +4,7 @@ import type { AuditService } from "../common/audit.service.js";
 import type { DatabaseService } from "../database/database.service.js";
 import type { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { ResourceHealthService } from "../common/resource-health.service.js";
+import type { LogSearchService } from "../logs/log-search.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
 import { ResourcesService } from "./resources.service.js";
 
@@ -21,7 +22,8 @@ function service(
     { record: vi.fn(async () => undefined) } as unknown as AuditService,
     {
       forResources: vi.fn(async () => new Map([["resource-1", status]])),
-    } as unknown as ResourceHealthService
+    } as unknown as ResourceHealthService,
+    { validate: vi.fn(async () => undefined) } as unknown as LogSearchService
   );
 }
 
@@ -32,6 +34,7 @@ const row = {
   kind: "service",
   description: null,
   tags_json: "[]",
+  log_query: null,
   agent_id: null,
   agent_kind: null,
   agent_platform: null,
@@ -120,6 +123,7 @@ describe("ResourcesService", () => {
       "service",
       null,
       "[]",
+      null,
       expect.any(String),
       expect.any(String)
     );

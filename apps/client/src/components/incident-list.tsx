@@ -1,9 +1,10 @@
 import type { IncidentSummary } from "@mimorii/contracts";
-import { Activity, ArrowUpRight, Pencil, ScrollText, Send } from "lucide-react";
+import { Activity, ArrowUpRight, Logs, Pencil, ScrollText, Send } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../lib/app-navigation";
 import { formatCount, formatDuration, formatRelative } from "../lib/format";
+import { IncidentLogsPanel } from "./incident-logs-panel";
 import { EmptyState } from "./page-state";
 import { StatusBadge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -12,12 +13,14 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 export function IncidentList({
   incidents,
   resourceNames,
+  loggedResourceIds,
   canManage,
   onEdit,
   onUpdate,
 }: {
   incidents: IncidentSummary[];
   resourceNames: ReadonlyMap<string, string>;
+  loggedResourceIds: ReadonlySet<string> | null;
   canManage: boolean;
   onEdit: (incident: IncidentSummary) => void;
   onUpdate: (incident: IncidentSummary) => void;
@@ -41,6 +44,11 @@ export function IncidentList({
           key={incident.id}
           incident={incident}
           resourceNames={resourceNames}
+          hasLogs={
+            loggedResourceIds !== null &&
+            (incident.logAlertRuleId !== null ||
+              incident.resources.some((resource) => loggedResourceIds.has(resource.id)))
+          }
           canManage={canManage}
           onEdit={onEdit}
           onUpdate={onUpdate}
@@ -62,17 +70,20 @@ export function IncidentList({
 function IncidentCard({
   incident,
   resourceNames,
+  hasLogs,
   canManage,
   onEdit,
   onUpdate,
 }: {
   incident: IncidentSummary;
   resourceNames: ReadonlyMap<string, string>;
+  hasLogs: boolean;
   canManage: boolean;
   onEdit: (incident: IncidentSummary) => void;
   onUpdate: (incident: IncidentSummary) => void;
 }) {
   const latest = incident.updates[0];
+  const [logsOpen, setLogsOpen] = useState(false);
 
   return (
     <article>
@@ -124,6 +135,17 @@ function IncidentCard({
                 </Link>
               </Button>
             ) : null}
+            {hasLogs ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className={logsOpen ? "border-lavender bg-lavender-soft" : undefined}
+                aria-expanded={logsOpen}
+                onClick={() => setLogsOpen((open) => !open)}
+              >
+                <Logs /> Logs
+              </Button>
+            ) : null}
             {canManage ? (
               <>
                 <Button variant="ghost" size="sm" onClick={() => onEdit(incident)}>
@@ -138,6 +160,12 @@ function IncidentCard({
             ) : null}
           </div>
         </CardHeader>
+
+        {logsOpen ? (
+          <CardContent className="border-t border-line p-4 sm:px-5">
+            <IncidentLogsPanel incident={incident} />
+          </CardContent>
+        ) : null}
 
         {latest ? (
           <CardContent className="border-t border-line bg-ink/[.015] p-4 sm:px-5">

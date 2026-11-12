@@ -15,6 +15,7 @@ import { mcpResourceUrl } from "../auth/oauth-config.js";
 import { ChecksService } from "../checks/checks.service.js";
 import { HeartbeatsService } from "../heartbeats/heartbeats.service.js";
 import { IncidentsService } from "../incidents/incidents.service.js";
+import { IncidentLogsService } from "../logs/incident-logs.service.js";
 import { LogAlertsService } from "../logs/log-alerts.service.js";
 import { LogInsightsService } from "../logs/log-insights.service.js";
 import { LogsQueryService } from "../logs/logs-query.service.js";
@@ -37,7 +38,8 @@ const monitoringInstructions =
   "For each relevant team, call get_team_overview; use list_resources and list_checks for resource and check details. " +
   "Treat returned status values and timestamps as the current monitoring state. " +
   "For application logs, use get_log_volume or get_log_patterns to get an overview and search_logs to read lines; " +
-  "list_log_labels and list_log_fields show what can be filtered. Logs are available only for teams where they are enabled.";
+  "list_log_labels and list_log_fields show what can be filtered; get_incident_logs gathers the logs around an incident. " +
+  "Logs are available only for teams where they are enabled.";
 
 @Injectable()
 export class McpService implements OnApplicationShutdown {
@@ -56,7 +58,8 @@ export class McpService implements OnApplicationShutdown {
     objectives: ObjectivesService,
     logs: LogsQueryService,
     logInsights: LogInsightsService,
-    logAlerts: LogAlertsService
+    logAlerts: LogAlertsService,
+    incidentLogs: IncidentLogsService
   ) {
     const services: McpToolServices = {
       teams,
@@ -70,6 +73,7 @@ export class McpService implements OnApplicationShutdown {
       logs,
       logInsights,
       logAlerts,
+      incidentLogs,
     };
     this.handler = createMimoriiMcpHandler(services, (error) => this.logger.error(error.stack));
     this.nodeHandler = toNodeHandler(this.handler, {

@@ -79,6 +79,20 @@ export interface LogPattern {
   trend: number[];
 }
 
+export interface IncidentLogStream {
+  label: string;
+  query: string;
+  volume: LogVolume;
+  patterns: LogPattern[];
+}
+
+export interface IncidentLogs {
+  from: string;
+  to: string;
+  streams: IncidentLogStream[];
+  unlinkedResources: Array<{ id: string; name: string }>;
+}
+
 export interface LogPatternsResult {
   sampled: number;
   limited: boolean;

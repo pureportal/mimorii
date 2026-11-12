@@ -19,6 +19,7 @@ import {
   Database,
   Eye,
   ImageIcon,
+  Logs,
   MemoryStick,
   Network,
   Pencil,
@@ -189,6 +190,15 @@ export function ResourceDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {activeTeam!.logsEnabled && resource.data.logQuery ? (
+            <Button asChild variant="outline">
+              <Link
+                to={`${appRoutes.logs}?${new URLSearchParams({ query: resource.data.logQuery })}`}
+              >
+                <Logs /> Logs
+              </Link>
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => setImageOpen(true)}>
             <ImageIcon /> Change image
           </Button>
@@ -778,6 +788,7 @@ function EditResourceDialog({
   const [name, setName] = useState(resource.name);
   const [description, setDescription] = useState(resource.description ?? "");
   const [tags, setTags] = useState(resource.tags.join(", "));
+  const [logQuery, setLogQuery] = useState(resource.logQuery ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -785,6 +796,7 @@ function EditResourceDialog({
       setName(resource.name);
       setDescription(resource.description ?? "");
       setTags(resource.tags.join(", "));
+      setLogQuery(resource.logQuery ?? "");
       setError("");
     }
   }, [open, resource]);
@@ -802,6 +814,7 @@ function EditResourceDialog({
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean),
+          ...(activeTeam!.logsEnabled ? { logQuery: logQuery.trim() || null } : {}),
         }),
       });
       await onSaved();
@@ -840,6 +853,20 @@ function EditResourceDialog({
             <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
             <Input id="edit-tags" value={tags} onChange={(event) => setTags(event.target.value)} />
           </Field>
+          {activeTeam!.logsEnabled ? (
+            <Field>
+              <FieldLabel htmlFor="edit-log-query">Log query</FieldLabel>
+              <Input
+                id="edit-log-query"
+                value={logQuery}
+                onChange={(event) => setLogQuery(event.target.value)}
+                placeholder='{service="api"}'
+                maxLength={2000}
+                className="font-mono"
+                spellCheck={false}
+              />
+            </Field>
+          ) : null}
           <FieldError>{error}</FieldError>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

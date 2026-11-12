@@ -371,6 +371,7 @@ export interface ResourceSummary {
   kind: ResourceKind;
   description: string | null;
   tags: string[];
+  logQuery: string | null;
   agent: ResourceAgentSummary | null;
   status: ResourceStatus;
   checksPassing: number;

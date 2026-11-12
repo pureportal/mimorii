@@ -6,6 +6,7 @@ import { LogAlertsController } from "./log-alerts.controller.js";
 import { LogAlertsService } from "./log-alerts.service.js";
 import { LogIngestionController } from "./log-ingestion.controller.js";
 import { LogIngestionLimiter } from "./log-ingestion-limiter.js";
+import { IncidentLogsService } from "./incident-logs.service.js";
 import { LogIngestionService } from "./log-ingestion.service.js";
 import { LogInsightsService } from "./log-insights.service.js";
 import { LogRetentionService } from "./log-retention.service.js";
@@ -42,6 +43,7 @@ import { LogsQueryService } from "./logs-query.service.js";
     LogIngestionLimiter,
     LogRetentionService,
     LogSavedSearchesService,
+    IncidentLogsService,
   ],
   exports: [
     LogSettingsService,
@@ -49,6 +51,8 @@ import { LogsQueryService } from "./logs-query.service.js";
     LogRetentionService,
     LogsQueryService,
     LogInsightsService,
+    LogSearchService,
+    IncidentLogsService,
   ],
 })
 export class LogsModule {}

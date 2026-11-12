@@ -59,6 +59,7 @@ function createResource(
     kind: "host",
     description: null,
     tags: [],
+    logQuery: null,
     agent: overrides.agent
       ? {
           id: `agent-${overrides.id}`,

@@ -15,6 +15,8 @@ export class Migration20261113000000 extends Migration {
 
       CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id, created_at DESC);
 
+      ALTER TABLE resources ADD COLUMN log_query TEXT;
+
       ALTER TABLE checks
         DROP CONSTRAINT checks_type_check,
         ADD CONSTRAINT checks_type_check CHECK (
@@ -34,6 +36,8 @@ export class Migration20261113000000 extends Migration {
         ADD CONSTRAINT checks_type_check CHECK (
           type IN ('http', 'tcp', 'dns', 'icmp', 'wan', 'host', 'disk', 'docker', 'database')
         );
+
+      ALTER TABLE resources DROP COLUMN log_query;
 
       DROP TABLE password_reset_tokens;
     `);
