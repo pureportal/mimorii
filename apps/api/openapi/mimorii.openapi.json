@@ -7523,7 +7523,7 @@
   "info": {
     "title": "Mimorii API",
     "description": "Self-hosted uptime, server analytics, and relay-agent API.",
-    "version": "15.0.0",
+    "version": "15.1.0",
     "contact": {}
   },
   "tags": [
