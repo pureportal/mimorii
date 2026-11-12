@@ -79,6 +79,7 @@ describe("Foxytail heartbeat telemetry", () => {
       "paused",
       null,
       expect.any(String),
+      expect.any(String),
       "heartbeat"
     );
     row.enabled = 0;
@@ -88,6 +89,7 @@ describe("Foxytail heartbeat telemetry", () => {
       expect.any(String),
       1,
       "pending",
+      expect.any(String),
       expect.any(String),
       expect.any(String),
       "heartbeat"

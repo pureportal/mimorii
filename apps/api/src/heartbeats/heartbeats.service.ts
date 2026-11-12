@@ -5,6 +5,7 @@ import type {
   HeartbeatEventSummary,
   HeartbeatEventType,
   HeartbeatMonitorSummary,
+  HeartbeatTimelineBucket,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { AuditService } from "../common/audit.service.js";
@@ -36,10 +37,14 @@ interface HeartbeatRow {
   next_expected_at: string | null;
   last_duration_ms: number | null;
   last_message: string | null;
+  last_success_at: string | null;
+  status_changed_at: string | null;
   created_at: string;
 }
 
 interface HeartbeatSummaryRow extends HeartbeatRow {
+  last_event_type: HeartbeatEventType | null;
+  latest_metadata_json: string | null;
   runs_30d: number;
   successful_runs_30d: number;
   success_rate_30d: number | null;
@@ -57,7 +62,18 @@ interface HeartbeatEventRow {
   received_at: string;
 }
 
+interface TimelineRow {
+  heartbeat_id: string;
+  bucket: number;
+  succeeded: number;
+  failed: number;
+  missed: number;
+}
+
 type SignalType = Exclude<HeartbeatEventType, "missed">;
+
+const TIMELINE_HOURS = 24;
+const HOUR_MS = 3_600_000;
 
 @Injectable()
 export class HeartbeatsService {
@@ -79,12 +95,12 @@ export class HeartbeatsService {
     const rows = resourceId
       ? await this.rows("WHERE hm.team_id = ? AND hm.resource_id = ?", teamId, resourceId)
       : await this.rows("WHERE hm.team_id = ?", teamId);
-    return rows.map((row) => this.map(row));
+    return this.summaries(rows);
   }
 
   async get(userId: string, teamId: string, id: string): Promise<HeartbeatMonitorSummary> {
     await this.access.require(userId, teamId, "viewer");
-    return this.map(await this.requireRow(teamId, id));
+    return this.summary(await this.requireRow(teamId, id));
   }
 
   async create(
@@ -110,9 +126,9 @@ export class HeartbeatsService {
     await this.database.run(
       `INSERT INTO heartbeat_monitors
        (id, team_id, resource_id, name, token_hash, interval_seconds, grace_seconds,
-        max_runtime_seconds, enabled, current_status, next_expected_at, created_by,
-        created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        max_runtime_seconds, enabled, current_status, next_expected_at, status_changed_at,
+        created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.resourceId,
@@ -124,6 +140,7 @@ export class HeartbeatsService {
       enabled ? 1 : 0,
       enabled ? "pending" : "paused",
       nextExpectedAt,
+      createdAt,
       userId,
       createdAt,
       createdAt
@@ -135,7 +152,7 @@ export class HeartbeatsService {
       subjectType: "heartbeat",
       subjectId: id,
     });
-    return this.createdResult(await this.requireRow(teamId, id), token);
+    return this.createdResult(await this.summary(await this.requireRow(teamId, id)), token);
   }
 
   async update(
@@ -170,8 +187,9 @@ export class HeartbeatsService {
     }
     await this.database.run(
       `UPDATE heartbeat_monitors SET resource_id = ?, name = ?, interval_seconds = ?,
-       grace_seconds = ?, max_runtime_seconds = ?, enabled = ?, current_status = ?,
-       running_since = ?, next_expected_at = ?, updated_at = ?
+       grace_seconds = ?, max_runtime_seconds = ?, enabled = ?,
+       status_changed_at = CASE WHEN current_status = ? THEN status_changed_at ELSE ? END,
+       current_status = ?, running_since = ?, next_expected_at = ?, updated_at = ?
        WHERE id = ? AND team_id = ?`,
       resourceId,
       input.name?.trim() ?? current.name,
@@ -179,6 +197,8 @@ export class HeartbeatsService {
       input.graceSeconds ?? current.grace_seconds,
       input.maxRuntimeSeconds === undefined ? current.max_runtime_seconds : input.maxRuntimeSeconds,
       enabled ? 1 : 0,
+      status,
+      updatedAt,
       status,
       restarting || !enabled ? null : current.running_since,
       nextExpectedAt,
@@ -193,7 +213,7 @@ export class HeartbeatsService {
       subjectType: "heartbeat",
       subjectId: id,
     });
-    return this.map(await this.requireRow(teamId, id));
+    return this.summary(await this.requireRow(teamId, id));
   }
 
   async rotateToken(userId: string, teamId: string, id: string): Promise<CreatedHeartbeatMonitor> {
@@ -213,7 +233,7 @@ export class HeartbeatsService {
       subjectType: "heartbeat",
       subjectId: id,
     });
-    return this.createdResult(current, token);
+    return this.createdResult(await this.summary(current), token);
   }
 
   async remove(userId: string, teamId: string, id: string): Promise<void> {
@@ -275,10 +295,11 @@ export class HeartbeatsService {
       }
       await this.database.run(
         `UPDATE heartbeat_monitors SET enabled = ?, current_status = ?, running_since = NULL,
-         next_expected_at = ?, updated_at = ? WHERE id = ?`,
+         next_expected_at = ?, status_changed_at = ?, updated_at = ? WHERE id = ?`,
         enabled ? 1 : 0,
         enabled ? "pending" : "paused",
         enabled ? new Date(now.getTime() + current.interval_seconds * 1000).toISOString() : null,
+        now.toISOString(),
         now.toISOString(),
         current.id
       );
@@ -322,9 +343,11 @@ export class HeartbeatsService {
       );
       if (type === "started") {
         await this.database.run(
-          `UPDATE heartbeat_monitors SET current_status = 'up', last_ping_at = ?,
+          `UPDATE heartbeat_monitors SET status_changed_at = CASE WHEN current_status = 'up' THEN status_changed_at ELSE ? END,
+           current_status = 'up', last_ping_at = ?,
            last_started_at = ?, running_since = ?, next_expected_at = ?, last_message = ?,
            updated_at = ? WHERE id = ?`,
+          occurredAt,
           occurredAt,
           occurredAt,
           occurredAt,
@@ -335,9 +358,12 @@ export class HeartbeatsService {
         );
       } else if (type === "succeeded") {
         await this.database.run(
-          `UPDATE heartbeat_monitors SET current_status = 'up', last_ping_at = ?,
+          `UPDATE heartbeat_monitors SET status_changed_at = CASE WHEN current_status = 'up' THEN status_changed_at ELSE ? END,
+           current_status = 'up', last_ping_at = ?, last_success_at = ?,
            running_since = NULL, next_expected_at = ?, last_duration_ms = ?, last_message = ?,
            updated_at = ? WHERE id = ?`,
+          occurredAt,
+          occurredAt,
           occurredAt,
           nextExpectedAt,
           durationMs,
@@ -347,9 +373,12 @@ export class HeartbeatsService {
         );
       } else {
         await this.database.run(
-          `UPDATE heartbeat_monitors SET current_status = 'down', last_ping_at = ?,
+          `UPDATE heartbeat_monitors SET
+           status_changed_at = CASE WHEN current_status = 'down' THEN status_changed_at ELSE ? END,
+           current_status = 'down', last_ping_at = ?,
            running_since = NULL, next_expected_at = ?, last_duration_ms = ?, last_message = ?,
            updated_at = ? WHERE id = ?`,
+          occurredAt,
           occurredAt,
           nextExpectedAt,
           durationMs,
@@ -418,8 +447,10 @@ export class HeartbeatsService {
       );
       await this.database.run(
         `UPDATE heartbeat_monitors SET current_status = 'down', running_since = NULL,
-         last_message = ?, updated_at = ? WHERE id = ? AND current_status != 'down'`,
+         last_message = ?, status_changed_at = ?, updated_at = ?
+         WHERE id = ? AND current_status != 'down'`,
         message,
+        occurredAt,
         occurredAt,
         row.id
       );
@@ -434,7 +465,8 @@ export class HeartbeatsService {
        COALESCE(hs.successful_runs, 0) AS successful_runs_30d,
        CASE WHEN COALESCE(hs.runs, 0) = 0 THEN NULL
          ELSE hs.successful_runs * 100.0 / hs.runs END AS success_rate_30d,
-       hs.average_duration_ms AS average_duration_ms_30d
+       hs.average_duration_ms AS average_duration_ms_30d,
+       latest.type AS last_event_type, latest.metadata_json AS latest_metadata_json
        FROM heartbeat_monitors hm JOIN resources r ON r.id = hm.resource_id
        LEFT JOIN (
          SELECT heartbeat_id, COUNT(*) AS runs,
@@ -442,7 +474,12 @@ export class HeartbeatsService {
           AVG(CASE WHEN type IN ('succeeded', 'failed') THEN duration_ms END) AS average_duration_ms
          FROM heartbeat_events WHERE type != 'started' AND occurred_at >= ?
          GROUP BY heartbeat_id
-       ) hs ON hs.heartbeat_id = hm.id ${where}
+       ) hs ON hs.heartbeat_id = hm.id
+       LEFT JOIN LATERAL (
+         SELECT type, metadata_json FROM heartbeat_events
+         WHERE heartbeat_id = hm.id AND type != 'started'
+         ORDER BY occurred_at DESC, id DESC LIMIT 1
+       ) latest ON TRUE ${where}
        ORDER BY LOWER(hm.name)`,
       new Date(Date.now() - 30 * 86_400_000).toISOString(),
       ...parameters
@@ -525,7 +562,52 @@ export class HeartbeatsService {
     return metadata;
   }
 
-  private map(row: HeartbeatSummaryRow): HeartbeatMonitorSummary {
+  private async summary(row: HeartbeatSummaryRow): Promise<HeartbeatMonitorSummary> {
+    return (await this.summaries([row]))[0]!;
+  }
+
+  private async summaries(rows: HeartbeatSummaryRow[]): Promise<HeartbeatMonitorSummary[]> {
+    if (!rows.length) return [];
+    const start = Math.floor(Date.now() / HOUR_MS) * HOUR_MS - (TIMELINE_HOURS - 1) * HOUR_MS;
+    const startAt = new Date(start).toISOString();
+    const counts = await this.database.all<TimelineRow>(
+      `SELECT heartbeat_id,
+       FLOOR(EXTRACT(EPOCH FROM (occurred_at - CAST(? AS TIMESTAMPTZ))) / 3600)::int AS bucket,
+       SUM(CASE WHEN type = 'succeeded' THEN 1 ELSE 0 END)::int AS succeeded,
+       SUM(CASE WHEN type = 'failed' THEN 1 ELSE 0 END)::int AS failed,
+       SUM(CASE WHEN type = 'missed' THEN 1 ELSE 0 END)::int AS missed
+       FROM heartbeat_events
+       WHERE heartbeat_id IN (?) AND occurred_at >= ? AND type != 'started'
+       GROUP BY heartbeat_id, bucket`,
+      startAt,
+      rows.map((row) => row.id),
+      startAt
+    );
+    const timelines = new Map<string, HeartbeatTimelineBucket[]>(
+      rows.map((row) => [
+        row.id,
+        Array.from({ length: TIMELINE_HOURS }, (_, index) => ({
+          start: new Date(start + index * HOUR_MS).toISOString(),
+          succeeded: 0,
+          failed: 0,
+          missed: 0,
+        })),
+      ])
+    );
+    for (const count of counts) {
+      const bucket = timelines.get(count.heartbeat_id)?.[count.bucket];
+      if (!bucket) continue;
+      bucket.succeeded = count.succeeded;
+      bucket.failed = count.failed;
+      bucket.missed = count.missed;
+    }
+    return rows.map((row) => this.map(row, timelines.get(row.id) ?? []));
+  }
+
+  private map(
+    row: HeartbeatSummaryRow,
+    timeline: HeartbeatTimelineBucket[]
+  ): HeartbeatMonitorSummary {
     return {
       id: row.id,
       teamId: row.team_id,
@@ -544,6 +626,13 @@ export class HeartbeatsService {
       nextDeadlineAt: this.deadline(row)?.toISOString() ?? null,
       lastDurationMs: row.last_duration_ms,
       lastMessage: row.last_message,
+      lastEventType: row.last_event_type,
+      lastSuccessAt: row.last_success_at,
+      statusSince: row.status_changed_at,
+      latestMetadata: row.latest_metadata_json
+        ? (JSON.parse(row.latest_metadata_json) as HeartbeatMonitorSummary["latestMetadata"])
+        : {},
+      timeline,
       runs30d: row.runs_30d,
       successfulRuns30d: row.successful_runs_30d,
       successRate30d: row.success_rate_30d,
@@ -565,11 +654,14 @@ export class HeartbeatsService {
     };
   }
 
-  private createdResult(row: HeartbeatSummaryRow, token: string): CreatedHeartbeatMonitor {
+  private createdResult(
+    heartbeat: HeartbeatMonitorSummary,
+    token: string
+  ): CreatedHeartbeatMonitor {
     const baseUrl = publicBaseUrl();
     const apiBase = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
     return {
-      heartbeat: this.map(row),
+      heartbeat,
       pingToken: token,
       pingUrl: `${apiBase}/heartbeats/${encodeURIComponent(token)}`,
     };

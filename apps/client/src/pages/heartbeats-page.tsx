@@ -4,24 +4,23 @@ import type {
   ResourceSummary,
 } from "@mimorii/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { History, KeyRound, Pencil, Plus, Radio, Trash2 } from "lucide-react";
+import { History, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { HeartbeatCard } from "../components/heartbeat-card";
 import { HeartbeatDialog } from "../components/heartbeat-dialog";
 import { FoxytailDialog } from "../components/foxytail-dialog";
 import { HeartbeatHistoryDialog } from "../components/heartbeat-history-dialog";
 import { HeartbeatSecretDialog } from "../components/heartbeat-secret-dialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
-import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Select } from "../components/ui/input";
 import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { formatCount, formatMilliseconds, formatPercent, formatRelative } from "../lib/format";
+import { formatCount } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 interface HeartbeatConfirmation {
@@ -94,6 +93,11 @@ export function HeartbeatsPage() {
     heartbeats.data?.filter((heartbeat) => !resourceId || heartbeat.resourceId === resourceId) ??
     [];
   const resourceNames = resourceOptionLabels(resources.data ?? []);
+  const foxytailResourceIds = new Set(
+    (resources.data ?? [])
+      .filter((resource) => resource.tags.includes("foxytail"))
+      .map((resource) => resource.id)
+  );
 
   return (
     <div className="space-y-6">
@@ -162,144 +166,27 @@ export function HeartbeatsPage() {
         />
       )}
       {filtered.length ? (
-        <div data-guide-page="heartbeats-list">
-          <div className="grid gap-3 xl:hidden">
-            {filtered.map((heartbeat) => (
-              <Card key={heartbeat.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                    <Radio className="size-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate font-display font-bold">{heartbeat.name}</h3>
-                        <p className="mt-0.5 truncate text-xs text-muted">
-                          {resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
-                        </p>
-                      </div>
-                      <StatusBadge status={heartbeat.status} />
-                    </div>
-                    {heartbeat.lastMessage ? (
-                      <p className="mt-2 line-clamp-2 text-xs text-muted">
-                        {heartbeat.lastMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
-                  <HeartbeatStat
-                    label="Interval"
-                    value={formatInterval(heartbeat.intervalSeconds)}
-                  />
-                  <HeartbeatStat
-                    label="30d success"
-                    value={formatPercent(heartbeat.successRate30d)}
-                  />
-                  <HeartbeatStat
-                    label="Avg duration"
-                    value={formatMilliseconds(heartbeat.averageDurationMs30d)}
-                  />
-                  <HeartbeatStat label="Last signal" value={formatRelative(heartbeat.lastPingAt)} />
-                  <HeartbeatStat
-                    label="Deadline"
-                    value={
-                      heartbeat.runningSince ? "Running" : formatRelative(heartbeat.nextDeadlineAt)
-                    }
-                  />
-                </dl>
-                <div className="mt-4 flex justify-end border-t border-line pt-3">
-                  <HeartbeatActions
-                    heartbeat={heartbeat}
-                    onHistory={() => setHistoryHeartbeat(heartbeat)}
-                    onRotate={() => setConfirmation({ action: "rotate", heartbeat })}
-                    onEdit={() => {
-                      setSelected(heartbeat);
-                      setFormOpen(true);
-                    }}
-                    onDelete={() => setConfirmation({ action: "delete", heartbeat })}
-                  />
-                </div>
-              </Card>
-            ))}
-          </div>
-          <Card className="hidden xl:block">
-            <CardHeader>
-              <h3 className="font-display font-bold">Monitors</h3>
-              <span className="text-xs text-muted">
-                {filtered.filter((heartbeat) => heartbeat.status === "down").length} down
-              </span>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm [&_td:not(:first-child)]:whitespace-nowrap [&_td:not(:last-child)]:pr-5 [&_th:not(:last-child)]:pr-5">
-                <thead className="text-xs text-muted">
-                  <tr>
-                    <th className="pb-3 font-medium">Heartbeat</th>
-                    <th className="pb-3 font-medium">Resource</th>
-                    <th className="pb-3 font-medium">Interval</th>
-                    <th className="pb-3 font-medium">30d success</th>
-                    <th className="pb-3 font-medium">Avg duration</th>
-                    <th className="pb-3 font-medium">Last signal</th>
-                    <th className="pb-3 font-medium">Deadline</th>
-                    <th className="pb-3 text-right font-medium">Status</th>
-                    <th className="pb-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((heartbeat) => (
-                    <tr key={heartbeat.id} className="border-t border-line">
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <span className="grid size-9 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                            <Radio className="size-4" />
-                          </span>
-                          <div>
-                            <p className="font-semibold">{heartbeat.name}</p>
-                            {heartbeat.lastMessage ? (
-                              <p className="max-w-64 truncate text-xs text-muted">
-                                {heartbeat.lastMessage}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 text-muted">
-                        {resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
-                      </td>
-                      <td className="py-4 text-muted">
-                        {formatInterval(heartbeat.intervalSeconds)}
-                      </td>
-                      <td className="py-4 text-muted">{formatPercent(heartbeat.successRate30d)}</td>
-                      <td className="py-4 text-muted">
-                        {formatMilliseconds(heartbeat.averageDurationMs30d)}
-                      </td>
-                      <td className="py-4 text-muted">{formatRelative(heartbeat.lastPingAt)}</td>
-                      <td className="py-4 text-muted">
-                        {heartbeat.runningSince
-                          ? "Running"
-                          : formatRelative(heartbeat.nextDeadlineAt)}
-                      </td>
-                      <td className="py-4 text-right">
-                        <StatusBadge status={heartbeat.status} />
-                      </td>
-                      <td className="py-4">
-                        <HeartbeatActions
-                          heartbeat={heartbeat}
-                          onHistory={() => setHistoryHeartbeat(heartbeat)}
-                          onRotate={() => setConfirmation({ action: "rotate", heartbeat })}
-                          onEdit={() => {
-                            setSelected(heartbeat);
-                            setFormOpen(true);
-                          }}
-                          onDelete={() => setConfirmation({ action: "delete", heartbeat })}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+        <div data-guide-page="heartbeats-list" className="grid gap-4">
+          {filtered.map((heartbeat) => (
+            <HeartbeatCard
+              key={heartbeat.id}
+              heartbeat={heartbeat}
+              resourceName={resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
+              foxytail={foxytailResourceIds.has(heartbeat.resourceId)}
+              actions={
+                <HeartbeatActions
+                  heartbeat={heartbeat}
+                  onHistory={() => setHistoryHeartbeat(heartbeat)}
+                  onRotate={() => setConfirmation({ action: "rotate", heartbeat })}
+                  onEdit={() => {
+                    setSelected(heartbeat);
+                    setFormOpen(true);
+                  }}
+                  onDelete={() => setConfirmation({ action: "delete", heartbeat })}
+                />
+              }
+            />
+          ))}
         </div>
       ) : (
         <EmptyState
@@ -348,23 +235,11 @@ export function HeartbeatsPage() {
         onClose={() => setCreated(null)}
       />
       <HeartbeatHistoryDialog
-        foxytail={resources.data?.some(
-          (resource) =>
-            resource.id === historyHeartbeat?.resourceId && resource.tags.includes("foxytail")
-        )}
+        foxytail={Boolean(historyHeartbeat && foxytailResourceIds.has(historyHeartbeat.resourceId))}
         heartbeat={historyHeartbeat}
         teamId={teamId}
         onClose={() => setHistoryHeartbeat(null)}
       />
-    </div>
-  );
-}
-
-function HeartbeatStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-muted">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold">{value}</dd>
     </div>
   );
 }
@@ -413,11 +288,4 @@ function HeartbeatActions({
       </Button>
     </div>
   );
-}
-
-function formatInterval(seconds: number): string {
-  if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
-  if (seconds < 86_400) return `${Number((seconds / 3_600).toFixed(1))} hr`;
-  const days = Number((seconds / 86_400).toFixed(1));
-  return `${days} ${days === 1 ? "day" : "days"}`;
 }

@@ -32,6 +32,14 @@ import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
 import { CheckHistoryChart } from "../components/check-history-chart";
 import { CheckTypeIcon } from "../components/check-type-icon";
+import {
+  FoxytailHighlights,
+  HeartbeatFacts,
+  HeartbeatProblems,
+  HeartbeatStateLine,
+  HeartbeatStatusBadge,
+  HeartbeatTimeline,
+} from "../components/heartbeat-insights";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
 import { ResourceImageDialog } from "../components/resource-image-dialog";
@@ -121,6 +129,7 @@ export function ResourceDetailPage() {
   const deviceStatus = currentAgent?.deviceStatus;
   const chartData = (history.data ?? []).toReversed();
   const activeCheck = checks.data?.find((check) => check.id === activeCheckId);
+  const historyHeartbeat = activeCheckId ? undefined : heartbeats.data?.[0];
   const hasHistorySeries = activeCheck
     ? createCheckHistorySeries(activeCheck.type, chartData).length > 0
     : false;
@@ -248,7 +257,9 @@ export function ResourceDetailPage() {
               <p className="mt-1 text-xs text-muted">
                 {activeCheckId
                   ? checks.data?.find((check) => check.id === activeCheckId)?.name
-                  : "No check selected"}
+                  : historyHeartbeat
+                    ? historyHeartbeat.name
+                    : "No check selected"}
               </p>
             </div>
             {checks.data?.length ? (
@@ -265,18 +276,28 @@ export function ResourceDetailPage() {
               </Select>
             ) : null}
           </CardHeader>
-          <CardContent className="h-72 pl-1 sm:pl-3">
-            {history.isLoading ? (
-              <LoadingState />
-            ) : activeCheck && hasHistorySeries ? (
-              <CheckHistoryChart check={activeCheck} results={chartData} />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted">
-                <StateArtwork illustration="analysis" />
-                <span>Waiting for results</span>
-              </div>
-            )}
-          </CardContent>
+          {historyHeartbeat ? (
+            <CardContent className="space-y-5">
+              <HeartbeatTimeline timeline={historyHeartbeat.timeline} />
+              <HeartbeatFacts heartbeat={historyHeartbeat} />
+              {resource.data.tags.includes("foxytail") ? (
+                <FoxytailHighlights heartbeat={historyHeartbeat} />
+              ) : null}
+            </CardContent>
+          ) : (
+            <CardContent className="h-72 pl-1 sm:pl-3">
+              {history.isLoading ? (
+                <LoadingState />
+              ) : activeCheck && hasHistorySeries ? (
+                <CheckHistoryChart check={activeCheck} results={chartData} />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted">
+                  <StateArtwork illustration="analysis" />
+                  <span>Waiting for results</span>
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
 
         <div data-guide-page="resource-monitors" className="space-y-6">
@@ -334,20 +355,18 @@ export function ResourceDetailPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {heartbeats.data?.map((heartbeat) => (
-                <div key={heartbeat.id} className="rounded-xl border border-line p-3">
+                <div key={heartbeat.id} className="space-y-3 rounded-xl border border-line p-3">
                   <div className="flex items-center gap-3">
                     <span className="grid size-9 place-items-center rounded-xl bg-mint/20 text-success-strong">
                       <Radio className="size-4" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{heartbeat.name}</p>
-                      <p className="text-xs text-muted">
-                        {formatPercent(heartbeat.successRate30d)} ·{" "}
-                        {formatRelative(heartbeat.lastPingAt)}
-                      </p>
-                    </div>
-                    <StatusBadge status={heartbeat.status} />
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+                      {heartbeat.name}
+                    </p>
+                    <HeartbeatStatusBadge heartbeat={heartbeat} />
                   </div>
+                  <HeartbeatStateLine heartbeat={heartbeat} />
+                  <HeartbeatProblems heartbeat={heartbeat} />
                 </div>
               ))}
               {!heartbeats.data?.length ? (

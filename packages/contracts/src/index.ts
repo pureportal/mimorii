@@ -1288,6 +1288,13 @@ export interface AgentHeartbeatResponse {
 export const heartbeatEventTypes = ["started", "succeeded", "failed", "missed"] as const;
 export type HeartbeatEventType = (typeof heartbeatEventTypes)[number];
 
+export interface HeartbeatTimelineBucket {
+  start: string;
+  succeeded: number;
+  failed: number;
+  missed: number;
+}
+
 export interface HeartbeatMonitorSummary {
   id: string;
   teamId: string;
@@ -1306,6 +1313,11 @@ export interface HeartbeatMonitorSummary {
   nextDeadlineAt: string | null;
   lastDurationMs: number | null;
   lastMessage: string | null;
+  lastEventType: HeartbeatEventType | null;
+  lastSuccessAt: string | null;
+  statusSince: string | null;
+  latestMetadata: Record<string, string | number | boolean | null>;
+  timeline: HeartbeatTimelineBucket[];
   runs30d: number;
   successfulRuns30d: number;
   successRate30d: number | null;
