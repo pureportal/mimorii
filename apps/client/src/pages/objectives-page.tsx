@@ -123,7 +123,7 @@ export function ObjectivesPage() {
                   <Metric label="Target" value={`${objective.targetPercent}%`} />
                   <Metric label="P95 latency" value={formatLatency(objective.latencyP95Ms)} />
                   <Metric
-                    label="Budget left"
+                    label={objective.remainingBudgetMinutes < 0 ? "Over budget" : "Budget left"}
                     value={formatBudget(objective.remainingBudgetMinutes)}
                   />
                 </div>
@@ -213,9 +213,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function formatBudget(minutes: number): string {
-  const roundedMinutes = Math.round(minutes);
-  const sign = roundedMinutes < 0 ? "−" : "";
-  return `${sign}${formatDuration(Math.abs(roundedMinutes) * 60)}`;
+  return formatDuration(Math.abs(Math.round(minutes)) * 60);
 }
 
 function ObjectiveDialog({

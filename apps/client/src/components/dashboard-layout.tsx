@@ -17,6 +17,7 @@ import {
   Network,
   RadioTower,
   ScrollText,
+  Search,
   Settings,
   ShieldCheck,
   Siren,
@@ -41,6 +42,7 @@ import {
 import { cn } from "../lib/cn";
 import { formatInitials } from "../lib/format";
 import { Brand } from "./brand";
+import { CommandPalette } from "./command-palette";
 import { DeviceNotificationPrompt } from "./device-notification-prompt";
 import { ProductGuide } from "./guide/product-guide";
 import { SponsorFavicon } from "./sponsor-favicon";
@@ -67,11 +69,23 @@ const navigationIcons: Record<NavigationItemId, LucideIcon> = {
   platform: ShieldCheck,
 };
 
+const searchShortcutLabel = /mac|iphone|ipad/i.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
+
 export function ProtectedLayout() {
   const { session, profileReady, activeTeam, setActiveTeamId, acknowledgeTour, logout } = useAuth();
   const location = useLocation();
   const [guideOpen, setGuideOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const navigationRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const openSearch = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      setSearchOpen((open) => !open);
+    };
+    window.addEventListener("keydown", openSearch);
+    return () => window.removeEventListener("keydown", openSearch);
+  }, []);
   useEffect(() => {
     navigationRef.current
       ?.querySelector('[aria-current="page"]')
@@ -213,6 +227,21 @@ export function ProtectedLayout() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Search"
+              aria-keyshortcuts="Control+K Meta+K"
+              onClick={() => setSearchOpen(true)}
+              className="gap-2 text-muted"
+            >
+              <Search />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden rounded border border-line px-1 font-mono text-[10px] md:inline">
+                {searchShortcutLabel}
+              </kbd>
+            </Button>
             <Button asChild variant="ghost" size="icon" className="lg:hidden">
               <Link to={appRoutes.account} aria-label="Account">
                 <CircleUserRound />
@@ -230,6 +259,12 @@ export function ProtectedLayout() {
         </main>
       </div>
 
+      <CommandPalette
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        teamId={activeTeam.id}
+        groups={groups}
+      />
       <MobileNavigation
         groups={groups}
         activeTeamId={activeTeam.id}

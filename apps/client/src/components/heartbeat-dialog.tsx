@@ -10,6 +10,7 @@ import { api, jsonBody } from "../lib/api";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
+import { DurationInput } from "./ui/duration-input";
 import { Field, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
@@ -102,39 +103,39 @@ export function HeartbeatDialog({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="heartbeat-interval">Interval (seconds)</FieldLabel>
-              <Input
+              <FieldLabel htmlFor="heartbeat-interval">Expected every</FieldLabel>
+              <DurationInput
                 id="heartbeat-interval"
                 name="intervalSeconds"
-                type="number"
-                min={60}
-                max={2_592_000}
-                defaultValue={heartbeat?.intervalSeconds ?? 300}
+                label="Expected every"
+                minSeconds={60}
+                maxSeconds={2_592_000}
+                defaultSeconds={heartbeat?.intervalSeconds ?? 300}
                 required
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="heartbeat-grace">Grace (seconds)</FieldLabel>
-              <Input
+              <FieldLabel htmlFor="heartbeat-grace">Grace period</FieldLabel>
+              <DurationInput
                 id="heartbeat-grace"
                 name="graceSeconds"
-                type="number"
-                min={0}
-                max={86_400}
-                defaultValue={heartbeat?.graceSeconds ?? 60}
+                label="Grace period"
+                minSeconds={0}
+                maxSeconds={86_400}
+                defaultSeconds={heartbeat?.graceSeconds ?? 60}
                 required
               />
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="heartbeat-runtime">Maximum runtime (seconds)</FieldLabel>
-            <Input
+            <FieldLabel htmlFor="heartbeat-runtime">Maximum runtime</FieldLabel>
+            <DurationInput
               id="heartbeat-runtime"
               name="maxRuntimeSeconds"
-              type="number"
-              min={60}
-              max={2_592_000}
-              defaultValue={heartbeat?.maxRuntimeSeconds ?? heartbeat?.intervalSeconds ?? 300}
+              label="Maximum runtime"
+              minSeconds={60}
+              maxSeconds={2_592_000}
+              defaultSeconds={heartbeat ? heartbeat.maxRuntimeSeconds : 300}
             />
           </Field>
           <label className="flex items-center gap-3 text-sm font-medium">

@@ -127,6 +127,9 @@ async function openCreation(mode: "Website" | "Port" | "Service" = "Website") {
       target: { value: "https://website.test/status" },
     });
   }
+  if (mode === "Port") {
+    fireEvent.change(within(dialog).getByLabelText("Host"), { target: { value: "example.com" } });
+  }
   return dialog;
 }
 

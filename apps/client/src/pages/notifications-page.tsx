@@ -30,6 +30,7 @@ import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatRelative } from "../lib/format";
+import { notificationEventLabels } from "../lib/notification-events";
 
 type NotificationConfirmation =
   | { action: "channel"; item: NotificationChannelSummary }
@@ -141,7 +142,7 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
             ? formatCount(channels.data?.length ?? 0, "channel")
             : section === "rules"
               ? formatCount(policies.data?.length ?? 0, "rule")
-              : `${formatCount(deliveries.data?.length ?? 0, "delivery", "deliveries")} loaded`}
+              : formatCount(deliveries.data?.length ?? 0, "delivery", "deliveries")}
         </p>
         {section === "channels" ? (
           <Button
@@ -198,7 +199,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                         </div>
                         <p className="mt-1 truncate text-sm text-muted">{channel.target}</p>
                         <p className="mt-2 text-xs text-muted">
-                          {formatRelative(channel.lastDeliveredAt)}
+                          {channel.lastDeliveredAt
+                            ? `Last delivery ${formatRelative(channel.lastDeliveredAt)}`
+                            : "No deliveries yet"}
                         </p>
                       </div>
                       {channel.lastDeliveryStatus ? (
@@ -303,7 +306,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h3 className="truncate font-semibold">{delivery.channelName}</h3>
-                            <p className="mt-1 text-xs text-muted">{delivery.event}</p>
+                            <p className="mt-1 text-xs text-muted">
+                              {notificationEventLabels[delivery.event]}
+                            </p>
                           </div>
                           <StatusBadge status={delivery.status} />
                         </div>
@@ -364,7 +369,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                       {deliveries.data.map((delivery) => (
                         <tr key={delivery.id} className="border-t border-line">
                           <td className="py-3 font-semibold">{delivery.channelName}</td>
-                          <td className="py-3 text-muted">{delivery.event}</td>
+                          <td className="py-3 text-muted">
+                            {notificationEventLabels[delivery.event]}
+                          </td>
                           <td className="py-3 text-muted">{formatRelative(delivery.createdAt)}</td>
                           <td className="py-3 text-muted">{delivery.attempts}</td>
                           <td className="max-w-72 break-words py-3 text-muted">

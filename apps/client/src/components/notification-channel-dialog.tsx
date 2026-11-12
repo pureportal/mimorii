@@ -60,10 +60,7 @@ export function NotificationChannelDialog({
     if (type === "email") {
       const recipients = form.get("recipients");
       if (typeof recipients !== "string") return;
-      payload.emailRecipients = recipients
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      payload.emailRecipients = recipients.split(/[\s,;]+/).filter(Boolean);
     } else if (type === "webhook") {
       const webhookUrl = form.get("webhookUrl");
       const webhookSecret = form.get("webhookSecret");
@@ -124,6 +121,7 @@ export function NotificationChannelDialog({
               <Textarea
                 id="channel-recipients"
                 name="recipients"
+                placeholder="ops@example.com, oncall@example.com"
                 defaultValue={channel?.type === "email" ? channel.target : ""}
                 required
               />

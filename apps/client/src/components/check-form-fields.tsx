@@ -24,6 +24,7 @@ export function HttpCheckFields({ fields, update }: CheckFormFieldsProps) {
         <Input
           id="http-url"
           type="url"
+          placeholder="https://example.com/health"
           value={fields.url}
           onChange={(event) => update("url", event.target.value)}
           required
@@ -371,6 +372,7 @@ export function TcpCheckFields({ fields, update }: CheckFormFieldsProps) {
         <FieldLabel htmlFor="tcp-host">Host</FieldLabel>
         <Input
           id="tcp-host"
+          placeholder="example.com"
           value={fields.host}
           onChange={(event) => update("host", event.target.value)}
           required
@@ -400,6 +402,7 @@ export function DnsCheckFields({ fields, update }: CheckFormFieldsProps) {
           <FieldLabel htmlFor="dns-host">Hostname</FieldLabel>
           <Input
             id="dns-host"
+            placeholder="example.com"
             value={fields.hostname}
             onChange={(event) => update("hostname", event.target.value)}
             required
@@ -610,6 +613,7 @@ export function IcmpCheckFields({ fields, update }: CheckFormFieldsProps) {
         <FieldLabel htmlFor="icmp-host">Host</FieldLabel>
         <Input
           id="icmp-host"
+          placeholder="1.1.1.1"
           value={fields.icmpHost}
           onChange={(event) => update("icmpHost", event.target.value)}
           required
@@ -756,6 +760,7 @@ export function DatabaseCheckFields({ fields, update }: CheckFormFieldsProps) {
           <FieldLabel htmlFor="database-host">Host</FieldLabel>
           <Input
             id="database-host"
+            placeholder="db.example.com"
             value={fields.databaseHost}
             onChange={(event) => update("databaseHost", event.target.value)}
             required

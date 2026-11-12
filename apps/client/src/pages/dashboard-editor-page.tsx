@@ -24,6 +24,7 @@ import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { cn } from "../lib/cn";
+import { slugify } from "../lib/slug";
 
 const widthClasses = {
   1: "lg:col-span-1",
@@ -479,15 +480,6 @@ function itemSummary(item: DashboardItem, resources: Map<string, string>): strin
 
 function unreachable(_value: never): never {
   throw new Error("Unsupported dashboard item");
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80);
 }
 
 function parseAccessMode(value: string): DashboardAccessMode {

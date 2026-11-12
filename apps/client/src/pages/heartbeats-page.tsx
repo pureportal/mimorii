@@ -418,5 +418,6 @@ function HeartbeatActions({
 function formatInterval(seconds: number): string {
   if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
   if (seconds < 86_400) return `${Number((seconds / 3_600).toFixed(1))} hr`;
-  return `${Number((seconds / 86_400).toFixed(1))} day`;
+  const days = Number((seconds / 86_400).toFixed(1));
+  return `${days} ${days === 1 ? "day" : "days"}`;
 }

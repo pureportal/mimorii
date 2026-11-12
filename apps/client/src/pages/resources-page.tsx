@@ -267,6 +267,17 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
 
 type SetupMode = "website" | "port" | "service";
 
+function suggestedResourceName(mode: SetupMode, target: string, port: string): string {
+  const value = target.trim();
+  if (!value || mode === "service") return "";
+  if (mode === "port") return port ? `${value}:${port}` : value;
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "";
+  }
+}
+
 function QuickResourceDialog({
   open,
   onOpenChange,
@@ -282,7 +293,7 @@ function QuickResourceDialog({
 }) {
   const [mode, setMode] = useState<SetupMode>("website");
   const [name, setName] = useState("");
-  const [target, setTarget] = useState("https://example.com/");
+  const [target, setTarget] = useState("");
   const [port, setPort] = useState("443");
   const [agentId, setAgentId] = useState("");
   const [interval, setInterval] = useState("60");
@@ -308,7 +319,7 @@ function QuickResourceDialog({
       const resource = await api<ResourceSummary>(`/teams/${teamId}/resources`, {
         method: "POST",
         ...jsonBody({
-          name,
+          name: name.trim() || suggestedResourceName(mode, target, port),
           kind: "service",
           tags: [],
         }),
@@ -365,7 +376,7 @@ function QuickResourceDialog({
               label="Website"
               onClick={() => {
                 setMode("website");
-                setTarget("https://example.com/");
+                setTarget("");
               }}
             />
             <ModeButton
@@ -374,7 +385,7 @@ function QuickResourceDialog({
               label="Port"
               onClick={() => {
                 setMode("port");
-                setTarget("example.com");
+                setTarget("");
               }}
             />
             <ModeButton
@@ -394,9 +405,12 @@ function QuickResourceDialog({
               id="resource-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder={mode === "website" ? "Main website" : "Production service"}
+              placeholder={
+                suggestedResourceName(mode, target, port) ||
+                (mode === "website" ? "Main website" : "Production service")
+              }
               maxLength={100}
-              required
+              required={mode === "service"}
             />
           </Field>
           {mode !== "service" ? (
@@ -408,6 +422,7 @@ function QuickResourceDialog({
                 <Input
                   id="resource-target"
                   type={mode === "website" ? "url" : "text"}
+                  placeholder={mode === "website" ? "https://example.com/" : "example.com"}
                   value={target}
                   onChange={(event) => setTarget(event.target.value)}
                   required
