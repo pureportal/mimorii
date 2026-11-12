@@ -1,6 +1,11 @@
-import { Activity, BarChart3, PencilLine, ShieldCheck } from "lucide-react";
+import { Activity, BarChart3, Check, Copy, PencilLine, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { getServerUrl } from "../lib/api";
+
+const machdochPresetUrl = "https://mimorii.app/api/mcp";
 
 const readCapabilities = [
   "Team health and resources",
@@ -29,6 +34,16 @@ const promptExamples = [
 
 export function McpPage() {
   const mcpServerUrl = `${getServerUrl()}/mcp`;
+  const [copied, setCopied] = useState(false);
+
+  async function copyServerUrl() {
+    try {
+      await navigator.clipboard.writeText(mcpServerUrl);
+      setCopied(true);
+    } catch {
+      toast.error("The server URL could not be copied");
+    }
+  }
 
   return (
     <main className="overflow-hidden">
@@ -57,9 +72,19 @@ export function McpPage() {
               <p className="text-xs font-bold uppercase tracking-[.16em] text-coral-strong">
                 Server URL
               </p>
-              <code className="mt-3 block overflow-x-auto rounded-xl bg-night px-4 py-3 text-sm text-white">
-                {mcpServerUrl}
-              </code>
+              <div className="mt-3 flex items-center gap-2">
+                <code className="block min-w-0 flex-1 overflow-x-auto rounded-xl bg-night px-4 py-3 text-sm text-white">
+                  {mcpServerUrl}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Copy server URL"
+                  onClick={() => void copyServerUrl()}
+                >
+                  {copied ? <Check /> : <Copy />}
+                </Button>
+              </div>
             </div>
             <ol className="mt-8 grid gap-6">
               <li className="grid grid-cols-[2.5rem_1fr] gap-4">
@@ -69,7 +94,13 @@ export function McpPage() {
                 <div>
                   <h3 className="font-display text-lg font-bold">Add the server</h3>
                   <p className="mt-1 leading-7 text-muted">
-                    Enter the server URL in your client&apos;s remote MCP connection settings.
+                    In Machdoch, open Settings, then MCP servers, choose Add preset, and select
+                    Mimorii.{" "}
+                    {mcpServerUrl === machdochPresetUrl
+                      ? ""
+                      : "Replace its URL with the server URL. "}
+                    Then select Start OAuth on its Auth tab. In other clients, enter the server URL
+                    in the remote MCP connection settings.
                   </p>
                 </div>
               </li>

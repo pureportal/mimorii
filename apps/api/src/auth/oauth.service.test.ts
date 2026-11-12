@@ -137,6 +137,7 @@ describe("OAuth service", () => {
       sessionUser.id,
       sessionUser.tokenVersion,
       clientId,
+      "Operations assistant",
       redirectUri,
       "mcp:read mcp:write",
       resource,
@@ -184,6 +185,15 @@ describe("OAuth service", () => {
         String(sql).includes("INSERT INTO oauth_refresh_tokens")
       )
     ).toBe(true);
+    expect(fixture.database.run).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO oauth_grants"),
+      expect.any(String),
+      sessionUser.id,
+      clientId,
+      "Operations assistant",
+      "mcp:read mcp:write",
+      expect.any(String)
+    );
   });
 
   it("does not issue a refresh token unless the client declared that grant", async () => {
@@ -285,7 +295,8 @@ describe("OAuth service", () => {
       refresh_token: expect.stringMatching(/^mim_ort_/),
     });
     expect(rotation.database.run).toHaveBeenCalledWith(
-      "UPDATE oauth_refresh_tokens SET consumed_at = ? WHERE id = ?",
+      "UPDATE oauth_refresh_tokens SET consumed_at = COALESCE(consumed_at, ?), replaced_by = ? WHERE id = ?",
+      expect.any(String),
       expect.any(String),
       "refresh-1"
     );
@@ -310,6 +321,60 @@ describe("OAuth service", () => {
       expect.any(String),
       "family-1"
     );
+  });
+
+  it("reissues tokens once when a lost refresh response is retried promptly", async () => {
+    const consumedAt = new Date(Date.now() - 10_000).toISOString();
+    const retry = serviceFixture();
+    retry.database.get
+      .mockResolvedValueOnce({ ...refreshTokenRow(consumedAt), replaced_by: "refresh-2" })
+      .mockResolvedValueOnce({ unused: true });
+    await expect(
+      retry.service.exchange({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        resource,
+        refresh_token: "mim_ort_retried",
+      })
+    ).resolves.toMatchObject({ refresh_token: expect.stringMatching(/^mim_ort_/) });
+    expect(retry.database.run).toHaveBeenCalledWith(
+      "UPDATE oauth_refresh_tokens SET revoked_at = ? WHERE id = ?",
+      expect.any(String),
+      "refresh-2"
+    );
+    expect(retry.database.run).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE oauth_access_tokens a SET revoked_at"),
+      expect.any(String),
+      "refresh-2"
+    );
+    expect(
+      retry.database.run.mock.calls.some(([sql]) =>
+        String(sql).includes("UPDATE oauth_grants SET revoked_at")
+      )
+    ).toBe(false);
+
+    for (const [consumed, successor] of [
+      [new Date(Date.now() - 120_000).toISOString(), { unused: true }],
+      [consumedAt, { unused: false }],
+    ] as const) {
+      const replay = serviceFixture();
+      replay.database.get
+        .mockResolvedValueOnce({ ...refreshTokenRow(consumed), replaced_by: "refresh-2" })
+        .mockResolvedValueOnce(successor);
+      await expect(
+        replay.service.exchange({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          resource,
+          refresh_token: "mim_ort_replayed",
+        })
+      ).rejects.toMatchObject({ code: "invalid_grant" });
+      expect(replay.database.run).toHaveBeenCalledWith(
+        "UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+        expect.any(String),
+        "family-1"
+      );
+    }
   });
 
   it("rejects refresh grants after the user's token version changes", async () => {
@@ -393,7 +458,7 @@ describe("OAuth service", () => {
       hashSecret("mim_oat_valid"),
       clientId
     );
-    expect(fixture.database.run).toHaveBeenCalledTimes(2);
+    expect(fixture.database.run).toHaveBeenCalledTimes(3);
     expect(fixture.database.transaction).toHaveBeenCalledTimes(1);
   });
 });
@@ -443,6 +508,7 @@ function authorizationCodeRow(allowRefresh: boolean) {
     current_token_version: sessionUser.tokenVersion,
     disabled_at: null,
     client_id: clientId,
+    client_name: "Operations assistant",
     redirect_uri: redirectUri,
     scopes: "mcp:read mcp:write",
     resource,
@@ -468,5 +534,6 @@ function refreshTokenRow(consumedAt: string | null) {
     expires_at: new Date(Date.now() + 60_000).toISOString(),
     consumed_at: consumedAt,
     revoked_at: null,
+    replaced_by: null,
   };
 }

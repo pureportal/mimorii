@@ -1361,6 +1361,15 @@ export interface OAuthAuthorizationRequestSummary {
   scopes: Array<"mcp:read" | "mcp:write">;
 }
 
+export interface OAuthConnectionSummary {
+  id: string;
+  clientName: string;
+  clientHost: string | null;
+  scopes: Array<"mcp:read" | "mcp:write">;
+  connectedAt: string;
+  lastUsedAt: string | null;
+}
+
 export interface OAuthAuthorizationDecisionResult {
   redirectUri: string;
 }

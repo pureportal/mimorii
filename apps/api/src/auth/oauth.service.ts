@@ -15,6 +15,7 @@ import {
 } from "./oauth-client-metadata.service.js";
 import { mcpResourceUrl, mcpScopes, oauthIssuer, type McpScope } from "./oauth-config.js";
 import { OAuthException } from "./oauth-error.js";
+import { revokeOAuthGrant } from "./oauth-grants.js";
 import type {
   OAuthAuthorizationDecision,
   OAuthAuthorizationRequest,
@@ -25,6 +26,7 @@ import type {
 const authorizationCodeLifetimeMs = 5 * 60_000;
 const accessTokenLifetimeMs = 60 * 60_000;
 const refreshTokenLifetimeMs = 30 * 86_400_000;
+const refreshReuseGraceMs = 60_000;
 const mcpScopeSet: ReadonlySet<string> = new Set(mcpScopes);
 
 interface AuthorizationCodeRow {
@@ -34,6 +36,7 @@ interface AuthorizationCodeRow {
   current_token_version: number;
   disabled_at: string | null;
   client_id: string;
+  client_name: string;
   redirect_uri: string;
   scopes: string;
   resource: string;
@@ -57,10 +60,17 @@ interface RefreshTokenRow {
   expires_at: string;
   consumed_at: string | null;
   revoked_at: string | null;
+  replaced_by: string | null;
+}
+
+interface IssuedTokenSet {
+  response: OAuthTokenResponse;
+  refreshTokenId: string | null;
 }
 
 interface AccessTokenUserRow extends UserRow {
   oauth_access_token_id: string;
+  refresh_family_id: string;
   client_id: string;
   scopes: string;
   resource: string;
@@ -144,14 +154,15 @@ export class OAuthService {
       await this.removeExpiredTokens(createdAt);
       await this.database.run(
         `INSERT INTO oauth_authorization_codes
-         (id, code_hash, user_id, user_token_version, client_id, redirect_uri, scopes,
-          resource, code_challenge, allow_refresh, expires_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, code_hash, user_id, user_token_version, client_id, client_name, redirect_uri,
+          scopes, resource, code_challenge, allow_refresh, expires_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         hashSecret(code),
         user.id,
         user.tokenVersion,
         decision.client_id,
+        validated.clientName,
         decision.redirect_uri,
         validated.scopes.join(" "),
         mcpResourceUrl().href,
@@ -200,7 +211,7 @@ export class OAuthService {
       input.client_id
     );
     if (refresh) {
-      await this.revokeFamily(refresh.family_id, new Date().toISOString());
+      await revokeOAuthGrant(this.database, refresh.family_id, new Date().toISOString());
       return;
     }
     if (input.token_type_hint === "refresh_token") {
@@ -212,8 +223,8 @@ export class OAuthService {
     if (!token.startsWith("mim_oat_")) return null;
     const now = new Date().toISOString();
     const row = await this.database.get<AccessTokenUserRow>(
-      `SELECT u.*, oat.id AS oauth_access_token_id, oat.client_id, oat.scopes, oat.resource,
-       oat.expires_at, oat.last_used_at
+      `SELECT u.*, oat.id AS oauth_access_token_id, oat.refresh_family_id, oat.client_id,
+       oat.scopes, oat.resource, oat.expires_at, oat.last_used_at
        FROM oauth_access_tokens oat JOIN users u ON u.id = oat.user_id
        WHERE oat.token_hash = ? AND oat.resource = ? AND oat.expires_at > ?
        AND oat.revoked_at IS NULL AND oat.user_token_version = u.token_version
@@ -228,6 +239,11 @@ export class OAuthService {
         "UPDATE oauth_access_tokens SET last_used_at = ? WHERE id = ?",
         now,
         row.oauth_access_token_id
+      );
+      await this.database.run(
+        "UPDATE oauth_grants SET last_used_at = ? WHERE id = ?",
+        now,
+        row.refresh_family_id
       );
     }
     return {
@@ -302,7 +318,7 @@ export class OAuthService {
         throw new OAuthException("invalid_grant", "Authorization code is invalid or expired");
       }
       if (row.used_at) {
-        if (row.token_family_id) await this.revokeFamily(row.token_family_id, now);
+        if (row.token_family_id) await revokeOAuthGrant(this.database, row.token_family_id, now);
         return { error: "replayed" as const };
       }
       const familyId = randomUUID();
@@ -313,18 +329,27 @@ export class OAuthService {
         familyId,
         row.id
       );
-      return {
-        tokens: await this.issueTokenSet({
-          userId: row.user_id,
-          userTokenVersion: row.user_token_version,
-          clientId: row.client_id,
-          scopes: storedScopes(row.scopes),
-          resource: row.resource,
-          familyId,
-          includeRefreshToken: row.allow_refresh,
-          now,
-        }),
-      };
+      const issued = await this.issueTokenSet({
+        userId: row.user_id,
+        userTokenVersion: row.user_token_version,
+        clientId: row.client_id,
+        scopes: storedScopes(row.scopes),
+        resource: row.resource,
+        familyId,
+        includeRefreshToken: row.allow_refresh,
+        now,
+      });
+      await this.database.run(
+        `INSERT INTO oauth_grants (id, user_id, client_id, client_name, scopes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        familyId,
+        row.user_id,
+        row.client_id,
+        row.client_name,
+        row.scopes,
+        now
+      );
+      return { tokens: issued.response };
     });
     if ("tokens" in outcome && outcome.tokens) return outcome.tokens;
     throw new OAuthException("invalid_grant", "Authorization code is invalid or expired");
@@ -345,48 +370,73 @@ export class OAuthService {
         hashSecret(refreshToken)
       );
       if (!row) return { error: "invalid" as const };
-      if (row.consumed_at) {
-        await this.revokeFamily(row.family_id, now);
+      const usable = refreshTokenUsable(row, input.client_id, resource);
+      if (row.consumed_at && !(usable && (await this.releaseUnusedSuccessor(row, now)))) {
+        await revokeOAuthGrant(this.database, row.family_id, now);
         return { error: "replayed" as const };
       }
-      if (
-        row.revoked_at ||
-        row.disabled_at ||
-        row.user_token_version !== row.current_token_version ||
-        new Date(row.expires_at).getTime() <= Date.now() ||
-        row.client_id !== input.client_id ||
-        row.resource !== resource
-      ) {
-        return { error: "invalid" as const };
-      }
+      if (!usable) return { error: "invalid" as const };
       const grantedScopes = storedScopes(row.scopes);
       const scopes = input.scope ? requestedScopes(input.scope) : grantedScopes;
       if (!scopes.every((scope) => grantedScopes.includes(scope))) {
         return { error: "scope" as const };
       }
-      await this.database.run(
-        "UPDATE oauth_refresh_tokens SET consumed_at = ? WHERE id = ?",
+      const issued = await this.issueTokenSet({
+        userId: row.user_id,
+        userTokenVersion: row.user_token_version,
+        clientId: row.client_id,
+        scopes,
+        resource: row.resource,
+        familyId: row.family_id,
+        includeRefreshToken: true,
         now,
+      });
+      await this.database.run(
+        "UPDATE oauth_refresh_tokens SET consumed_at = COALESCE(consumed_at, ?), replaced_by = ? WHERE id = ?",
+        now,
+        issued.refreshTokenId,
         row.id
       );
-      return {
-        tokens: await this.issueTokenSet({
-          userId: row.user_id,
-          userTokenVersion: row.user_token_version,
-          clientId: row.client_id,
-          scopes,
-          resource: row.resource,
-          familyId: row.family_id,
-          includeRefreshToken: true,
-          now,
-        }),
-      };
+      return { tokens: issued.response };
     });
     if ("tokens" in outcome && outcome.tokens) return outcome.tokens;
     if (outcome.error === "scope") {
       throw new OAuthException("invalid_scope", "Requested scope exceeds the original grant");
     }
     throw new OAuthException("invalid_grant", "Refresh token is invalid or expired");
+  }
+
+  private async releaseUnusedSuccessor(row: RefreshTokenRow, now: string): Promise<boolean> {
+    if (
+      !row.replaced_by ||
+      !row.consumed_at ||
+      Date.now() - new Date(row.consumed_at).getTime() > refreshReuseGraceMs
+    ) {
+      return false;
+    }
+    const successor = await this.database.get<{ unused: boolean }>(
+      `SELECT (r.consumed_at IS NULL AND r.revoked_at IS NULL AND NOT EXISTS (
+         SELECT 1 FROM oauth_access_tokens a
+         WHERE a.refresh_family_id = r.family_id AND a.created_at = r.created_at
+           AND (a.last_used_at IS NOT NULL OR a.revoked_at IS NOT NULL)
+       )) AS unused
+       FROM oauth_refresh_tokens r WHERE r.id = ? FOR UPDATE`,
+      row.replaced_by
+    );
+    if (!successor?.unused) return false;
+    await this.database.run(
+      `UPDATE oauth_access_tokens a SET revoked_at = ?
+       FROM oauth_refresh_tokens r
+       WHERE r.id = ? AND a.refresh_family_id = r.family_id AND a.created_at = r.created_at`,
+      now,
+      row.replaced_by
+    );
+    await this.database.run(
+      "UPDATE oauth_refresh_tokens SET revoked_at = ? WHERE id = ?",
+      now,
+      row.replaced_by
+    );
+    return true;
   }
 
   private async issueTokenSet(input: {
@@ -398,7 +448,7 @@ export class OAuthService {
     familyId: string;
     includeRefreshToken: boolean;
     now: string;
-  }): Promise<OAuthTokenResponse> {
+  }): Promise<IssuedTokenSet> {
     await this.removeExpiredTokens(input.now);
     const accessToken = createSecret("mim_oat");
     const accessTokenId = randomUUID();
@@ -424,15 +474,16 @@ export class OAuthService {
       expires_in: accessTokenLifetimeMs / 1_000,
       scope: input.scopes.join(" "),
     };
-    if (!input.includeRefreshToken) return response;
+    if (!input.includeRefreshToken) return { response, refreshTokenId: null };
 
     const refreshToken = createSecret("mim_ort");
+    const refreshTokenId = randomUUID();
     await this.database.run(
       `INSERT INTO oauth_refresh_tokens
        (id, family_id, token_hash, user_id, user_token_version, client_id, scopes,
         resource, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      randomUUID(),
+      refreshTokenId,
       input.familyId,
       hashSecret(refreshToken),
       input.userId,
@@ -443,7 +494,7 @@ export class OAuthService {
       new Date(new Date(input.now).getTime() + refreshTokenLifetimeMs).toISOString(),
       input.now
     );
-    return { ...response, refresh_token: refreshToken };
+    return { response: { ...response, refresh_token: refreshToken }, refreshTokenId };
   }
 
   private async revokeAccessToken(tokenHash: string, clientId: string): Promise<boolean> {
@@ -454,29 +505,19 @@ export class OAuthService {
       clientId
     );
     if (!token) return false;
-    await this.revokeFamily(token.refresh_family_id, new Date().toISOString());
+    await revokeOAuthGrant(this.database, token.refresh_family_id, new Date().toISOString());
     return true;
-  }
-
-  private async revokeFamily(familyId: string, revokedAt: string): Promise<void> {
-    await this.database.run(
-      `UPDATE oauth_refresh_tokens SET revoked_at = ?
-       WHERE family_id = ? AND revoked_at IS NULL`,
-      revokedAt,
-      familyId
-    );
-    await this.database.run(
-      `UPDATE oauth_access_tokens SET revoked_at = ?
-       WHERE refresh_family_id = ? AND revoked_at IS NULL`,
-      revokedAt,
-      familyId
-    );
   }
 
   private async removeExpiredTokens(now: string): Promise<void> {
     await this.database.run("DELETE FROM oauth_authorization_codes WHERE expires_at <= ?", now);
     await this.database.run("DELETE FROM oauth_access_tokens WHERE expires_at <= ?", now);
     await this.database.run("DELETE FROM oauth_refresh_tokens WHERE expires_at <= ?", now);
+    await this.database.run(
+      `DELETE FROM oauth_grants g
+       WHERE NOT EXISTS (SELECT 1 FROM oauth_access_tokens a WHERE a.refresh_family_id = g.id)
+         AND NOT EXISTS (SELECT 1 FROM oauth_refresh_tokens r WHERE r.family_id = g.id)`
+    );
   }
 }
 
@@ -498,6 +539,17 @@ function canonicalMcpResource(value: string): string {
     throw new OAuthException("invalid_request", "OAuth resource is invalid");
   }
   return canonicalResource;
+}
+
+function refreshTokenUsable(row: RefreshTokenRow, clientId: string, resource: string): boolean {
+  return (
+    !row.revoked_at &&
+    !row.disabled_at &&
+    row.user_token_version === row.current_token_version &&
+    new Date(row.expires_at).getTime() > Date.now() &&
+    row.client_id === clientId &&
+    row.resource === resource
+  );
 }
 
 function requestedScopes(value: string | undefined): McpScope[] {

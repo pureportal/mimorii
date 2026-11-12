@@ -14,6 +14,7 @@ Mimorii publishes classic tools plus a standards-based MCP Apps resource for `ge
 
 | Client or surface             | Transport                      | OAuth compatibility                                 | MCP Apps                | Assessment                      |
 | ----------------------------- | ------------------------------ | --------------------------------------------------- | ----------------------- | ------------------------------- |
+| Machdoch desktop and CLI      | Streamable HTTP                | Registered native client, PKCE, and refresh match   | Supported               | Supported; verified locally     |
 | ChatGPT plugins               | Public Streamable HTTP         | CIMD, PKCE, refresh, and scope step-up match        | Supported               | Supported; live flow unverified |
 | Claude Code                   | Streamable HTTP                | CIMD, PKCE, refresh, and scope step-up match        | Host support documented | Supported; live flow unverified |
 | Claude hosted connectors      | Public HTTPS Streamable HTTP   | CIMD and hosted callback match                      | Interactive connectors  | Supported; live flow unverified |
@@ -26,6 +27,14 @@ Mimorii publishes classic tools plus a standards-based MCP Apps resource for `ge
 | VS Code local agent           | Streamable HTTP                | Automatic CIMD and scope step-up match              | Not documented          | Unverified                      |
 | VS Code Copilot agent harness | Local unauthenticated MCP only | Remote OAuth is not available                       | Not applicable          | Unsupported                     |
 | Cursor                        | Streamable HTTP                | DCR or static credentials; CIMD is not documented   | Not documented          | Unverified                      |
+
+## Machdoch
+
+Machdoch includes a **Mimorii** MCP preset under Data & Observability. It connects to `https://mimorii.app/api/mcp`; change the URL in the server's setup for a self-hosted Mimorii. The preset requests `mcp:read mcp:write` and authorizes with the registered native client `machdoch-client` through Machdoch's loopback callback on port 43110. A different callback port configured in Machdoch is accepted because Mimorii ignores the port of loopback callbacks.
+
+To connect a second Mimorii server, add a custom `streamable-http` server in Machdoch with OAuth, client ID `machdoch-client`, redirect URL `http://127.0.0.1:43110/oauth/callback`, and scopes `mcp:read, mcp:write`. machdoch.cloud managed settings cannot distribute OAuth MCP servers yet, so each Machdoch user adds the Mimorii preset on their device.
+
+On 2026-11-12, the MCP SDK version used by Machdoch (1.29.0) was tested against a self-hosted production build: `NODE_ENV=production`, an HTTPS `MIMORII_PUBLIC_URL` on a non-local hostname, and a TLS-terminating reverse proxy that preserves `Host`. It completed discovery, consent in the web app, the loopback callback, tool calls including `get_incident_logs` and linking a resource's logs with `update_resource`, a refresh retried after a lost response, and disconnection from Account → Connected apps, after which the next refresh failed with `invalid_grant`. The packaged Machdoch desktop app and a public deployment have not been tested.
 
 ## OpenAI
 

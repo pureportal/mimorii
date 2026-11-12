@@ -2710,6 +2710,18 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         })
         .expect(200);
       expect(rotated.body.refresh_token).not.toBe(readTokens.body.refresh_token);
+      const retried = await request(app.getHttpServer())
+        .post("/api/oauth/token")
+        .type("form")
+        .send({
+          grant_type: "refresh_token",
+          client_id: clientId,
+          refresh_token: readTokens.body.refresh_token,
+          resource,
+        })
+        .expect(200);
+      await callMcp(rotated.body.access_token, mcpRequest("tools/list", {})).expect(401);
+      await callMcp(retried.body.access_token, mcpRequest("tools/list", {})).expect(200);
       await request(app.getHttpServer())
         .post("/api/oauth/token")
         .type("form")
@@ -2721,7 +2733,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         })
         .expect(400)
         .expect(({ body }) => expect(body.error).toBe("invalid_grant"));
-      await callMcp(rotated.body.access_token, mcpRequest("tools/list", {})).expect(401);
+      await callMcp(retried.body.access_token, mcpRequest("tools/list", {})).expect(401);
     } finally {
       metadata.mockRestore();
     }

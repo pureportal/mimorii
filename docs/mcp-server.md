@@ -29,6 +29,8 @@ methods:
 }
 ```
 
+The Machdoch desktop app has no public HTTPS client document, so Mimorii registers it as a built-in public native client with the ID `machdoch-client` and the loopback callback `http://127.0.0.1:43110/oauth/callback`. It is the same client identity Machdoch uses for machdoch.cloud. It follows the same PKCE, consent, refresh, and revocation rules as other clients; the consent page shows its name and the local-app warning but no client host.
+
 HTTPS redirects are matched exactly. HTTP loopback redirects require the registered scheme, host, path, and query, while the port is ignored for ephemeral native-client callbacks. Authorization and token requests must use the canonical resource URL derived from `MIMORII_PUBLIC_URL`:
 
 ```text
@@ -37,7 +39,9 @@ https://mimorii.example/api/mcp
 
 The consent page displays the client hostname, redirect destination, requested permissions, and whether the client can retain access with refresh tokens. Loopback redirects receive an additional local-app warning.
 
-Authorization codes expire after five minutes and are single-use. Access tokens expire after one hour. A client receives a 30-day refresh token only when its metadata declares the `refresh_token` grant. Refresh tokens rotate on every use; authorization-code or refresh-token replay revokes the entire token family. Codes and tokens are stored only as hashes. Resource comparison accepts uppercase scheme and host components for interoperability while preserving the exact endpoint path and rejecting credentials, query strings, and fragments.
+Authorization codes expire after five minutes and are single-use. Access tokens expire after one hour. A client receives a 30-day refresh token only when its metadata declares the `refresh_token` grant. Refresh tokens rotate on every use; authorization-code or refresh-token replay revokes the entire token family. A refresh token presented again within 60 seconds is treated as a retry after a lost response only while its replacement has never been used: the unused replacement is revoked and a new pair is issued. Any other reuse is a replay. Codes and tokens are stored only as hashes. Resource comparison accepts uppercase scheme and host components for interoperability while preserving the exact endpoint path and rejecting credentials, query strings, and fragments.
+
+Each approval creates one connected app. Users see their connected apps, when they connected, and when they last used Mimorii under Account → Connected apps, and Disconnect revokes that app's access and refresh tokens immediately. Listing and disconnecting require a browser session.
 
 Every access and refresh operation checks the represented user's current token version and disabled state. Password or account security changes that invalidate the user's sessions also invalidate their OAuth grants. Authorization responses include `iss`, and access tokens are bound to the exact MCP resource and client.
 
@@ -59,6 +63,13 @@ All tools receive the user ID from the validated access token. User IDs, roles, 
 | `list_maintenance`, `get_maintenance`                       | `mcp:read`           | Viewer                   |
 | `update_resource`                                           | `mcp:read mcp:write` | Member                   |
 | `create_incident`, `add_incident_update`                    | `mcp:read mcp:write` | Member                   |
+| `search_logs`, `get_log_volume`, `get_log_patterns`         | `mcp:read`           | Viewer, logs enabled     |
+| `list_log_labels`, `list_log_fields`, `get_log_context`     | `mcp:read`           | Viewer, logs enabled     |
+| `get_incident_logs`                                         | `mcp:read`           | Viewer, logs enabled     |
+| `list_log_alert_rules`, `test_log_alert_rule`               | `mcp:read`           | Viewer, logs enabled     |
+| `create_log_alert_rule`                                     | `mcp:read mcp:write` | Member, logs enabled     |
+
+`get_incident_logs` returns the log volume and most severe log patterns from 15 minutes before an incident started until 15 minutes after it ended, capped at seven days. It covers the log alert rule that opened the incident and each linked resource that has a log query, and lists the incident's resources without one. `update_resource` can set or remove a resource's log query, so an agent can link logs it finds with `list_log_labels`.
 
 Mutation tools reuse the same validation, transactions, audit events, notification behavior, and role checks as REST mutations. Incident mutations are marked as non-idempotent and open-world because they can publish updates and enqueue notifications. Resource updates are non-destructive and do not expose agent, check, or secret mutation paths.
 

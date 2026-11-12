@@ -23,6 +23,36 @@ export class Migration20261113000000 extends Migration {
 
       ALTER TABLE resources ADD COLUMN log_query TEXT;
 
+      DELETE FROM oauth_authorization_codes;
+      ALTER TABLE oauth_authorization_codes ADD COLUMN client_name TEXT NOT NULL;
+      ALTER TABLE oauth_refresh_tokens ADD COLUMN replaced_by TEXT;
+
+      CREATE TABLE oauth_grants (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        last_used_at TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX idx_oauth_grants_user ON oauth_grants(user_id, created_at DESC);
+
+      INSERT INTO oauth_grants (id, user_id, client_id, client_name, scopes, created_at, last_used_at)
+      SELECT family_id, user_id, client_id,
+        COALESCE(substring(client_id from '^https://([^/:]+)'), client_id),
+        MAX(scopes), MIN(created_at), MAX(last_used_at)
+      FROM (
+        SELECT refresh_family_id AS family_id, user_id, client_id, scopes, created_at, last_used_at
+        FROM oauth_access_tokens
+        UNION ALL
+        SELECT family_id, user_id, client_id, scopes, created_at, NULL
+        FROM oauth_refresh_tokens
+      ) tokens
+      GROUP BY family_id, user_id, client_id;
+
       ALTER TABLE checks
         DROP CONSTRAINT checks_type_check,
         ADD CONSTRAINT checks_type_check CHECK (
@@ -42,6 +72,10 @@ export class Migration20261113000000 extends Migration {
         ADD CONSTRAINT checks_type_check CHECK (
           type IN ('http', 'tcp', 'dns', 'icmp', 'wan', 'host', 'disk', 'docker', 'database')
         );
+
+      DROP TABLE oauth_grants;
+      ALTER TABLE oauth_refresh_tokens DROP COLUMN replaced_by;
+      ALTER TABLE oauth_authorization_codes DROP COLUMN client_name;
 
       ALTER TABLE resources DROP COLUMN log_query;
 

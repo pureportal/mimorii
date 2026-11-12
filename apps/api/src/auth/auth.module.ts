@@ -9,6 +9,7 @@ import { AuthGuard } from "./auth.guard.js";
 import { AuthService } from "./auth.service.js";
 import { OptionalAuthGuard } from "./optional-auth.guard.js";
 import { OAuthClientMetadataService } from "./oauth-client-metadata.service.js";
+import { OAuthConnectionsService } from "./oauth-connections.service.js";
 import { OAuthController } from "./oauth.controller.js";
 import { OAuthService } from "./oauth.service.js";
 import { PasswordResetService } from "./password-reset.service.js";
@@ -43,6 +44,7 @@ function jwtSecret(): string {
     ApiTokensService,
     OAuthClientMetadataService,
     OAuthService,
+    OAuthConnectionsService,
     SessionService,
     PasswordResetService,
     TwoFactorService,

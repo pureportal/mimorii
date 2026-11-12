@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
+  Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Res,
@@ -24,6 +27,7 @@ import {
   oauthTokenUrl,
   publicOrigin,
 } from "./oauth-config.js";
+import { OAuthConnectionsService } from "./oauth-connections.service.js";
 import { OAuthException } from "./oauth-error.js";
 import {
   oauthAuthorizationDecisionSchema,
@@ -38,7 +42,10 @@ import { OAuthService } from "./oauth.service.js";
 @ApiExcludeController()
 @Controller()
 export class OAuthController {
-  constructor(private readonly oauth: OAuthService) {}
+  constructor(
+    private readonly oauth: OAuthService,
+    private readonly connections: OAuthConnectionsService
+  ) {}
 
   @Get(".well-known/oauth-protected-resource/api/mcp")
   protectedResourceMetadata(@Res({ passthrough: true }) response: Response) {
@@ -112,6 +119,26 @@ export class OAuthController {
       user,
       parseOAuthInput(oauthAuthorizationDecisionSchema, body)
     );
+  }
+
+  @Get("oauth/connections")
+  @UseGuards(AuthGuard)
+  connectionList(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: Response
+  ) {
+    preventCaching(response);
+    return this.connections.list(user);
+  }
+
+  @Delete("oauth/connections/:id")
+  @HttpCode(204)
+  @UseGuards(AuthGuard)
+  disconnect(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string
+  ): Promise<void> {
+    return this.connections.disconnect(user, id);
   }
 
   @Post("oauth/token")

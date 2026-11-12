@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ApiTokensCard } from "../components/api-tokens-card";
+import { ConnectedAppsCard } from "../components/connected-apps-card";
 import { NotificationDeviceCard } from "../components/notification-device-card";
 import { PrivacySettingsButton } from "../components/privacy-controls";
 import { TwoFactorCard } from "../components/two-factor/two-factor-card";
@@ -101,6 +102,8 @@ export function SettingsPage() {
       </Card>
 
       <ApiTokensCard />
+
+      <ConnectedAppsCard />
 
       <NotificationDeviceCard />
 

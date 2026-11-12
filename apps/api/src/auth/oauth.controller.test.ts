@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OAuthController } from "./oauth.controller.js";
+import type { OAuthConnectionsService } from "./oauth-connections.service.js";
 import type { OAuthService } from "./oauth.service.js";
 
 beforeEach(() => vi.stubEnv("MIMORII_PUBLIC_URL", "https://mimorii.example"));
@@ -8,7 +9,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("OAuth controller", () => {
   it("publishes MCP resource and authorization-server discovery metadata", () => {
-    const controller = new OAuthController({} as OAuthService);
+    const controller = new OAuthController({} as OAuthService, {} as OAuthConnectionsService);
     const resourceResponse = responseFixture();
     const serverResponse = responseFixture();
 
@@ -39,7 +40,7 @@ describe("OAuth controller", () => {
   });
 
   it("ignores authorization extensions and moves the request to the local consent page", () => {
-    const controller = new OAuthController({} as OAuthService);
+    const controller = new OAuthController({} as OAuthService, {} as OAuthConnectionsService);
     const fixture = responseFixture();
 
     controller.authorize(
@@ -63,7 +64,7 @@ describe("OAuth controller", () => {
   });
 
   it("uses the OAuth-specific error for unsupported authorization response types", () => {
-    const controller = new OAuthController({} as OAuthService);
+    const controller = new OAuthController({} as OAuthService, {} as OAuthConnectionsService);
     const fixture = responseFixture();
 
     expect(() =>
@@ -80,7 +81,7 @@ describe("OAuth controller", () => {
   });
 
   it("rejects malformed canonical authorization parameters", () => {
-    const controller = new OAuthController({} as OAuthService);
+    const controller = new OAuthController({} as OAuthService, {} as OAuthConnectionsService);
     const fixture = responseFixture();
 
     for (const query of [
@@ -95,9 +96,10 @@ describe("OAuth controller", () => {
 
   it("keeps the authenticated consent request strict", () => {
     const authorizationRequestHandler = vi.fn();
-    const controller = new OAuthController({
-      authorizationRequest: authorizationRequestHandler,
-    } as unknown as OAuthService);
+    const controller = new OAuthController(
+      { authorizationRequest: authorizationRequestHandler } as unknown as OAuthService,
+      {} as OAuthConnectionsService
+    );
     const fixture = responseFixture();
 
     expect(() =>
@@ -111,7 +113,10 @@ describe("OAuth controller", () => {
 
   it("requires exact form media types and strict token parameters", async () => {
     const exchange = vi.fn(async () => ({ access_token: "token" }));
-    const controller = new OAuthController({ exchange } as unknown as OAuthService);
+    const controller = new OAuthController(
+      { exchange } as unknown as OAuthService,
+      {} as OAuthConnectionsService
+    );
     const fixture = responseFixture();
     const tokenRequest = {
       grant_type: "authorization_code",

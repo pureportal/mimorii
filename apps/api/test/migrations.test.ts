@@ -58,6 +58,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "user_two_factor",
           "user_recovery_codes",
           "two_factor_challenges",
+          "oauth_grants",
         ])
       );
 
