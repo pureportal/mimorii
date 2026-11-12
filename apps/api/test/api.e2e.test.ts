@@ -2532,6 +2532,7 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
     const metadata = vi.spyOn(clients, "resolve").mockResolvedValue({
       clientId,
       clientName: "MCP test client",
+      publisherHost: "client.example",
       redirectUris: [redirectUri],
       allowRefresh: true,
     });

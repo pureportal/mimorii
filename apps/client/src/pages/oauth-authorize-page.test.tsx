@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OAuthAuthorizePage } from "./oauth-authorize-page";
@@ -87,6 +87,32 @@ describe("OAuth consent page", () => {
       state: "client-state",
       decision: "approve",
     });
+  });
+
+  it("omits the publisher row for a registered native client", async () => {
+    useAuthMock.mockReturnValue({ session: { accessToken: "session" } });
+    apiMock.mockResolvedValueOnce({
+      clientName: "Machdoch",
+      clientHost: null,
+      redirectHost: "127.0.0.1:43110",
+      redirectIsLoopback: true,
+      refreshAccess: true,
+      scopes: ["mcp:read"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={[`/oauth/authorize${search}`]}>
+        <Routes>
+          <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const heading = await screen.findByRole("heading", { name: "Connect Machdoch" });
+    const consent = within(heading.closest("main")!);
+    expect(consent.queryByText("Client")).not.toBeInTheDocument();
+    expect(consent.getByText("127.0.0.1:43110")).toBeVisible();
+    expect(consent.getByText("Only continue if you opened this local app.")).toBeVisible();
   });
 });
 

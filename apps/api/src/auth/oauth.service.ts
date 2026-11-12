@@ -70,7 +70,7 @@ interface AccessTokenUserRow extends UserRow {
 
 interface ValidatedAuthorizationRequest {
   clientName: string;
-  clientHost: string;
+  clientHost: string | null;
   redirectHost: string;
   redirectIsLoopback: boolean;
   scopes: McpScope[];
@@ -266,7 +266,7 @@ export class OAuthService {
     const redirect = new URL(input.redirect_uri);
     return {
       clientName: client.clientName,
-      clientHost: new URL(client.clientId).hostname,
+      clientHost: client.publisherHost,
       redirectHost: redirect.host,
       redirectIsLoopback: isLoopbackHostname(redirect.hostname),
       scopes,

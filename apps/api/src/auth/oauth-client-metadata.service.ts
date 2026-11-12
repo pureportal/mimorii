@@ -33,9 +33,23 @@ const metadataSchema = z.object({
 export interface OAuthClientMetadata {
   clientId: string;
   clientName: string;
+  publisherHost: string | null;
   redirectUris: string[];
   allowRefresh: boolean;
 }
+
+export const registeredNativeClients: ReadonlyMap<string, OAuthClientMetadata> = new Map([
+  [
+    "machdoch-client",
+    {
+      clientId: "machdoch-client",
+      clientName: "Machdoch",
+      publisherHost: null,
+      redirectUris: ["http://127.0.0.1:43110/oauth/callback"],
+      allowRefresh: true,
+    },
+  ],
+]);
 
 interface CachedMetadata {
   value: OAuthClientMetadata;
@@ -54,6 +68,8 @@ export class OAuthClientMetadataService {
   constructor(private readonly targets: TargetSafetyService) {}
 
   async resolve(clientId: string): Promise<OAuthClientMetadata> {
+    const registered = registeredNativeClients.get(clientId);
+    if (registered) return registered;
     const url = validateClientIdUrl(clientId);
     const cached = this.cache.get(clientId);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
@@ -216,9 +232,14 @@ export function parseClientMetadata(body: string, clientId: string): OAuthClient
   return {
     clientId,
     clientName: parsed.data.client_name,
+    publisherHost: clientPublisherHost(clientId),
     redirectUris,
     allowRefresh: parsed.data.grant_types?.includes("refresh_token") ?? false,
   };
+}
+
+export function clientPublisherHost(clientId: string): string | null {
+  return registeredNativeClients.has(clientId) ? null : new URL(clientId).hostname;
 }
 
 export function validRedirectUri(value: string): boolean {

@@ -416,6 +416,7 @@ function serviceFixture(metadataOverrides: Partial<OAuthClientMetadata> = {}) {
   const metadata: OAuthClientMetadata = {
     clientId,
     clientName: "Operations assistant",
+    publisherHost: "client.example",
     redirectUris: [redirectUri],
     allowRefresh: true,
     ...metadataOverrides,

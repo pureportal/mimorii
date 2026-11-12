@@ -79,10 +79,12 @@ export function OAuthAuthorizePage() {
                 </div>
               </div>
               <dl className="mt-5 grid gap-2 text-sm">
-                <div className="grid grid-cols-[5rem_1fr] gap-2">
-                  <dt className="text-muted">Client</dt>
-                  <dd className="break-all">{request.clientHost}</dd>
-                </div>
+                {request.clientHost ? (
+                  <div className="grid grid-cols-[5rem_1fr] gap-2">
+                    <dt className="text-muted">Client</dt>
+                    <dd className="break-all">{request.clientHost}</dd>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-[5rem_1fr] gap-2">
                   <dt className="text-muted">Returns to</dt>
                   <dd className="break-all">{request.redirectHost}</dd>

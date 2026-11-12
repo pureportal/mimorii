@@ -35,6 +35,7 @@ describe("OAuth client metadata", () => {
     ).toEqual({
       clientId,
       clientName: "Operations assistant",
+      publisherHost: "client.example",
       redirectUris: ["https://client.example/oauth/callback", "http://127.0.0.1:9123/callback"],
       allowRefresh: true,
     });
@@ -146,6 +147,29 @@ describe("OAuth client metadata", () => {
 
     await expect(service.resolve(clientId)).rejects.toMatchObject({ code: "invalid_client" });
     expect(resolveStrictPublicHost).toHaveBeenCalledWith("client.example");
+  });
+
+  it("resolves the registered Machdoch native client without a metadata request", async () => {
+    const resolveStrictPublicHost = vi.fn();
+    const service = new OAuthClientMetadataService({
+      resolveStrictPublicHost,
+    } as unknown as TargetSafetyService);
+
+    await expect(service.resolve("machdoch-client")).resolves.toEqual({
+      clientId: "machdoch-client",
+      clientName: "Machdoch",
+      publisherHost: null,
+      redirectUris: ["http://127.0.0.1:43110/oauth/callback"],
+      allowRefresh: true,
+    });
+    await expect(service.resolve("machdoch")).rejects.toMatchObject({ code: "invalid_client" });
+    expect(resolveStrictPublicHost).not.toHaveBeenCalled();
+    expect(
+      redirectUriMatches(
+        "http://127.0.0.1:43110/oauth/callback",
+        "http://127.0.0.1:43111/oauth/callback"
+      )
+    ).toBe(true);
   });
 
   it("honors shared metadata cache directives within the local cache cap", () => {

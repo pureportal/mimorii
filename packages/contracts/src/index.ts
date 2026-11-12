@@ -1354,7 +1354,7 @@ export interface CreatedApiToken {
 
 export interface OAuthAuthorizationRequestSummary {
   clientName: string;
-  clientHost: string;
+  clientHost: string | null;
   redirectHost: string;
   redirectIsLoopback: boolean;
   refreshAccess: boolean;
