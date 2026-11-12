@@ -7,6 +7,10 @@ use std::time::Duration;
 
 static TEMPORARY_PATH_ID: AtomicUsize = AtomicUsize::new(0);
 
+pub fn plain(text: &str) -> String {
+    anstream::adapter::strip_str(text).to_string()
+}
+
 pub struct MockResponse {
     status: u16,
     headers: Vec<(String, String)>,

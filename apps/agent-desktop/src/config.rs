@@ -83,10 +83,6 @@ impl AgentConfig {
         result
     }
 
-    pub fn public_summary(&self) -> String {
-        format!("server: {}\ncredential: enrolled", self.server_url)
-    }
-
     fn validate(&self) -> Result<()> {
         if normalize_server_url(&self.server_url, true)? != self.server_url {
             bail!("agent server URL is not normalized");

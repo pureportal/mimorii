@@ -5,6 +5,7 @@ use dialoguer::{Input, MultiSelect, Select, theme::ColorfulTheme};
 use crate::config::AgentConfig;
 use crate::save_config;
 use crate::target_policy::{TargetPolicy, TargetProtocol};
+use crate::terminal::{self, Tone};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct ConfigOptions {
@@ -32,11 +33,19 @@ pub(crate) fn configure(options: ConfigOptions) -> Result<()> {
     if options.has_updates() {
         apply_config_options(&mut config.target_policy, &options)?;
     } else if !interactive_configure(&mut config.target_policy)? {
-        println!("configuration unchanged");
+        anstream::println!("{} Network access unchanged", terminal::mark(Tone::Neutral));
         return Ok(());
     }
     let path = save_config(&config)?;
-    println!("configuration updated: {}", path.display());
+    anstream::println!(
+        "{}
+{}",
+        terminal::success("Network access saved"),
+        terminal::fields(&[
+            ("Allowed", config.target_policy.summary()),
+            ("Configuration", path.display().to_string()),
+        ])
+    );
     Ok(())
 }
 

@@ -149,7 +149,7 @@ pub struct AgentPollResponse {
     pub tasks: Vec<AgentTask>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CheckType {
     Http,
@@ -194,7 +194,7 @@ pub enum FaviconResult {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CheckState {
     Up,

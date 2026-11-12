@@ -139,7 +139,8 @@ try {
     $cli = Join-Path $installDirectory "mimorii-agent-desktop.exe"
 
     $statusOutput = & $cli status
-    Assert-True ($LASTEXITCODE -eq 0 -and $statusOutput -eq "service: running") "The CLI did not report the running service"
+    $serviceRows = @($statusOutput | Where-Object { $_ -match '^\s*Service\s+.*Running$' })
+    Assert-True ($LASTEXITCODE -eq 0 -and $serviceRows.Count -eq 1) "The CLI did not report the running service"
     $controlStatus = & $cli status --json | ConvertFrom-Json
     Assert-True ($controlStatus.service -eq "running" -and -not $controlStatus.enrolled) "The Agent UI status is incorrect before enrollment"
 

@@ -123,10 +123,6 @@ fn saves_and_loads_camel_case_configuration_without_exposing_the_key() {
     let loaded = AgentConfig::load_from(&path).unwrap();
     assert_eq!(loaded.server_url, config.server_url);
     assert_eq!(loaded.agent_key, config.agent_key);
-    let summary = loaded.public_summary();
-    assert!(summary.contains("server: https://observe.example.com/api"));
-    assert!(summary.contains("credential: enrolled"));
-    assert!(!summary.contains(&valid_key()));
 
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

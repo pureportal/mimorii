@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 #[cfg(target_os = "linux")]
 use super::ServiceAction;
 #[cfg(windows)]
-use super::{AgentControlStatus, WindowsServiceControlAction};
+use super::WindowsServiceControlAction;
 use super::{
     Cli, CollectionWorker, Command, ConfigOptions, apply_config_options, check_runner_cycle, cycle,
     execute_tasks, run_configured_cycle, time_now,
@@ -210,16 +210,55 @@ fn parses_all_runtime_and_service_commands() {
         Command::Once
     ));
     assert!(matches!(
-        Cli::try_parse_from(["mimorii-agent-desktop", "doctor"])
+        Cli::try_parse_from(["mimorii-agent-desktop", "doctor", "--json"])
             .unwrap()
             .command,
-        Command::Doctor
+        Command::Doctor { json: true }
     ));
     assert!(matches!(
         Cli::try_parse_from(["mimorii-agent-desktop", "status"])
             .unwrap()
             .command,
-        Command::Status { json: false }
+        Command::Status {
+            json: false,
+            watch: false
+        }
+    ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "status", "--watch"])
+            .unwrap()
+            .command,
+        Command::Status {
+            json: false,
+            watch: true
+        }
+    ));
+    assert!(Cli::try_parse_from(["mimorii-agent-desktop", "status", "--watch", "--json"]).is_err());
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "activity", "-n", "5", "--json"])
+            .unwrap()
+            .command,
+        Command::Activity {
+            json: true,
+            limit: 5
+        }
+    ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "logs", "--follow"])
+            .unwrap()
+            .command,
+        Command::Logs {
+            lines: 50,
+            follow: true
+        }
+    ));
+    assert!(matches!(
+        Cli::try_parse_from(["mimorii-agent-desktop", "completions", "powershell"])
+            .unwrap()
+            .command,
+        Command::Completions {
+            shell: clap_complete::Shell::PowerShell
+        }
     ));
     assert!(matches!(
         Cli::try_parse_from(["mimorii-agent-desktop", "update"])
@@ -266,7 +305,10 @@ fn parses_all_runtime_and_service_commands() {
             Cli::try_parse_from(["mimorii-agent-desktop", "status", "--json"])
                 .unwrap()
                 .command,
-            Command::Status { json: true }
+            Command::Status {
+                json: true,
+                watch: false
+            }
         ));
         assert!(matches!(
             Cli::try_parse_from(["mimorii-agent-desktop", "windows-service"])
@@ -283,27 +325,6 @@ fn parses_all_runtime_and_service_commands() {
             }
         ));
     }
-}
-
-#[cfg(windows)]
-#[test]
-fn control_status_exposes_the_target_policy_without_the_agent_key() {
-    let value = serde_json::to_value(AgentControlStatus {
-        service: "running",
-        enrolled: true,
-        server_url: Some("https://observe.example.com/api".to_owned()),
-        target_policy: Some(TargetPolicy::default()),
-        configuration_error: None,
-        runtime: None,
-        log_path: "agent-desktop.log".to_owned(),
-    })
-    .unwrap();
-
-    assert_eq!(value["targetPolicy"]["allowedCidrs"], json!([]));
-    assert_eq!(value["targetPolicy"]["allowedHostnames"], json!([]));
-    assert_eq!(value["targetPolicy"]["allowedProtocols"], json!([]));
-    assert_eq!(value["targetPolicy"]["allowedPorts"], json!([]));
-    assert!(value.get("agentKey").is_none());
 }
 
 #[test]
@@ -455,6 +476,8 @@ fn disk_tasks_collect_locally_without_uploading_host_telemetry() {
     .unwrap();
 
     assert_eq!(outcome.heartbeat.unwrap().unwrap().accepted_snapshots, 0);
+    assert_eq!(outcome.checks.len(), 1);
+    assert_eq!(outcome.checks[0].target, mount);
     let _poll_request = server
         .requests
         .recv_timeout(Duration::from_secs(1))

@@ -1,3 +1,4 @@
+mod activity;
 mod api;
 mod checks;
 mod collector;
@@ -5,25 +6,30 @@ mod config;
 mod config_command;
 mod containers;
 mod database;
+mod doctor;
 mod favicon;
 mod host_check;
 mod host_maintenance;
 mod icmp;
 #[cfg(target_os = "linux")]
 mod linux;
+mod logs;
 mod models;
 mod runtime;
 mod runtime_state;
 mod service;
+mod service_state;
 mod snapshot_store;
+mod status_command;
 mod target_policy;
+mod terminal;
 #[cfg(test)]
 mod test_support;
 mod update;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use serde::Serialize;
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -33,8 +39,6 @@ use config::AgentConfig;
 use config_command::apply_config_options;
 use config_command::{ConfigOptions, configure};
 use runtime::{run_check_runner_loop, run_check_runner_once, run_loop, run_once};
-use runtime_state::{RuntimeState, RuntimeSummary, unix_now};
-use target_policy::TargetPolicy;
 
 #[cfg(test)]
 use runtime::{CollectionWorker, check_runner_cycle, cycle, execute_tasks, run_configured_cycle};
@@ -43,7 +47,8 @@ use runtime::{CollectionWorker, check_runner_cycle, cycle, execute_tasks, run_co
 #[command(
     name = "mimorii-agent-desktop",
     version,
-    about = "Mimorii read-only monitoring agent"
+    about = "Mimorii monitoring agent for servers and desktops",
+    after_help = "Start with `mimorii-agent-desktop status`, or `mimorii-agent-desktop doctor` when something looks wrong."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -52,49 +57,115 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Connect this computer to a Mimorii server
     Enroll {
-        #[arg(long)]
+        /// Mimorii API URL, for example https://mimorii.example.com/api
+        #[arg(long, value_name = "URL")]
         server: String,
-        #[arg(long, env = "MIMORII_AGENT_KEY", hide_env_values = true)]
+        /// Enrollment key created in Mimorii
+        #[arg(
+            long,
+            env = "MIMORII_AGENT_KEY",
+            hide_env_values = true,
+            value_name = "KEY"
+        )]
         key: String,
+        /// Allow an http:// server URL
         #[arg(long)]
         allow_insecure_http: bool,
     },
+    /// Choose which network targets this agent may check
     Config {
         #[command(flatten)]
         options: ConfigOptions,
     },
+    /// Show the connection, service, and upload status
+    Status {
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Refresh continuously until Ctrl+C
+        #[arg(long, short, conflicts_with = "json")]
+        watch: bool,
+    },
+    /// Diagnose enrollment, connectivity, and service health
+    Doctor {
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show checks this agent ran recently
+    Activity {
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Number of checks to show
+        #[arg(long, short = 'n', default_value_t = 20, value_name = "COUNT")]
+        limit: usize,
+    },
+    /// Show the agent log
+    #[cfg(any(windows, target_os = "linux"))]
+    Logs {
+        /// Number of lines to show
+        #[arg(long, short = 'n', default_value_t = 50, value_name = "COUNT")]
+        lines: usize,
+        /// Keep printing new entries until Ctrl+C
+        #[arg(long, short)]
+        follow: bool,
+    },
+    /// Run the agent in the foreground
+    Run,
+    /// Run a single collection and check cycle
+    Once,
+    /// Run network checks without collecting host telemetry
     CheckRunner {
-        #[arg(long, env = "MIMORII_AGENT_SERVER")]
+        /// Mimorii API URL
+        #[arg(long, env = "MIMORII_AGENT_SERVER", value_name = "URL")]
         server: String,
-        #[arg(long, env = "MIMORII_AGENT_KEY", hide_env_values = true)]
+        /// Enrollment key created in Mimorii
+        #[arg(
+            long,
+            env = "MIMORII_AGENT_KEY",
+            hide_env_values = true,
+            value_name = "KEY"
+        )]
         key: String,
+        /// Allow an http:// server URL
         #[arg(
             long,
             env = "MIMORII_AGENT_ALLOW_INSECURE_HTTP",
             default_value_t = false
         )]
         allow_insecure_http: bool,
-        #[arg(long, env = "MIMORII_AGENT_ALLOWED_CIDRS", default_value = "")]
+        /// Comma-separated CIDRs the runner may reach
+        #[arg(
+            long,
+            env = "MIMORII_AGENT_ALLOWED_CIDRS",
+            default_value = "",
+            value_name = "CIDRS"
+        )]
         allowed_cidrs: String,
+        /// Run a single cycle and exit
         #[arg(long)]
         once: bool,
     },
-    Run,
-    Once,
-    Doctor,
-    Status {
-        #[arg(long)]
-        json: bool,
-    },
+    /// Check for and install agent updates
     Update {
+        /// Only report whether an update is available
         #[arg(long)]
         check: bool,
+        /// Print machine-readable JSON
         #[arg(long)]
         json: bool,
         #[arg(long, hide = true)]
         privileged: bool,
     },
+    /// Print a shell completion script
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
+    /// Manage the systemd user service
     #[cfg(target_os = "linux")]
     Service {
         #[command(subcommand)]
@@ -131,7 +202,9 @@ enum WindowsServiceControlAction {
 #[cfg(target_os = "linux")]
 #[derive(Subcommand)]
 enum ServiceAction {
+    /// Install, enable, and start the service
     Install,
+    /// Stop, disable, and remove the service
     Uninstall,
 }
 
@@ -144,6 +217,13 @@ fn main() -> Result<()> {
             allow_insecure_http,
         } => enroll(&server, &key, allow_insecure_http),
         Command::Config { options } => configure(options),
+        Command::Status { json, watch } => status_command::show(json, watch),
+        Command::Doctor { json } => doctor::run(json),
+        Command::Activity { json, limit } => activity::show(json, limit),
+        #[cfg(any(windows, target_os = "linux"))]
+        Command::Logs { lines, follow } => logs::show(lines, follow),
+        Command::Run => run_loop(),
+        Command::Once => run_once(),
         Command::CheckRunner {
             server,
             key,
@@ -159,15 +239,17 @@ fn main() -> Result<()> {
                 run_check_runner_loop(config)
             }
         }
-        Command::Run => run_loop(),
-        Command::Once => run_once().map(|_| ()),
-        Command::Doctor => doctor(),
-        Command::Status { json } => status(json),
         Command::Update {
             check,
             json,
             privileged,
         } => update::run(check, json, privileged),
+        Command::Completions { shell } => {
+            let mut command = Cli::command();
+            let name = command.get_name().to_owned();
+            clap_complete::generate(shell, &mut command, name, &mut std::io::stdout());
+            Ok(())
+        }
         #[cfg(target_os = "linux")]
         Command::Service { action } => match action {
             ServiceAction::Install => service::install(&std::env::current_exe()?),
@@ -196,12 +278,19 @@ fn enroll(server: &str, key: &str, allow_insecure_http: bool) -> Result<()> {
     }
     ApiClient::new(config.clone())?.verify()?;
     let path = save_config(&config)?;
-    println!("enrolled with {}", config.server_url);
-    println!("configuration: {}", path.display());
+    anstream::println!(
+        "{}\n{}",
+        terminal::success(format!("Enrolled with {}", config.server_url)),
+        terminal::fields(&[("Configuration", path.display().to_string())])
+    );
     #[cfg(target_os = "linux")]
     service::install(&std::env::current_exe()?).context(
         "enrollment succeeded, but the Linux agent service could not be installed or started; fix the reported issue, then run `mimorii-agent-desktop service install`",
     )?;
+    anstream::println!(
+        "\n  Check the connection with {}",
+        terminal::command("mimorii-agent-desktop doctor")
+    );
     Ok(())
 }
 
@@ -213,96 +302,6 @@ pub(crate) fn save_config(config: &AgentConfig) -> Result<std::path::PathBuf> {
 
     #[cfg(not(windows))]
     return config.save();
-}
-
-fn doctor() -> Result<()> {
-    let config = AgentConfig::load()?;
-    println!("configuration: ok");
-    println!("agent: ok");
-    println!("{}", config.public_summary());
-    if let Some(summary) = runtime_summary()? {
-        for line in summary.lines() {
-            println!("{line}");
-        }
-    }
-    ApiClient::new(config)?
-        .verify()
-        .context("server verification failed")?;
-    println!("server: reachable");
-    Ok(())
-}
-
-fn status(json: bool) -> Result<()> {
-    let status = control_status()?;
-    if json {
-        println!("{}", serde_json::to_string(&status)?);
-        return Ok(());
-    }
-    #[cfg(windows)]
-    println!("service: {}", status.service);
-    match (&status.server_url, &status.configuration_error) {
-        (Some(server_url), _) => {
-            println!("server: {server_url}");
-            println!("credential: enrolled");
-        }
-        (None, Some(error)) => println!("configuration: {error}"),
-        (None, None) => println!("credential: not enrolled"),
-    }
-    if let Some(runtime) = &status.runtime {
-        for line in runtime.lines() {
-            println!("{line}");
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentControlStatus {
-    #[cfg(windows)]
-    service: &'static str,
-    enrolled: bool,
-    server_url: Option<String>,
-    target_policy: Option<TargetPolicy>,
-    configuration_error: Option<String>,
-    runtime: Option<RuntimeSummary>,
-    #[cfg(windows)]
-    log_path: String,
-}
-
-fn control_status() -> Result<AgentControlStatus> {
-    #[cfg(windows)]
-    let service = service::status()?.as_str();
-    let runtime = runtime_summary().ok().flatten();
-    let path = config::config_path()?;
-    let (enrolled, server_url, target_policy, configuration_error) = if !path.exists() {
-        (false, None, None, None)
-    } else {
-        match AgentConfig::load() {
-            Ok(config) => (
-                true,
-                Some(config.server_url),
-                Some(config.target_policy),
-                None,
-            ),
-            Err(error) => (false, None, None, Some(format!("{error:#}"))),
-        }
-    };
-    Ok(AgentControlStatus {
-        #[cfg(windows)]
-        service,
-        enrolled,
-        server_url,
-        target_policy,
-        configuration_error,
-        runtime,
-        #[cfg(windows)]
-        log_path: config::log_path()?.display().to_string(),
-    })
-}
-
-fn runtime_summary() -> Result<Option<RuntimeSummary>> {
-    Ok(RuntimeState::load(&config::state_path()?)?.map(|state| state.summary(unix_now())))
 }
 
 pub fn time_now() -> String {

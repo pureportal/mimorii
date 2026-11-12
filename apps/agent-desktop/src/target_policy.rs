@@ -52,6 +52,39 @@ pub struct TargetPolicy {
 }
 
 impl TargetPolicy {
+    pub fn summary(&self) -> String {
+        let join = |values: Vec<String>| values.join(", ");
+        let parts = [
+            (
+                "IP addresses",
+                join(self.allowed_cidrs.iter().map(ToString::to_string).collect()),
+            ),
+            ("Hostnames", self.allowed_hostnames.join(", ")),
+            (
+                "Protocols",
+                join(
+                    self.allowed_protocols
+                        .iter()
+                        .map(|protocol| protocol.as_str().to_owned())
+                        .collect(),
+                ),
+            ),
+            (
+                "Ports",
+                join(self.allowed_ports.iter().map(ToString::to_string).collect()),
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, values)| !values.is_empty())
+        .map(|(label, values)| format!("{label} {values}"))
+        .collect::<Vec<_>>();
+        if parts.is_empty() {
+            "All targets".to_owned()
+        } else {
+            parts.join(" · ")
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         if self.allowed_hostnames.iter().any(|pattern| {
             let wildcard_count = pattern

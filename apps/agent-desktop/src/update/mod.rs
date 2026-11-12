@@ -10,6 +10,8 @@ use serde::Serialize;
 
 use github::GitHubReleaseClient;
 
+use crate::terminal;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateStatus {
@@ -76,10 +78,19 @@ pub fn run(check_only: bool, json: bool, _privileged: bool) -> Result<()> {
     } else {
         match outcome {
             #[cfg(target_os = "linux")]
-            InstallOutcome::Installed => println!("updated Mimorii Agent to {}", result.version),
+            InstallOutcome::Installed => anstream::println!(
+                "{}",
+                terminal::success(format!("Updated Mimorii Agent to {}", result.version))
+            ),
             #[cfg(windows)]
             InstallOutcome::InstallerStarted => {
-                println!("Mimorii Agent {} installer started", result.version)
+                anstream::println!(
+                    "{}",
+                    terminal::success(format!(
+                        "Mimorii Agent {} installer started",
+                        result.version
+                    ))
+                )
             }
         }
     }
@@ -90,12 +101,25 @@ fn print_status(status: &UpdateStatus, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string(status)?);
     } else if status.update_available {
-        println!(
-            "Mimorii Agent {} is available (installed: {})",
-            status.latest_version, status.current_version
+        anstream::println!(
+            "{} Mimorii Agent {} is available {}
+  Install it with {}",
+            terminal::mark(terminal::Tone::Warning),
+            status.latest_version,
+            terminal::paint(
+                terminal::MUTED,
+                format!("(installed {})", status.current_version)
+            ),
+            terminal::command("mimorii-agent-desktop update")
         );
     } else {
-        println!("Mimorii Agent {} is up to date", status.current_version);
+        anstream::println!(
+            "{}",
+            terminal::success(format!(
+                "Mimorii Agent {} is up to date",
+                status.current_version
+            ))
+        );
     }
     Ok(())
 }

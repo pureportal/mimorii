@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+use crate::activity::{self, CheckActivity};
 use crate::api::{ApiClient, PayloadRejected};
 use crate::config::{
     AgentConfig, ConfigRefresh, ConfigWatcher, collection_path, config_path, state_path,
@@ -14,6 +15,7 @@ use crate::config::{
 use crate::models::{AgentTask, HeartbeatRequest, HeartbeatResponse, TaskResult};
 use crate::runtime_state::RuntimeStatus;
 use crate::snapshot_store::SnapshotStore;
+use crate::terminal::{self, Tone};
 
 const DEFAULT_COLLECTION_INTERVAL_SECONDS: u64 = 30;
 const MINIMUM_COLLECTION_INTERVAL_SECONDS: u64 = 15;
@@ -37,12 +39,20 @@ struct ConsoleReporter;
 
 impl RuntimeReporter for ConsoleReporter {
     fn info(&self, message: &str) {
-        println!("{message}");
+        anstream::println!("{} {message}", timestamp());
     }
 
     fn error(&self, message: &str) {
-        eprintln!("{message}");
+        anstream::eprintln!(
+            "{} {}",
+            timestamp(),
+            terminal::tinted(Tone::Danger, message)
+        );
     }
+}
+
+fn timestamp() -> String {
+    terminal::paint(terminal::MUTED, crate::time_now())
 }
 
 pub(crate) fn run_loop() -> Result<()> {
@@ -133,6 +143,7 @@ fn record_cycle(status: &mut RuntimeStatus<'_>, outcome: Result<CycleOutcome>) {
     match outcome {
         Ok(outcome) => {
             status.contacted();
+            status.record_checks(outcome.checks);
             match outcome.heartbeat {
                 Ok(Some(_)) => {
                     status.uploaded();
@@ -166,26 +177,32 @@ pub(crate) fn run_once() -> Result<()> {
         Ok(())
     })?;
     match outcome.heartbeat? {
-        Some(response) => println!(
-            "trigger accepted at {} with {} snapshot(s) and {} result(s)",
-            response.accepted_at, response.accepted_snapshots, response.accepted_results
+        Some(response) => anstream::println!(
+            "{}",
+            terminal::success(format!(
+                "Uploaded {} and {} at {}",
+                terminal::count(response.accepted_snapshots, "snapshot", "snapshots"),
+                terminal::count(response.accepted_results, "check result", "check results"),
+                response.accepted_at
+            ))
         ),
-        None => println!("no trigger; collected data retained locally"),
+        None => anstream::println!(
+            "{} No checks requested; collected data stays queued locally",
+            terminal::mark(Tone::Neutral)
+        ),
     }
     Ok(())
 }
 
 pub(crate) fn run_check_runner_loop(config: AgentConfig) -> Result<()> {
     let client = ApiClient::new(config)?;
-    println!("Mimorii check runner started");
+    let reporter = ConsoleReporter;
+    reporter.info("Mimorii check runner started");
     loop {
         match check_runner_cycle(&client) {
-            Ok(Some(response)) => println!(
-                "trigger accepted at {} with {} result(s)",
-                response.accepted_at, response.accepted_results
-            ),
+            Ok(Some(response)) => reporter.info(&check_runner_summary(&response)),
             Ok(None) => {}
-            Err(error) => eprintln!("check runner cycle failed: {error:#}"),
+            Err(error) => reporter.error(&format!("check runner cycle failed: {error:#}")),
         }
         sleep(TRIGGER_POLL_INTERVAL);
     }
@@ -193,13 +210,20 @@ pub(crate) fn run_check_runner_loop(config: AgentConfig) -> Result<()> {
 
 pub(crate) fn run_check_runner_once(config: AgentConfig) -> Result<()> {
     match check_runner_cycle(&ApiClient::new(config)?)? {
-        Some(response) => println!(
-            "trigger accepted at {} with {} result(s)",
-            response.accepted_at, response.accepted_results
-        ),
-        None => println!("no trigger"),
+        Some(response) => {
+            anstream::println!("{}", terminal::success(check_runner_summary(&response)))
+        }
+        None => anstream::println!("{} No checks requested", terminal::mark(Tone::Neutral)),
     }
     Ok(())
+}
+
+fn check_runner_summary(response: &HeartbeatResponse) -> String {
+    format!(
+        "Uploaded {} at {}",
+        terminal::count(response.accepted_results, "check result", "check results"),
+        response.accepted_at
+    )
 }
 
 pub(crate) fn check_runner_cycle(client: &ApiClient) -> Result<Option<HeartbeatResponse>> {
@@ -250,12 +274,14 @@ pub(crate) fn cycle(
         if poll.tasks.is_empty() {
             return Ok(CycleOutcome {
                 heartbeat: Ok(None),
+                checks: Vec::new(),
             });
         }
         let snapshot = crate::collector::collect()?;
         let results = execute_tasks(&poll.tasks, |task| {
             crate::checks::execute(task, &snapshot, policy)
         });
+        let checks = activity::record(&poll.tasks, &results);
         let heartbeat = client
             .heartbeat(&HeartbeatRequest {
                 agent_version: AGENT_VERSION,
@@ -264,21 +290,24 @@ pub(crate) fn cycle(
                 capabilities: NATIVE_CAPABILITIES.to_vec(),
             })
             .map(Some);
-        return Ok(CycleOutcome { heartbeat });
+        return Ok(CycleOutcome { heartbeat, checks });
     }
     if poll.tasks.is_empty() && store.pending()? == 0 {
         return Ok(CycleOutcome {
             heartbeat: Ok(None),
+            checks: Vec::new(),
         });
     }
-    let heartbeat = transfer_trigger(client, &poll.tasks, store).map(Some);
-    Ok(CycleOutcome { heartbeat })
+    let mut checks = Vec::new();
+    let heartbeat = transfer_trigger(client, &poll.tasks, store, &mut checks).map(Some);
+    Ok(CycleOutcome { heartbeat, checks })
 }
 
 fn transfer_trigger(
     client: &ApiClient,
     tasks: &[AgentTask],
     store: &SnapshotStore,
+    checks: &mut Vec<CheckActivity>,
 ) -> Result<HeartbeatResponse> {
     if store.pending()? == 0 {
         store.append(&crate::collector::collect()?)?;
@@ -290,6 +319,7 @@ fn transfer_trigger(
     let results = execute_tasks(tasks, |task| {
         crate::checks::execute(task, &latest_snapshot, policy)
     });
+    *checks = activity::record(tasks, &results);
     let mut response = upload_batch(client, store, results)?;
     for _ in 1..MAX_UPLOAD_BATCHES_PER_CYCLE {
         if store.pending()? == 0 {
@@ -365,6 +395,7 @@ pub(crate) fn execute_tasks<T: Sync, R: Send>(
 
 pub(crate) struct CycleOutcome {
     pub(crate) heartbeat: Result<Option<HeartbeatResponse>>,
+    pub(crate) checks: Vec<CheckActivity>,
 }
 
 pub(crate) struct CollectionWorker {

@@ -1,6 +1,8 @@
 use std::sync::Mutex;
 
 use super::{RuntimeState, RuntimeStatus, format_age};
+use crate::activity::CheckActivity;
+use crate::models::{CheckState, CheckType};
 use crate::runtime::RuntimeReporter;
 use crate::test_support::temporary_path;
 
@@ -55,7 +57,6 @@ fn records_contact_failures_and_recovery() {
     let summary = recovered.summary(recovered.last_contact_at.unwrap() + 30);
     assert_eq!(summary.last_error, None);
     assert_eq!(summary.last_contact_seconds_ago, Some(30));
-    assert_eq!(summary.lines()[0], "last contact: 30 seconds ago");
 
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
@@ -78,6 +79,75 @@ fn restarts_keep_the_last_successful_contact() {
     assert_eq!(restarted.last_upload_at, before.last_upload_at);
     assert_eq!(restarted.last_error, None);
 
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+fn activity(checked_at: u64, target: &str, status: CheckState) -> CheckActivity {
+    CheckActivity {
+        checked_at,
+        check_type: CheckType::Tcp,
+        target: target.to_owned(),
+        status,
+        latency_ms: Some(4.0),
+        message: None,
+    }
+}
+
+#[test]
+fn recent_checks_keep_the_newest_results_across_restarts() {
+    let path = temporary_path("agent-state.json");
+    let reporter = RecordingReporter::default();
+    let mut first = RuntimeStatus::new(path.clone(), &reporter);
+    first.record_checks(
+        (0..45)
+            .map(|index| activity(100, &format!("old-{index}:22"), CheckState::Up))
+            .collect(),
+    );
+    first.record_checks(vec![
+        activity(200, "db.internal:5432", CheckState::Down),
+        activity(200, "cache.internal:6379", CheckState::Up),
+    ]);
+    first.record_checks(Vec::new());
+    first.persist();
+
+    RuntimeStatus::new(path.clone(), &reporter);
+    let restarted = RuntimeState::load(&path).unwrap().unwrap();
+    assert_eq!(restarted.recent_checks.len(), 47);
+    assert_eq!(restarted.recent_checks[0].target, "db.internal:5432");
+    assert_eq!(restarted.recent_checks[1].target, "cache.internal:6379");
+
+    let mut full = RuntimeStatus::new(path.clone(), &reporter);
+    full.record_checks(
+        (0..10)
+            .map(|index| activity(300, &format!("new-{index}:22"), CheckState::Up))
+            .collect(),
+    );
+    full.persist();
+    let summary = RuntimeState::load(&path).unwrap().unwrap().summary(330);
+    assert_eq!(summary.recent_checks.len(), 50);
+    assert_eq!(summary.recent_checks[0].target, "new-0:22");
+    assert_eq!(summary.recent_checks[0].checked_seconds_ago, 30);
+    assert_eq!(summary.recent_checks[49].target, "old-37:22");
+
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn state_without_recent_checks_loads_as_empty_activity() {
+    let path = temporary_path("agent-state.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"{"agentVersion":"15.0.0","startedAt":1,"updatedAt":2,"lastContactAt":null,"lastUploadAt":null,"lastError":null,"lastErrorAt":null,"pendingSnapshots":0}"#,
+    )
+    .unwrap();
+    assert!(
+        RuntimeState::load(&path)
+            .unwrap()
+            .unwrap()
+            .recent_checks
+            .is_empty()
+    );
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 

@@ -107,6 +107,46 @@ pub fn restart_if_installed() -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
+pub fn state() -> Result<crate::service_state::ServiceState> {
+    if !systemd_user_unit()?.is_file() {
+        return Ok(crate::service_state::ServiceState::NotInstalled);
+    }
+    let user_id = current_user_id()?;
+    let output = systemctl_user_command(&user_id, &["is-active", LINUX_SERVICE_NAME])
+        .output()
+        .context("could not query the Mimorii Agent service")?;
+    Ok(crate::service_state::ServiceState::from_systemd(
+        String::from_utf8_lossy(&output.stdout).trim(),
+    ))
+}
+
+#[cfg(target_os = "linux")]
+pub fn show_journal(lines: usize, follow: bool) -> Result<()> {
+    let user_id = current_user_id()?;
+    let mut process = Command::new("journalctl");
+    process
+        .args([
+            "--user",
+            "--unit",
+            LINUX_SERVICE_NAME,
+            "--no-pager",
+            "--output",
+            "short-iso",
+        ])
+        .arg("--lines")
+        .arg(lines.to_string())
+        .env("XDG_RUNTIME_DIR", systemd_user_runtime_directory(&user_id));
+    if follow {
+        process.arg("--follow");
+    }
+    let status = process.status().context("could not run journalctl")?;
+    if !status.success() {
+        bail!("journalctl exited with {status}");
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
 fn systemd_user_unit() -> Result<PathBuf> {
     Ok(LinuxServicePaths::discover()?.unit())
 }
@@ -273,35 +313,12 @@ mod windows {
     use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
     use crate::runtime::RuntimeReporter;
+    use crate::service_state::ServiceState;
 
     pub const SERVICE_NAME: &str = "MimoriiAgent";
+    const ERROR_SERVICE_DOES_NOT_EXIST: i32 = 1060;
     const LOG_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
     const CONTROL_TIMEOUT: Duration = Duration::from_secs(30);
-
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub enum AgentServiceState {
-        Stopped,
-        Starting,
-        Stopping,
-        Running,
-        Continuing,
-        Pausing,
-        Paused,
-    }
-
-    impl AgentServiceState {
-        pub fn as_str(self) -> &'static str {
-            match self {
-                Self::Stopped => "stopped",
-                Self::Starting => "starting",
-                Self::Stopping => "stopping",
-                Self::Running => "running",
-                Self::Continuing => "continuing",
-                Self::Pausing => "pausing",
-                Self::Paused => "paused",
-            }
-        }
-    }
 
     define_windows_service!(service_main, dispatch_service);
 
@@ -310,13 +327,18 @@ mod windows {
             .context("could not connect the Mimorii agent to the Windows Service Control Manager")
     }
 
-    pub fn status() -> Result<AgentServiceState> {
+    pub fn state() -> Result<ServiceState> {
         let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
             .context("could not open the Windows Service Control Manager")?;
-        let service = manager
-            .open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS)
-            .context("Mimorii Agent is not installed")?;
-        Ok(map_state(service.query_status()?.current_state))
+        match manager.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
+            Ok(service) => Ok(map_state(service.query_status()?.current_state)),
+            Err(windows_service::Error::Winapi(error))
+                if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST) =>
+            {
+                Ok(ServiceState::NotInstalled)
+            }
+            Err(error) => Err(error).context("could not query the Mimorii Agent service"),
+        }
     }
 
     pub fn start() -> Result<()> {
@@ -458,15 +480,17 @@ mod windows {
         }
     }
 
-    fn map_state(state: WindowsServiceState) -> AgentServiceState {
+    fn map_state(state: WindowsServiceState) -> ServiceState {
         match state {
-            WindowsServiceState::Stopped => AgentServiceState::Stopped,
-            WindowsServiceState::StartPending => AgentServiceState::Starting,
-            WindowsServiceState::StopPending => AgentServiceState::Stopping,
-            WindowsServiceState::Running => AgentServiceState::Running,
-            WindowsServiceState::ContinuePending => AgentServiceState::Continuing,
-            WindowsServiceState::PausePending => AgentServiceState::Pausing,
-            WindowsServiceState::Paused => AgentServiceState::Paused,
+            WindowsServiceState::Stopped => ServiceState::Stopped,
+            WindowsServiceState::StartPending | WindowsServiceState::ContinuePending => {
+                ServiceState::Starting
+            }
+            WindowsServiceState::StopPending | WindowsServiceState::PausePending => {
+                ServiceState::Stopping
+            }
+            WindowsServiceState::Running => ServiceState::Running,
+            WindowsServiceState::Paused => ServiceState::Paused,
         }
     }
 
@@ -537,7 +561,7 @@ mod windows {
 }
 
 #[cfg(windows)]
-pub use windows::{run, start, status, stop};
+pub use windows::{run, start, state, stop};
 
 #[cfg(any(target_os = "linux", test))]
 fn command(program: &str, arguments: &[&str]) -> Result<()> {

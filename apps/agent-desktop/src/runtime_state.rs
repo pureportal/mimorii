@@ -6,9 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::activity::{CheckActivity, CheckActivityView, RECENT_CHECK_LIMIT};
 use crate::runtime::RuntimeReporter;
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeState {
     pub agent_version: String,
@@ -19,6 +20,8 @@ pub struct RuntimeState {
     pub last_error: Option<String>,
     pub last_error_at: Option<u64>,
     pub pending_snapshots: usize,
+    #[serde(default)]
+    pub recent_checks: Vec<CheckActivity>,
 }
 
 #[derive(Debug, Serialize)]
@@ -30,6 +33,7 @@ pub struct RuntimeSummary {
     pub last_error: Option<String>,
     pub last_error_seconds_ago: Option<u64>,
     pub pending_snapshots: usize,
+    pub recent_checks: Vec<CheckActivityView>,
 }
 
 impl RuntimeState {
@@ -54,6 +58,11 @@ impl RuntimeState {
             last_error: self.last_error.clone(),
             last_error_seconds_ago: self.last_error_at.map(age),
             pending_snapshots: self.pending_snapshots,
+            recent_checks: self
+                .recent_checks
+                .iter()
+                .map(|check| check.view(now))
+                .collect(),
         }
     }
 
@@ -67,32 +76,6 @@ impl RuntimeState {
         staged.as_file().sync_all()?;
         staged.persist(path).map_err(|error| error.error)?;
         Ok(())
-    }
-}
-
-impl RuntimeSummary {
-    pub fn lines(&self) -> Vec<String> {
-        let mut lines = vec![
-            format!(
-                "last contact: {}",
-                self.last_contact_seconds_ago
-                    .map_or("never".to_owned(), format_age)
-            ),
-            format!(
-                "last upload: {}",
-                self.last_upload_seconds_ago
-                    .map_or("never".to_owned(), format_age)
-            ),
-            format!("pending snapshots: {}", self.pending_snapshots),
-        ];
-        if let Some(error) = &self.last_error {
-            let age = self
-                .last_error_seconds_ago
-                .map(|seconds| format!(" ({})", format_age(seconds)))
-                .unwrap_or_default();
-            lines.push(format!("last error: {error}{age}"));
-        }
-        lines
     }
 }
 
@@ -121,6 +104,7 @@ impl<'a> RuntimeStatus<'a> {
                 updated_at: now,
                 last_contact_at: previous.last_contact_at,
                 last_upload_at: previous.last_upload_at,
+                recent_checks: previous.recent_checks,
                 ..RuntimeState::default()
             },
             reporter,
@@ -147,6 +131,15 @@ impl<'a> RuntimeStatus<'a> {
         self.reporter.error(message);
         self.state.last_error = Some(message.chars().take(500).collect());
         self.state.last_error_at = Some(unix_now());
+    }
+
+    pub fn record_checks(&mut self, mut checks: Vec<CheckActivity>) {
+        if checks.is_empty() {
+            return;
+        }
+        checks.append(&mut self.state.recent_checks);
+        checks.truncate(RECENT_CHECK_LIMIT);
+        self.state.recent_checks = checks;
     }
 
     pub fn set_pending_snapshots(&mut self, count: usize) {

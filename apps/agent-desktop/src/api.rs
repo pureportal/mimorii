@@ -1,7 +1,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use reqwest::StatusCode;
 use reqwest::blocking::{Client, Response};
 use reqwest::header::USER_AGENT;
@@ -30,6 +30,17 @@ impl fmt::Display for PayloadRejected {
 }
 
 impl std::error::Error for PayloadRejected {}
+
+#[derive(Debug)]
+pub struct KeyRejected;
+
+impl fmt::Display for KeyRejected {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("agent key was rejected")
+    }
+}
+
+impl std::error::Error for KeyRejected {}
 
 impl ApiClient {
     pub fn new(config: AgentConfig) -> Result<Self> {
@@ -93,7 +104,7 @@ impl ApiClient {
 
 fn reject_unauthorized(response: &Response) -> Result<()> {
     if response.status() == StatusCode::UNAUTHORIZED {
-        bail!("agent key was rejected");
+        return Err(KeyRejected.into());
     }
     Ok(())
 }
