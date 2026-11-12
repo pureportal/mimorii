@@ -37,6 +37,13 @@ interface AgentConfirmation {
   agent: AgentSummary;
 }
 
+const agentStatusLabels: Record<AgentSummary["status"], string> = {
+  online: "Online",
+  stale: "Reporting late",
+  offline: "Offline",
+  never: "Not connected",
+};
+
 function agentPlatform(agent: AgentSummary): string {
   if (agent.deviceStatus) return agent.deviceStatus.device.model;
   if (agent.platform) return agent.platform;
@@ -44,7 +51,7 @@ function agentPlatform(agent: AgentSummary): string {
     ["http", "tcp", "dns"].includes(capability)
   );
   const reportsHostTelemetry = agent.capabilities.includes("host");
-  return runsNetworkChecks && !reportsHostTelemetry ? "Check runner" : "Not connected";
+  return runsNetworkChecks && !reportsHostTelemetry ? "Check runner" : "Platform unknown";
 }
 
 export function AgentsPage() {
@@ -134,10 +141,13 @@ export function AgentsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-display font-bold">{agent.resourceName}</p>
                     <p className="mt-1 truncate text-xs text-muted">
-                      {agentPlatform(agent)} · {formatRelative(agent.lastSeenAt)}
+                      {agentPlatform(agent)} ·{" "}
+                      {agent.lastSeenAt
+                        ? `Last seen ${formatRelative(agent.lastSeenAt).toLowerCase()}`
+                        : "Never connected"}
                     </p>
                   </div>
-                  <StatusBadge status={agent.status} />
+                  <StatusBadge status={agent.status}>{agentStatusLabels[agent.status]}</StatusBadge>
                 </div>
                 {agent.kind === "mobile" && agent.deviceStatus ? (
                   <MobileDeviceStatusSummary status={agent.deviceStatus} />

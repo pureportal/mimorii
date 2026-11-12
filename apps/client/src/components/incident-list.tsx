@@ -100,8 +100,10 @@ function IncidentCard({
                 incident.resources
                   .map((resource) => resourceNames.get(resource.id) ?? resource.name)
                   .join(", "),
-                formatRelative(incident.startedAt),
-                formatDuration(incident.durationSeconds),
+                `Started ${formatRelative(incident.startedAt).toLowerCase()}`,
+                incident.resolvedAt
+                  ? `Lasted ${formatDuration(incident.durationSeconds)}`
+                  : `Open for ${formatDuration(incident.durationSeconds)}`,
               ]
                 .filter(Boolean)
                 .join(" · ")}

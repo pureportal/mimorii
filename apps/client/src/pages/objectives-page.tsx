@@ -109,45 +109,62 @@ export function ObjectivesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-display font-bold">{objective.name}</h3>
-                      <StatusBadge status={objective.status} />
+                      <StatusBadge status={objective.status}>
+                        {objectiveStatusLabels[objective.status]}
+                      </StatusBadge>
                     </div>
                     <p className="mt-1 text-sm text-muted">
                       {objective.checkName ?? objective.resourceName} · {objective.windowDays} days
                     </p>
                   </div>
-                  <p className="font-display text-2xl font-black">
-                    {formatPercent(objective.availabilityPercent)}
+                  {objective.availabilityPercent !== null ? (
+                    <div className="text-right">
+                      <p className="font-display text-2xl font-black">
+                        {formatPercent(objective.availabilityPercent)}
+                      </p>
+                      <p className="text-[11px] font-medium text-muted">Availability</p>
+                    </div>
+                  ) : null}
+                </div>
+                {objective.status === "no-data" ? (
+                  <p className="mt-5 rounded-xl bg-ink/[.035] p-3 text-sm text-muted">
+                    No availability results in the last {objective.windowDays} days
                   </p>
-                </div>
-                <div className="mt-5 grid grid-cols-3 gap-3">
-                  <Metric label="Target" value={`${objective.targetPercent}%`} />
-                  <Metric label="P95 latency" value={formatLatency(objective.latencyP95Ms)} />
-                  <Metric
-                    label={objective.remainingBudgetMinutes < 0 ? "Over budget" : "Budget left"}
-                    value={formatBudget(objective.remainingBudgetMinutes)}
-                  />
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span id={`${objective.id}-budget`} className="font-medium text-muted">
-                      Budget used
-                    </span>
-                    <span className="font-semibold">{Math.round(objective.burnRate * 100)}%</span>
-                  </div>
-                  <div
-                    role="progressbar"
-                    aria-labelledby={`${objective.id}-budget`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(consumed)}
-                    className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink/6"
-                  >
-                    <div
-                      className={`h-full rounded-full ${objective.status === "breached" ? "bg-danger" : objective.status === "at-risk" ? "bg-warning" : "bg-success"}`}
-                      style={{ width: `${consumed}%` }}
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="mt-5 grid grid-cols-3 gap-3">
+                      <Metric label="Target" value={`${objective.targetPercent}%`} />
+                      <Metric label="P95 latency" value={formatLatency(objective.latencyP95Ms)} />
+                      <Metric
+                        label={objective.remainingBudgetMinutes < 0 ? "Over budget" : "Budget left"}
+                        value={formatBudget(objective.remainingBudgetMinutes)}
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <div className="flex items-baseline justify-between text-xs">
+                        <span id={`${objective.id}-budget`} className="font-medium text-muted">
+                          Budget used
+                        </span>
+                        <span className="font-semibold">
+                          {Math.round(objective.burnRate * 100)}%
+                        </span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-labelledby={`${objective.id}-budget`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.round(consumed)}
+                        className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink/6"
+                      >
+                        <div
+                          className={`h-full rounded-full ${objective.status === "breached" ? "bg-danger" : objective.status === "at-risk" ? "bg-warning" : "bg-success"}`}
+                          style={{ width: `${consumed}%` }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
                 {canManage ? (
                   <div className="mt-4 flex justify-end gap-2 border-t border-line pt-4">
                     <Button
@@ -202,6 +219,13 @@ export function ObjectivesPage() {
     </div>
   );
 }
+
+const objectiveStatusLabels: Record<ServiceLevelObjectiveSummary["status"], string> = {
+  met: "On target",
+  "at-risk": "At risk",
+  breached: "Breached",
+  "no-data": "No results",
+};
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (

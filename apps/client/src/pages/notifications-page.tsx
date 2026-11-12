@@ -38,6 +38,12 @@ type NotificationConfirmation =
 
 export type AlertingSection = "channels" | "rules" | "history";
 
+function deliveryStatusLabel(delivery: NotificationDeliverySummary): string {
+  if (delivery.status === "delivered") return "Delivered";
+  if (delivery.status === "failed") return "Failed";
+  return delivery.attempts ? "Retrying" : "Queued";
+}
+
 export function NotificationsPage({ section }: { section: AlertingSection }) {
   const { activeTeam } = useAuth();
   const teamId = activeTeam!.id;
@@ -310,7 +316,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                               {notificationEventLabels[delivery.event]}
                             </p>
                           </div>
-                          <StatusBadge status={delivery.status} />
+                          <StatusBadge status={delivery.status}>
+                            {deliveryStatusLabel(delivery)}
+                          </StatusBadge>
                         </div>
                         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                           <div>
@@ -378,7 +386,9 @@ export function NotificationsPage({ section }: { section: AlertingSection }) {
                             {delivery.error ?? "—"}
                           </td>
                           <td className="py-3 text-right">
-                            <StatusBadge status={delivery.status} />
+                            <StatusBadge status={delivery.status}>
+                              {deliveryStatusLabel(delivery)}
+                            </StatusBadge>
                           </td>
                           <td className="py-3 text-right">
                             {delivery.status === "failed" ? (

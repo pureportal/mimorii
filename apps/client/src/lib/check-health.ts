@@ -127,8 +127,10 @@ export function isHealthCheckType(type: CheckType): boolean {
   return healthCheckTypeSet.has(type);
 }
 
+const validityCheckTypes = new Set<CheckType>(["tls", "domain"]);
+
 export function checkPassingLabel(type: CheckType): "Availability" | "Healthy" {
-  return isHealthCheckType(type) ? "Healthy" : "Availability";
+  return isHealthCheckType(type) || validityCheckTypes.has(type) ? "Healthy" : "Availability";
 }
 
 export function getCheckHealthItems(
@@ -334,6 +336,7 @@ export function formatCheckMetric(metric: string, value: CheckMetricValue): stri
   }
 
   const normalized = metric.toLowerCase();
+  if (identifierMetrics.has(metric)) return String(value);
   if (normalized.includes("bytes")) return formatBytes(value);
   if (normalized.includes("percent")) return `${formatNumber(value, 1)}%`;
   if (normalized.endsWith("ms")) return `${formatNumber(value, 1)} ms`;
@@ -343,6 +346,8 @@ export function formatCheckMetric(metric: string, value: CheckMetricValue): stri
   if (metric === "loadAverage") return formatNumber(value, 2);
   return formatNumber(value, 1);
 }
+
+const identifierMetrics = new Set(["port", "statusCode", "pid", "exitCode"]);
 
 function metricItem(metrics: CheckSummary["latestMetrics"], key: string): CheckHealthItem | null {
   const value = metrics[key];
