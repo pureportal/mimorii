@@ -13,6 +13,7 @@ import { CommonModule } from "./common/common.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { DashboardsModule } from "./dashboards/dashboards.module.js";
 import databaseConfig from "./mikro-orm.config.js";
+import { ExportsModule } from "./exports/exports.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { HeartbeatsModule } from "./heartbeats/heartbeats.module.js";
 import { IncidentsModule } from "./incidents/incidents.module.js";
@@ -57,6 +58,7 @@ import { TeamsModule } from "./teams/teams.module.js";
     HeartbeatsModule,
     AgentsModule,
     IncidentsModule,
+    ExportsModule,
     LogsModule,
     MaintenanceModule,
     McpModule,

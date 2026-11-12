@@ -9,6 +9,7 @@ import {
   type LogDisplayOptions,
 } from "../../lib/log-display";
 import { Button } from "../ui/button";
+import { saveBlob } from "../../lib/download";
 
 const dedupLabels: Record<LogDedupMode, string> = {
   none: "None",
@@ -156,10 +157,8 @@ function Indicator() {
 }
 
 function download(content: string, type: string, extension: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `mimorii-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
-  link.click();
-  URL.revokeObjectURL(url);
+  saveBlob(
+    new Blob([content], { type }),
+    `mimorii-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`
+  );
 }

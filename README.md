@@ -22,6 +22,7 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 Mimorii keeps check history and turns failures into an operational timeline. You can:
 
 - investigate and update incidents in one place
+- export resources, checks, check results, daily availability, incidents, and the audit log as CSV, JSON, or NDJSON
 - search, filter, group into patterns, and live-tail logs with autocomplete and team-shared saved searches, and open incidents when a log pattern appears or stops appearing
 - ask an AI assistant connected through MCP to search logs, summarize patterns, and create log alert rules
 - schedule recurring maintenance and suppress planned alerts

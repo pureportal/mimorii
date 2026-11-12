@@ -1368,3 +1368,14 @@ export interface OverviewAnalytics {
   statusTimeline: Array<{ bucket: string; up: number; degraded: number; down: number }>;
   latencyTimeline: Array<{ bucket: string; latencyMs: number }>;
 }
+
+export const exportFormatIds = ["csv", "json", "ndjson"] as const;
+export type ExportFormatId = (typeof exportFormatIds)[number];
+
+export interface ExportDatasetSummary {
+  id: string;
+  label: string;
+  usesTimeRange: boolean;
+  filters: string[];
+  formats: ExportFormatId[];
+}
