@@ -59,12 +59,29 @@ export const checkTypes = [
   "dns",
   "icmp",
   "wan",
+  "tls",
+  "smtp",
+  "grpc",
+  "ntp",
+  "domain",
+  "database",
   "host",
   "disk",
   "docker",
-  "database",
 ] as const;
 export type CheckType = (typeof checkTypes)[number];
+
+export const agentCheckTypes: readonly CheckType[] = [
+  "http",
+  "tcp",
+  "dns",
+  "icmp",
+  "wan",
+  "database",
+  "host",
+  "disk",
+  "docker",
+];
 
 export const healthCheckTypes = ["host", "disk", "docker"] as const satisfies readonly CheckType[];
 
@@ -130,7 +147,7 @@ export const agentCapabilities = [...checkTypes, "device-status"] as const;
 export type AgentCapability = (typeof agentCapabilities)[number];
 
 export const agentCapabilitiesByKind = {
-  desktop: checkTypes,
+  desktop: agentCheckTypes,
   mobile: ["device-status"],
 } as const satisfies Record<AgentKind, readonly AgentCapability[]>;
 
@@ -455,6 +472,54 @@ export interface WanCheckConfig {
   latencyWarningMs?: number;
 }
 
+export interface TlsCheckConfig {
+  target: {
+    host: string;
+    port: number;
+    serverName?: string;
+  };
+  certificateWarningDays: number;
+  validateTls: boolean;
+}
+
+export const smtpSecurityModes = ["starttls", "tls", "none"] as const;
+export type SmtpSecurityMode = (typeof smtpSecurityModes)[number];
+
+export interface SmtpCheckConfig {
+  target: {
+    host: string;
+    port: number;
+    security: SmtpSecurityMode;
+  };
+  certificateWarningDays?: number;
+  validateTls: boolean;
+}
+
+export interface GrpcCheckConfig {
+  target: {
+    host: string;
+    port: number;
+    tls: boolean;
+    service?: string;
+  };
+  validateTls: boolean;
+}
+
+export interface NtpCheckConfig {
+  target: {
+    host: string;
+    port: number;
+  };
+  offsetWarningMs: number;
+}
+
+export interface DomainCheckConfig {
+  target: {
+    domain: string;
+  };
+  expiryWarningDays: number;
+}
+
 export const hostMaintenanceDefaults = {
   securityUpdates: true,
   softwareUpdates: true,
@@ -532,6 +597,11 @@ export type CheckConfig =
   | DnsCheckConfig
   | IcmpCheckConfig
   | WanCheckConfig
+  | TlsCheckConfig
+  | SmtpCheckConfig
+  | GrpcCheckConfig
+  | NtpCheckConfig
+  | DomainCheckConfig
   | HostCheckConfig
   | DiskCheckConfig
   | DockerCheckConfig

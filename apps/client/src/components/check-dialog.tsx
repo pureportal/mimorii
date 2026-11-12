@@ -1,4 +1,5 @@
 import {
+  agentCheckTypes,
   checkTypes,
   type CheckExecution,
   type CheckSummary,
@@ -9,6 +10,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   buildCheckConfig,
   checkFields,
+  checkTypePorts,
   initialCheckFields,
   type CheckFields,
   type UpdateCheckField,
@@ -24,6 +26,14 @@ import {
   TcpCheckFields,
   WanCheckFields,
 } from "./check-form-fields";
+import {
+  DomainCheckFields,
+  GrpcCheckFields,
+  NtpCheckFields,
+  SmtpCheckFields,
+  TlsCheckFields,
+} from "./check-protocol-fields";
+import { agentOnlyCheckTypes, checkTypeLabels } from "../lib/check-types";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
@@ -52,18 +62,6 @@ interface CheckDialogProps {
   defaultResourceId?: string;
   onSubmit: (payload: CheckPayload) => Promise<void>;
 }
-
-const checkTypeNames: Record<CheckType, string> = {
-  http: "HTTP",
-  tcp: "TCP port",
-  dns: "DNS record",
-  icmp: "ICMP ping",
-  wan: "WAN reachability",
-  host: "Host health",
-  disk: "Disk usage",
-  docker: "Docker",
-  database: "Database",
-};
 
 function localFieldsForResource(fields: CheckFields, resource: ResourceSummary): CheckFields {
   const windows = resource.agent?.platform?.toLowerCase().includes("windows") === true;
@@ -129,7 +127,7 @@ export function CheckDialog({
     try {
       await onSubmit({
         resourceId,
-        name: name.trim() ? name : checkTypeNames[type],
+        name: name.trim() ? name : checkTypeLabels[type],
         type,
         config: buildCheckConfig(type, fields),
         execution: executionKind === "agent" ? { kind: "agent", agentId } : { kind: "direct" },
@@ -165,7 +163,7 @@ export function CheckDialog({
                 value={resourceId}
                 onChange={(event) => {
                   setResourceId(event.target.value);
-                  if (["host", "disk", "docker"].includes(type)) {
+                  if (agentOnlyCheckTypes.has(type)) {
                     const resource = resources.find((item) => item.id === event.target.value);
                     if (resource?.agent) setAgentId(resource.agent.id);
                     if ((type === "host" || type === "disk") && resource) {
@@ -178,8 +176,7 @@ export function CheckDialog({
                 {resources
                   .filter(
                     (resource) =>
-                      !["host", "disk", "docker"].includes(type) ||
-                      resource.agent?.kind === "desktop"
+                      !agentOnlyCheckTypes.has(type) || resource.agent?.kind === "desktop"
                   )
                   .map((resource) => (
                     <option key={resource.id} value={resource.id}>
@@ -207,8 +204,17 @@ export function CheckDialog({
                 const next = checkTypes.find((value) => value === event.target.value);
                 if (next) {
                   setType(next);
-                  if (next === "host" && !initial && timeout === "5000") setTimeoutValue("30000");
-                  if (["host", "disk", "docker"].includes(next)) {
+                  if (!initial) {
+                    const port = checkTypePorts[next];
+                    if (port) update("port", port);
+                    if (next === "ntp" && fields.host === initialCheckFields.host) {
+                      update("host", "pool.ntp.org");
+                    }
+                    if (next === "host" && timeout === "5000") setTimeoutValue("30000");
+                    if (next === "domain" && Number(interval) < 3600) setInterval("21600");
+                  }
+                  if (!agentCheckTypes.includes(next)) setExecutionKind("direct");
+                  if (agentOnlyCheckTypes.has(next)) {
                     const resource =
                       resources.find(
                         (item) => item.id === resourceId && item.agent?.kind === "desktop"
@@ -227,7 +233,7 @@ export function CheckDialog({
             >
               {checkTypes.map((value) => (
                 <option key={value} value={value}>
-                  {checkTypeNames[value]}
+                  {checkTypeLabels[value]}
                 </option>
               ))}
             </Select>
@@ -238,6 +244,11 @@ export function CheckDialog({
           {type === "dns" ? <DnsCheckFields fields={fields} update={update} /> : null}
           {type === "icmp" ? <IcmpCheckFields fields={fields} update={update} /> : null}
           {type === "wan" ? <WanCheckFields fields={fields} update={update} /> : null}
+          {type === "tls" ? <TlsCheckFields fields={fields} update={update} /> : null}
+          {type === "smtp" ? <SmtpCheckFields fields={fields} update={update} /> : null}
+          {type === "grpc" ? <GrpcCheckFields fields={fields} update={update} /> : null}
+          {type === "ntp" ? <NtpCheckFields fields={fields} update={update} /> : null}
+          {type === "domain" ? <DomainCheckFields fields={fields} update={update} /> : null}
           {type === "host" ? <HostCheckFields fields={fields} update={update} /> : null}
           {type === "disk" ? <DiskCheckFields fields={fields} update={update} /> : null}
           {type === "docker" ? <DockerCheckFields fields={fields} update={update} /> : null}
@@ -249,7 +260,7 @@ export function CheckDialog({
               <Select
                 id="check-execution"
                 value={executionKind}
-                disabled={["host", "disk", "docker"].includes(type)}
+                disabled={agentOnlyCheckTypes.has(type) || !agentCheckTypes.includes(type)}
                 onChange={(event) => {
                   const kind = event.target.value === "agent" ? "agent" : "direct";
                   setExecutionKind(kind);
@@ -304,6 +315,7 @@ export function CheckDialog({
           </div>
 
           <AdvancedFields
+            minimumInterval={type === "domain" ? 3600 : 30}
             interval={interval}
             timeout={timeout}
             failureThreshold={failureThreshold}
@@ -332,6 +344,7 @@ export function CheckDialog({
 }
 
 function AdvancedFields({
+  minimumInterval,
   interval,
   timeout,
   failureThreshold,
@@ -343,6 +356,7 @@ function AdvancedFields({
   onRecoveryThresholdChange,
   onEnabledChange,
 }: {
+  minimumInterval: number;
   interval: string;
   timeout: string;
   failureThreshold: string;
@@ -362,7 +376,7 @@ function AdvancedFields({
           id="interval"
           label="Interval · seconds"
           value={interval}
-          min={30}
+          min={minimumInterval}
           max={86400}
           onChange={onIntervalChange}
         />

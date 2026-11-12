@@ -846,7 +846,7 @@ export function DatabaseCheckFields({ fields, update }: CheckFormFieldsProps) {
   );
 }
 
-function Checkbox({
+export function Checkbox({
   label,
   checked,
   onChange,
@@ -868,7 +868,7 @@ function Checkbox({
   );
 }
 
-function ThresholdField({
+export function ThresholdField({
   id,
   label,
   value,

@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { spawn } from "node:child_process";
+import { CheckFailure } from "./check-outcome.js";
 
 export interface IcmpProbeResult {
   sent: number;
@@ -26,7 +27,7 @@ export class IcmpService {
       child.once("error", (error) => {
         clearTimeout(timer);
         reject(
-          Object.assign(new Error("ICMP executor is unavailable"), {
+          Object.assign(new CheckFailure("ICMP executor is unavailable"), {
             code: (error as NodeJS.ErrnoException).code,
           })
         );

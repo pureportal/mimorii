@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { agentCollectionInterval, checkTypes, termsVersion } from "@mimorii/contracts";
+import { agentCheckTypes, agentCollectionInterval, termsVersion } from "@mimorii/contracts";
 import { createSecret, hashPassword, hashSecret } from "../../common/crypto.js";
 import type { DatabaseService } from "../database.service.js";
 import { assertSafeSeedCredentials, seedGlobalAdministrator } from "./global-admin.js";
@@ -123,7 +123,7 @@ export async function seedAccount(
        collection_interval_seconds = ?, updated_at = ?
        WHERE id = ? AND team_id = ?`,
       hashSecret(enrollmentKey),
-      JSON.stringify(checkTypes),
+      JSON.stringify(agentCheckTypes),
       configuration.agentIntervalSeconds,
       now,
       existing.id,
@@ -158,7 +158,7 @@ export async function seedAccount(
       agentId,
       hashSecret(enrollmentKey),
       "desktop",
-      JSON.stringify(checkTypes),
+      JSON.stringify(agentCheckTypes),
       configuration.agentIntervalSeconds,
       now,
       now

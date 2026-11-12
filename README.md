@@ -10,7 +10,7 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 ## What Mimorii watches
 
 - Websites and APIs, including response status, timing, content assertions, and TLS certificate expiry
-- TCP ports and DNS records
+- TCP ports, DNS records, TLS certificates on any port, SMTP servers, gRPC health endpoints, NTP servers, and domain registration expiry
 - CPU, memory, load, disks, and discovered server technologies
 - Scheduled jobs and backups through heartbeat URLs
 - Services inside private networks through Linux and Windows agents

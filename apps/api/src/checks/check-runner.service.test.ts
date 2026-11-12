@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TargetSafetyService } from "../common/target-safety.service.js";
 import { CheckRunnerService } from "./check-runner.service.js";
 
+const unusedProbes = [{}, {}, {}, {}, {}] as unknown as [never, never, never, never, never];
+
 describe("check runner", () => {
   let server: Server;
   let port: number;
@@ -48,7 +50,7 @@ describe("check runner", () => {
   it.each(["POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const)(
     "sends %s HTTP requests",
     async (method) => {
-      const runner = new CheckRunnerService(targets, {} as never, {} as never);
+      const runner = new CheckRunnerService(targets, {} as never, {} as never, ...unusedProbes);
       const result = await runner.run({
         id: `check-${method}`,
         type: "http",
@@ -69,7 +71,7 @@ describe("check runner", () => {
   );
 
   it("sends configured headers and body and evaluates grouped JSON conditions", async () => {
-    const runner = new CheckRunnerService(targets, {} as never, {} as never);
+    const runner = new CheckRunnerService(targets, {} as never, {} as never, ...unusedProbes);
     const result = await runner.run({
       id: "check-json",
       type: "http",
@@ -150,7 +152,12 @@ describe("check runner", () => {
         metrics: { connectionUtilizationPercent: 90 },
       })),
     };
-    const runner = new CheckRunnerService(targets, icmp as never, database as never);
+    const runner = new CheckRunnerService(
+      targets,
+      icmp as never,
+      database as never,
+      ...unusedProbes
+    );
 
     await expect(
       runner.run({

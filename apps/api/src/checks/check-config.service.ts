@@ -4,6 +4,7 @@ import {
   httpJsonAssertionOperators,
   httpMethods,
   hostMaintenanceDefaults,
+  smtpSecurityModes,
   type CheckConfig,
   type CheckType,
   type DatabaseCheckConfig,
@@ -11,12 +12,18 @@ import {
   type DiskCheckConfig,
   type DnsCheckConfig,
   type DockerCheckConfig,
+  type DomainCheckConfig,
+  type GrpcCheckConfig,
   type HostCheckConfig,
   type HttpCheckConfig,
   type HttpJsonAssertionNode,
   type HttpMethod,
   type IcmpCheckConfig,
+  type NtpCheckConfig,
+  type SmtpCheckConfig,
+  type SmtpSecurityMode,
   type TcpCheckConfig,
+  type TlsCheckConfig,
   type WanCheckConfig,
 } from "@mimorii/contracts";
 import { isIP } from "node:net";
@@ -24,6 +31,7 @@ import { domainToASCII } from "node:url";
 
 const dnsRecordTypes = new Set(["A", "AAAA", "CNAME", "MX", "NS", "SRV", "TXT"]);
 const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const grpcServicePattern = /^[A-Za-z_][A-Za-z0-9_.]*$/;
 
 @Injectable()
 export class CheckConfigService {
@@ -39,6 +47,16 @@ export class CheckConfigService {
         return this.icmp(value);
       case "wan":
         return this.wan(value);
+      case "tls":
+        return this.tls(value);
+      case "smtp":
+        return this.smtp(value);
+      case "grpc":
+        return this.grpc(value);
+      case "ntp":
+        return this.ntp(value);
+      case "domain":
+        return this.domain(value);
       case "host":
         return this.host(value);
       case "disk":
@@ -229,6 +247,107 @@ export class CheckConfigService {
         : {
             latencyWarningMs: this.number(value.latencyWarningMs, 1, 30_000, "Latency threshold"),
           }),
+    };
+  }
+
+  private tls(value: Record<string, unknown>): TlsCheckConfig {
+    const target = this.object(value.target, "TLS target");
+    const serverName =
+      target.serverName === undefined || target.serverName === ""
+        ? undefined
+        : this.hostName(target.serverName, "TLS server name");
+    if (serverName && isIP(serverName)) this.invalid("TLS server name must be a hostname");
+    return {
+      target: {
+        host: this.hostName(target.host, "TLS host"),
+        port: this.integer(target.port ?? 443, 1, 65_535, "TLS port"),
+        ...(serverName ? { serverName } : {}),
+      },
+      certificateWarningDays: this.integer(
+        value.certificateWarningDays ?? 21,
+        1,
+        365,
+        "Certificate threshold"
+      ),
+      validateTls: value.validateTls !== false,
+    };
+  }
+
+  private smtp(value: Record<string, unknown>): SmtpCheckConfig {
+    const target = this.object(value.target, "SMTP target");
+    const security = target.security ?? "starttls";
+    if (!smtpSecurityModes.some((mode) => mode === security)) {
+      this.invalid("SMTP security is invalid");
+    }
+    const mode = security as SmtpSecurityMode;
+    const certificateWarningDays =
+      value.certificateWarningDays === undefined
+        ? undefined
+        : this.integer(value.certificateWarningDays, 1, 365, "Certificate threshold");
+    if (certificateWarningDays !== undefined && mode === "none") {
+      this.invalid("Certificate threshold requires TLS");
+    }
+    return {
+      target: {
+        host: this.hostName(target.host, "SMTP host"),
+        port: this.integer(
+          target.port ?? (mode === "tls" ? 465 : mode === "starttls" ? 587 : 25),
+          1,
+          65_535,
+          "SMTP port"
+        ),
+        security: mode,
+      },
+      ...(certificateWarningDays === undefined ? {} : { certificateWarningDays }),
+      validateTls: value.validateTls !== false,
+    };
+  }
+
+  private grpc(value: Record<string, unknown>): GrpcCheckConfig {
+    const target = this.object(value.target, "gRPC target");
+    const service = target.service;
+    if (
+      service !== undefined &&
+      service !== "" &&
+      (typeof service !== "string" || service.length > 200 || !grpcServicePattern.test(service))
+    ) {
+      this.invalid("gRPC service is invalid");
+    }
+    const tls = target.tls !== false;
+    return {
+      target: {
+        host: this.hostName(target.host, "gRPC host"),
+        port: this.integer(target.port ?? (tls ? 443 : 80), 1, 65_535, "gRPC port"),
+        tls,
+        ...(service ? { service: service as string } : {}),
+      },
+      validateTls: value.validateTls !== false,
+    };
+  }
+
+  private ntp(value: Record<string, unknown>): NtpCheckConfig {
+    const target = this.object(value.target, "NTP target");
+    return {
+      target: {
+        host: this.hostName(target.host, "NTP host"),
+        port: this.integer(target.port ?? 123, 1, 65_535, "NTP port"),
+      },
+      offsetWarningMs: this.number(
+        value.offsetWarningMs ?? 500,
+        1,
+        60_000,
+        "Clock offset threshold"
+      ),
+    };
+  }
+
+  private domain(value: Record<string, unknown>): DomainCheckConfig {
+    const target = this.object(value.target, "Domain target");
+    const domain = this.hostName(target.domain, "Domain");
+    if (isIP(domain) || !domain.includes(".")) this.invalid("Domain is invalid");
+    return {
+      target: { domain },
+      expiryWarningDays: this.integer(value.expiryWarningDays ?? 30, 1, 365, "Expiry threshold"),
     };
   }
 

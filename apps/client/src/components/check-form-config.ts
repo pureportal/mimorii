@@ -1,6 +1,8 @@
 import {
   hostMaintenanceDefaults,
+  smtpSecurityModes,
   type CheckType,
+  type SmtpSecurityMode,
   type HttpJsonAssertionGroup,
   type HttpJsonAssertionNode,
   type HttpJsonAssertionOperator,
@@ -25,7 +27,7 @@ export interface JsonAssertionGroupField {
 export type JsonAssertionNodeField = JsonAssertionField | JsonAssertionGroupField;
 
 export const initialCheckFields = {
-  url: "https://example.com/",
+  url: "",
   method: "GET",
   requestHeaders: "",
   secretHeaderName: "",
@@ -43,12 +45,19 @@ export const initialCheckFields = {
   certificateWarningDays: "30",
   followRedirects: true,
   validateTls: true,
-  host: "example.com",
+  host: "",
   port: "443",
-  hostname: "example.com",
+  serverName: "",
+  smtpSecurity: "starttls" as SmtpSecurityMode,
+  grpcService: "",
+  grpcTls: true,
+  offsetWarningMs: "500",
+  domain: "",
+  expiryWarningDays: "30",
+  hostname: "",
   recordType: "A",
   expectedValue: "",
-  icmpHost: "1.1.1.1",
+  icmpHost: "",
   packetCount: "3",
   minimumSuccessPercent: "100",
   wanTargets: "Cloudflare: 1.1.1.1\nGoogle: 8.8.8.8",
@@ -81,7 +90,7 @@ export const initialCheckFields = {
   containerCpu: "90",
   containerMemory: "90",
   databaseEngine: "postgresql" as "postgresql" | "mysql" | "redis",
-  databaseHost: "localhost",
+  databaseHost: "",
   databasePort: "5432",
   databaseName: "",
   databaseUsername: "",
@@ -91,6 +100,14 @@ export const initialCheckFields = {
   slowQueryWarningCount: "",
   databaseQuery: "",
   databaseExpectedValue: "",
+};
+
+export const checkTypePorts: Partial<Record<CheckType, string>> = {
+  tcp: "443",
+  tls: "443",
+  smtp: "587",
+  grpc: "443",
+  ntp: "123",
 };
 
 export type CheckFields = typeof initialCheckFields;
@@ -120,6 +137,15 @@ export function checkFields(value: unknown): CheckFields {
     validateTls: config?.validateTls !== false,
     host: stringField(target?.host, initialCheckFields.host),
     port: stringField(target?.port, initialCheckFields.port),
+    serverName: stringField(target?.serverName, ""),
+    smtpSecurity:
+      smtpSecurityModes.find((mode) => mode === target?.security) ??
+      initialCheckFields.smtpSecurity,
+    grpcService: stringField(target?.service, ""),
+    grpcTls: target?.tls !== false,
+    offsetWarningMs: stringField(config?.offsetWarningMs, initialCheckFields.offsetWarningMs),
+    domain: stringField(target?.domain, initialCheckFields.domain),
+    expiryWarningDays: stringField(config?.expiryWarningDays, initialCheckFields.expiryWarningDays),
     hostname: stringField(target?.hostname, initialCheckFields.hostname),
     recordType: stringField(config?.recordType, initialCheckFields.recordType),
     expectedValue: stringField(config?.expectedValue, ""),
@@ -246,6 +272,46 @@ export function buildCheckConfig(type: CheckType, fields: CheckFields): Record<s
         ...(fields.latencyWarningMs ? { latencyWarningMs: Number(fields.latencyWarningMs) } : {}),
       };
     }
+    case "tls":
+      return {
+        target: {
+          host: fields.host,
+          port: Number(fields.port),
+          ...(fields.serverName.trim() ? { serverName: fields.serverName.trim() } : {}),
+        },
+        ...(fields.certificateWarningDays
+          ? { certificateWarningDays: Number(fields.certificateWarningDays) }
+          : {}),
+        validateTls: fields.validateTls,
+      };
+    case "smtp":
+      return {
+        target: { host: fields.host, port: Number(fields.port), security: fields.smtpSecurity },
+        ...(fields.smtpSecurity !== "none" && fields.certificateWarningDays
+          ? { certificateWarningDays: Number(fields.certificateWarningDays) }
+          : {}),
+        validateTls: fields.validateTls,
+      };
+    case "grpc":
+      return {
+        target: {
+          host: fields.host,
+          port: Number(fields.port),
+          tls: fields.grpcTls,
+          ...(fields.grpcService.trim() ? { service: fields.grpcService.trim() } : {}),
+        },
+        validateTls: fields.validateTls,
+      };
+    case "ntp":
+      return {
+        target: { host: fields.host, port: Number(fields.port) },
+        offsetWarningMs: Number(fields.offsetWarningMs),
+      };
+    case "domain":
+      return {
+        target: { domain: fields.domain },
+        expiryWarningDays: Number(fields.expiryWarningDays),
+      };
     case "host":
       return {
         cpuWarningPercent: Number(fields.cpu),

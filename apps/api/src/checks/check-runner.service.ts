@@ -2,10 +2,15 @@ import { Injectable } from "@nestjs/common";
 import type {
   DatabaseCheckConfig,
   DnsCheckConfig,
+  DomainCheckConfig,
+  GrpcCheckConfig,
   HttpCheckConfig,
   HttpJsonAssertionNode,
   IcmpCheckConfig,
+  NtpCheckConfig,
+  SmtpCheckConfig,
   TcpCheckConfig,
+  TlsCheckConfig,
   WanCheckConfig,
 } from "@mimorii/contracts";
 import { Resolver } from "node:dns/promises";
@@ -15,8 +20,14 @@ import { connect } from "node:net";
 import { TLSSocket } from "node:tls";
 import type { ExecutedCheckResult, RunnableCheck } from "./checks.types.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
+import { CheckFailure } from "./check-outcome.js";
 import { DatabaseCheckService } from "./database-check.service.js";
 import { IcmpService, type IcmpProbeResult } from "./icmp.service.js";
+import { DomainCheckService } from "./protocols/domain-check.service.js";
+import { GrpcCheckService } from "./protocols/grpc-check.service.js";
+import { NtpCheckService } from "./protocols/ntp-check.service.js";
+import { SmtpCheckService } from "./protocols/smtp-check.service.js";
+import { TlsCheckService } from "./protocols/tls-check.service.js";
 
 const MAX_HTTP_BODY_BYTES = 512 * 1024;
 
@@ -25,7 +36,12 @@ export class CheckRunnerService {
   constructor(
     private readonly targets: TargetSafetyService,
     private readonly icmpChecks: IcmpService,
-    private readonly databaseChecks: DatabaseCheckService
+    private readonly databaseChecks: DatabaseCheckService,
+    private readonly tlsChecks: TlsCheckService,
+    private readonly smtpChecks: SmtpCheckService,
+    private readonly grpcChecks: GrpcCheckService,
+    private readonly ntpChecks: NtpCheckService,
+    private readonly domainChecks: DomainCheckService
   ) {}
 
   async run(check: RunnableCheck): Promise<ExecutedCheckResult> {
@@ -47,6 +63,31 @@ export class CheckRunnerService {
           return await this.icmp(check.config as IcmpCheckConfig, check.timeoutMs, checkedAt);
         case "wan":
           return await this.wan(check.config as WanCheckConfig, check.timeoutMs, checkedAt);
+        case "tls":
+          return {
+            ...(await this.tlsChecks.run(check.config as TlsCheckConfig, check.timeoutMs)),
+            checkedAt,
+          };
+        case "smtp":
+          return {
+            ...(await this.smtpChecks.run(check.config as SmtpCheckConfig, check.timeoutMs)),
+            checkedAt,
+          };
+        case "grpc":
+          return {
+            ...(await this.grpcChecks.run(check.config as GrpcCheckConfig, check.timeoutMs)),
+            checkedAt,
+          };
+        case "ntp":
+          return {
+            ...(await this.ntpChecks.run(check.config as NtpCheckConfig, check.timeoutMs)),
+            checkedAt,
+          };
+        case "domain":
+          return {
+            ...(await this.domainChecks.run(check.config as DomainCheckConfig, check.timeoutMs)),
+            checkedAt,
+          };
         case "database":
           return await this.database(
             check.config as DatabaseCheckConfig,
@@ -580,16 +621,7 @@ export class CheckRunnerService {
 
   private safeError(error: unknown): string {
     if (error instanceof Error && error.message === "timeout") return "Check timed out";
-    if (
-      error instanceof Error &&
-      new Set([
-        "ICMP executor is unavailable",
-        "Database query value did not match",
-        "Database statistics are unavailable",
-      ]).has(error.message)
-    ) {
-      return error.message;
-    }
+    if (error instanceof CheckFailure) return error.message;
     if (error instanceof Error && "code" in error) {
       const code = String((error as Error & { code?: string }).code ?? "");
       if (code === "ENOTFOUND" || code === "ENODATA") return "Target could not be resolved";

@@ -304,6 +304,9 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       );
       expect(checkTypeConstraint?.definition).toContain("'host'::text");
       expect(checkTypeConstraint?.definition).toContain("'disk'::text");
+      for (const type of ["tls", "smtp", "grpc", "ntp", "domain"]) {
+        expect(checkTypeConstraint?.definition).toContain(`'${type}'::text`);
+      }
 
       const activeAgentResourceIndex = await database.get<{ indexdef: string }>(
         `SELECT indexdef FROM pg_indexes

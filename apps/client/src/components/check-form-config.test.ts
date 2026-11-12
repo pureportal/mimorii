@@ -94,4 +94,34 @@ describe("check form configuration", () => {
       criticalPercent: 92,
     });
   });
+
+  it.each([
+    [
+      "tls",
+      {
+        target: { host: "mail.example.com", port: 993, serverName: "imap.example.com" },
+        certificateWarningDays: 14,
+        validateTls: false,
+      },
+    ],
+    [
+      "smtp",
+      {
+        target: { host: "mail.example.com", port: 465, security: "tls" },
+        certificateWarningDays: 14,
+        validateTls: true,
+      },
+    ],
+    [
+      "grpc",
+      {
+        target: { host: "api.example.com", port: 50051, tls: false, service: "orders.Orders" },
+        validateTls: true,
+      },
+    ],
+    ["ntp", { target: { host: "time.example.com", port: 123 }, offsetWarningMs: 250 }],
+    ["domain", { target: { domain: "example.org" }, expiryWarningDays: 45 }],
+  ] as const)("round-trips %s checks", (type, config) => {
+    expect(buildCheckConfig(type, checkFields(config))).toEqual(config);
+  });
 });

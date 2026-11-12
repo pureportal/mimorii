@@ -4,6 +4,7 @@ import net from "node:net";
 import mysql from "mysql2/promise";
 import { Client, type QueryResult } from "pg";
 import { createClient } from "redis";
+import { CheckFailure } from "./check-outcome.js";
 
 export interface DatabaseProbeResult {
   latencyMs: number;
@@ -82,7 +83,7 @@ export class DatabaseCheckService {
         FROM pg_stat_database WHERE datname = current_database()
       `);
       const row = result.rows[0];
-      if (!row) throw new Error("Database statistics are unavailable");
+      if (!row) throw new CheckFailure("Database statistics are unavailable");
       const metrics = {
         engine: "postgresql",
         version: row.version,
@@ -116,7 +117,7 @@ export class DatabaseCheckService {
     if (!Object.hasOwn(config.query, "expectedValue")) return;
     const actual = result.rows[0] ? Object.values(result.rows[0])[0] : undefined;
     if (!sameScalar(actual, config.query.expectedValue)) {
-      throw new Error("Database query value did not match");
+      throw new CheckFailure("Database query value did not match");
     }
   }
 
@@ -157,7 +158,7 @@ export class DatabaseCheckService {
             WHERE VARIABLE_NAME = 'Uptime') AS uptimeSeconds`
       );
       const row = rows[0];
-      if (!row) throw new Error("Database statistics are unavailable");
+      if (!row) throw new CheckFailure("Database statistics are unavailable");
       const metrics = {
         engine: "mysql",
         version: String(row.version),
@@ -183,7 +184,7 @@ export class DatabaseCheckService {
         if (Object.hasOwn(config.query, "expectedValue")) {
           const actual = queryRows[0] ? Object.values(queryRows[0])[0] : undefined;
           if (!sameScalar(actual, config.query.expectedValue)) {
-            throw new Error("Database query value did not match");
+            throw new CheckFailure("Database query value did not match");
           }
         }
       }

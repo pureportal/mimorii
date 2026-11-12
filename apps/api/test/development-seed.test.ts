@@ -1,4 +1,4 @@
-import { checkTypes, type CheckConfig, type CheckType } from "@mimorii/contracts";
+import { agentCheckTypes, type CheckConfig, type CheckType } from "@mimorii/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { CheckConfigService } from "../src/checks/check-config.service.js";
 import type { DatabaseService } from "../src/database/database.service.js";
@@ -64,7 +64,7 @@ describe("development seed", () => {
     expect(run).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE agents SET key_hash"),
       expect.any(String),
-      JSON.stringify(checkTypes),
+      JSON.stringify(agentCheckTypes),
       developmentSeedDefaults.agentIntervalSeconds,
       expect.any(String),
       "agent-local",

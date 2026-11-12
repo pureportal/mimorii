@@ -1,6 +1,6 @@
 import { hashSecret } from "../../common/crypto.js";
 import { applicationVersion } from "../../version.js";
-import { checkTypes, termsVersion } from "@mimorii/contracts";
+import { agentCheckTypes, termsVersion } from "@mimorii/contracts";
 import { at, days, hours, minutes, seedId, seedSecret, type SeedContext } from "./context.js";
 
 export interface SeedIdentityIds {
@@ -120,7 +120,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
      revoked_at = NULL, updated_at = ? WHERE id = ? AND team_id = ?`,
     "Local development",
     applicationVersion,
-    JSON.stringify(checkTypes),
+    JSON.stringify(agentCheckTypes),
     context.now.toISOString(),
     context.now.toISOString(),
     context.agentId,
@@ -197,7 +197,7 @@ async function seedAgents(context: SeedContext, ids: SeedIdentityIds): Promise<v
       "desktop",
       agent.platform,
       agent.version,
-      JSON.stringify(agent.revokedAt ? agent.capabilities : checkTypes),
+      JSON.stringify(agent.revokedAt ? agent.capabilities : agentCheckTypes),
       agent.lastSeenAt,
       agent.revokedAt,
       at(context, -days(60)),

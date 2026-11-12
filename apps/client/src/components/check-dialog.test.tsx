@@ -34,6 +34,10 @@ const windowsResource: ResourceSummary = {
   },
 };
 
+function enterUrl() {
+  fireEvent.change(screen.getByLabelText("URL"), { target: { value: "https://example.com/" } });
+}
+
 describe("CheckDialog", () => {
   afterEach(cleanup);
 
@@ -58,6 +62,7 @@ describe("CheckDialog", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Type" }), {
       target: { value: "dns" },
     });
+    fireEvent.change(screen.getByLabelText("Hostname"), { target: { value: "example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Save check" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -72,6 +77,7 @@ describe("CheckDialog", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
       target: { value: "Public endpoint" },
     });
+    enterUrl();
     fireEvent.click(screen.getByRole("button", { name: "Save check" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -88,6 +94,7 @@ describe("CheckDialog", () => {
       screen.getByRole("spinbutton", { name: "Consecutive breaches before alert" }),
       { target: { value: "3" } }
     );
+    enterUrl();
     fireEvent.click(screen.getByRole("button", { name: "Save check" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -171,6 +178,7 @@ describe("CheckDialog", () => {
       );
 
       expect(screen.getByRole("combobox", { name: "Resource" })).toHaveValue(resource.id);
+      enterUrl();
       fireEvent.click(screen.getByRole("button", { name: "Save check" }));
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());

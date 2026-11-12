@@ -34,6 +34,16 @@ interface ResourceRow {
 }
 
 const secretCheckTypes = new Set<CheckType>(["http", "database"]);
+const hostTargetCheckTypes = new Set<CheckType>([
+  "tcp",
+  "icmp",
+  "database",
+  "tls",
+  "smtp",
+  "grpc",
+  "ntp",
+]);
+const domainMinimumIntervalSeconds = 3_600;
 
 @Injectable()
 export class ChecksService {
@@ -82,6 +92,10 @@ export class ChecksService {
     const encryptedSecret =
       secretCheckTypes.has(input.type) && input.secret ? encryptConfiguration(input.secret) : null;
     this.validateSecret(input.type, config, encryptedSecret);
+    const intervalSeconds = this.intervalSeconds(
+      input.type,
+      input.intervalSeconds ?? (input.type === "domain" ? 21_600 : 60)
+    );
 
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -100,7 +114,7 @@ export class ChecksService {
       JSON.stringify(config),
       execution.kind === "agent" ? execution.agentId : null,
       encryptedSecret,
-      input.intervalSeconds ?? 60,
+      intervalSeconds,
       input.timeoutMs ?? (input.type === "host" ? 30_000 : 5_000),
       input.failureThreshold ?? 2,
       input.recoveryThreshold ?? 1,
@@ -158,6 +172,10 @@ export class ChecksService {
           ? encryptConfiguration(input.secret)
           : null;
     this.validateSecret(type, config, encryptedSecret);
+    const intervalSeconds = this.intervalSeconds(
+      type,
+      input.intervalSeconds ?? current.interval_seconds
+    );
     const enabled = input.enabled ?? Boolean(current.enabled);
     const now = new Date().toISOString();
 
@@ -172,7 +190,7 @@ export class ChecksService {
       JSON.stringify(config),
       execution.kind === "agent" ? execution.agentId : null,
       encryptedSecret,
-      input.intervalSeconds ?? current.interval_seconds,
+      intervalSeconds,
       input.timeoutMs ?? current.timeout_ms,
       input.failureThreshold ?? current.failure_threshold,
       input.recoveryThreshold ?? current.recovery_threshold,
@@ -336,16 +354,12 @@ export class ChecksService {
       await this.targets.resolvePublicHost(url.hostname);
       return;
     }
-    if (type === "tcp") {
-      await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
-      return;
-    }
     if (type === "dns") {
       this.targets.normalizeHost((config as { target: { hostname: string } }).target.hostname);
       return;
     }
-    if (type === "icmp") {
-      await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
+    if (type === "domain") {
+      this.targets.normalizeHost((config as { target: { domain: string } }).target.domain);
       return;
     }
     if (type === "wan") {
@@ -356,9 +370,16 @@ export class ChecksService {
       );
       return;
     }
-    if (type === "database") {
+    if (hostTargetCheckTypes.has(type)) {
       await this.targets.resolvePublicHost((config as { target: { host: string } }).target.host);
     }
+  }
+
+  private intervalSeconds(type: CheckType, value: number): number {
+    if (type === "domain" && value < domainMinimumIntervalSeconds) {
+      throw new BadRequestException("Domain checks can run at most once per hour");
+    }
+    return value;
   }
 
   private execution(value: { kind: "direct" | "agent"; agentId?: string }): CheckExecution {

@@ -10,6 +10,11 @@ import { CheckOrchestratorService } from "./check-orchestrator.service.js";
 import { CheckRunnerService } from "./check-runner.service.js";
 import { DatabaseCheckService } from "./database-check.service.js";
 import { IcmpService } from "./icmp.service.js";
+import { DomainCheckService } from "./protocols/domain-check.service.js";
+import { GrpcCheckService } from "./protocols/grpc-check.service.js";
+import { NtpCheckService } from "./protocols/ntp-check.service.js";
+import { SmtpCheckService } from "./protocols/smtp-check.service.js";
+import { TlsCheckService } from "./protocols/tls-check.service.js";
 import { ChecksController } from "./checks.controller.js";
 import { ChecksService } from "./checks.service.js";
 import { ResultsService } from "./results.service.js";
@@ -30,6 +35,11 @@ import { ResultsService } from "./results.service.js";
     CheckRunnerService,
     DatabaseCheckService,
     IcmpService,
+    TlsCheckService,
+    SmtpCheckService,
+    GrpcCheckService,
+    NtpCheckService,
+    DomainCheckService,
     ChecksService,
     ResultsService,
   ],

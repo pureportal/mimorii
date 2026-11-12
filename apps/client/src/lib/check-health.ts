@@ -38,6 +38,19 @@ const metricLabels: Record<string, string> = {
   tlsCipher: "TLS cipher",
   tlsProtocol: "TLS protocol",
   port: "Port",
+  certificateSubject: "Certificate subject",
+  certificateTrusted: "Trusted certificate",
+  startTls: "STARTTLS",
+  authMechanisms: "Authentication",
+  maximumMessageBytes: "Message size limit",
+  grpcStatus: "gRPC status",
+  servingStatus: "Health",
+  clockOffsetMs: "Clock offset",
+  stratum: "Stratum",
+  referenceId: "Reference",
+  domainDaysRemaining: "Registration",
+  domainExpiresAt: "Registration expiry",
+  registrar: "Registrar",
   recordCount: "Records",
   packetsSent: "Packets sent",
   packetsReceived: "Packets received",
@@ -89,6 +102,11 @@ const historyMetricOrder: Record<CheckType, string[]> = {
   dns: ["latencyMs", "recordCount"],
   icmp: ["latencyMs", "packetLossPercent", "minimumLatencyMs", "maximumLatencyMs"],
   wan: ["latencyMs", "reachableTargets"],
+  tls: ["certificateDaysRemaining", "latencyMs"],
+  smtp: ["latencyMs", "certificateDaysRemaining"],
+  grpc: ["latencyMs"],
+  ntp: ["clockOffsetMs", "latencyMs", "stratum"],
+  domain: ["domainDaysRemaining"],
   host: ["cpuPercent", "memoryPercent", "loadAverage", "swapPercent", "processCount"],
   disk: ["usedPercent", "usedBytes", "totalBytes"],
   docker: ["containerCount", "runningContainerCount", "unhealthyContainerCount", "restartCount"],
@@ -157,6 +175,27 @@ export function getCheckHealthItems(
         ),
         valueItem("latencyMs", check.lastLatencyMs)
       );
+      break;
+    case "tls":
+      items.push(
+        metricItem(metrics, "certificateDaysRemaining"),
+        metricItem(metrics, "certificateIssuer")
+      );
+      break;
+    case "smtp":
+      items.push(
+        valueItem("latencyMs", check.lastLatencyMs),
+        metricItem(metrics, "certificateDaysRemaining")
+      );
+      break;
+    case "grpc":
+      items.push(valueItem("latencyMs", check.lastLatencyMs), metricItem(metrics, "servingStatus"));
+      break;
+    case "ntp":
+      items.push(metricItem(metrics, "clockOffsetMs"), metricItem(metrics, "stratum"));
+      break;
+    case "domain":
+      items.push(metricItem(metrics, "domainDaysRemaining"), metricItem(metrics, "registrar"));
       break;
     case "host":
       items.push(

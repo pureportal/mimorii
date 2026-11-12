@@ -1,4 +1,8 @@
-import { hostMaintenanceDefaults, type CheckSummary } from "@mimorii/contracts";
+import {
+  hostMaintenanceDefaults,
+  type CheckSummary,
+  type SmtpCheckConfig,
+} from "@mimorii/contracts";
 
 export type CheckMetricThresholdComparison =
   | "greaterThan"
@@ -69,6 +73,40 @@ export function checkMetricThresholds(
       }
       return metric === "reachableTargets"
         ? [critical(config.requiredSuccessfulTargets, "lessThan")]
+        : [];
+    }
+    case "tls": {
+      const config =
+        "certificateWarningDays" in check.config ? check.config : invalidCheckConfig(check.type);
+      return metric === "certificateDaysRemaining" && config.certificateWarningDays !== undefined
+        ? [
+            warning(config.certificateWarningDays, "lessThanOrEqual"),
+            critical(0, "lessThanOrEqual"),
+          ]
+        : [];
+    }
+    case "smtp": {
+      const config = check.config as SmtpCheckConfig;
+      if (metric === "latencyMs") return [warning(check.timeoutMs * 0.75)];
+      return metric === "certificateDaysRemaining" && config.certificateWarningDays !== undefined
+        ? [
+            warning(config.certificateWarningDays, "lessThanOrEqual"),
+            critical(0, "lessThanOrEqual"),
+          ]
+        : [];
+    }
+    case "grpc":
+      return metric === "latencyMs" ? [warning(check.timeoutMs * 0.75)] : [];
+    case "ntp": {
+      const config =
+        "offsetWarningMs" in check.config ? check.config : invalidCheckConfig(check.type);
+      return metric === "clockOffsetMs" ? [warning(config.offsetWarningMs)] : [];
+    }
+    case "domain": {
+      const config =
+        "expiryWarningDays" in check.config ? check.config : invalidCheckConfig(check.type);
+      return metric === "domainDaysRemaining"
+        ? [warning(config.expiryWarningDays, "lessThanOrEqual"), critical(0, "lessThanOrEqual")]
         : [];
     }
     case "host": {

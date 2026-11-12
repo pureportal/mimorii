@@ -8,6 +8,7 @@ import {
   formatCheckMetric,
   prioritizeCheckHistorySeries,
 } from "../lib/check-health";
+import { checkTypeLabels } from "../lib/check-types";
 import { formatPercent, formatRelative } from "../lib/format";
 import { CheckHealthSummary } from "./check-health-summary";
 import { HostMaintenanceResults } from "./host-maintenance-results";
@@ -55,7 +56,9 @@ export function CheckDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
         <DialogHeader title={check?.name ?? "Check details"}>
-          {check ? [check.type.toUpperCase(), resourceName].filter(Boolean).join(" · ") : undefined}
+          {check
+            ? [checkTypeLabels[check.type], resourceName].filter(Boolean).join(" · ")
+            : undefined}
         </DialogHeader>
 
         {check ? (

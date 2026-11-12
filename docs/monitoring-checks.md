@@ -68,6 +68,16 @@ The collected database metrics are:
 - MySQL: version, connection utilization, questions, slow queries, aborted connections, network bytes, and uptime.
 - Redis: version, clients, memory, cache hit rate, rejected connections, evictions, and uptime.
 
+## Protocol checks
+
+TLS, SMTP, gRPC, NTP, and domain checks run directly from the Mimorii server. Desktop agents do not run them yet.
+
+- TLS certificate checks complete a TLS handshake with any host and port. They report the protocol, cipher, issuer, subject, and expiry, fail on expired, untrusted, or mismatched certificates, and degrade inside the expiry warning window. Turn off certificate validation only for private certificate authorities that the Mimorii server does not trust; expiry is still enforced.
+- SMTP checks read the greeting, send `EHLO`, and report advertised STARTTLS, authentication mechanisms, and message size limits. STARTTLS mode requires the server to offer STARTTLS and upgrades the session before evaluating the certificate. TLS mode connects with implicit TLS, usually on port 465. No mail is sent; the session ends with `QUIT`.
+- gRPC checks call `grpc.health.v1.Health/Check` over HTTP/2 with or without TLS. Leave the service empty to check the whole server. Servers must implement the standard gRPC health checking protocol.
+- NTP checks send one SNTP client request over UDP and report stratum, reference, round trip, and the clock offset relative to the Mimorii server. Unsynchronized servers and kiss-o'-death replies fail. Offsets are only meaningful when the Mimorii server clock is synchronized.
+- Domain checks look up the registration through RDAP, using the IANA bootstrap registry to find the registry server, and report the expiration date and registrar. Registries without RDAP, or that do not publish an expiration date, cannot be monitored this way. Domain checks run at most once per hour and default to every six hours to respect registry rate limits.
+
 ## References
 
 - [ICMP Echo in RFC 792](https://www.rfc-editor.org/rfc/rfc792)
@@ -75,3 +85,7 @@ The collected database metrics are:
 - [Docker Engine API](https://docs.docker.com/reference/api/engine/version/v1.46/)
 - [PostgreSQL monitoring statistics](https://www.postgresql.org/docs/current/monitoring.html)
 - [MySQL Performance Schema](https://dev.mysql.com/doc/refman/8.4/en/performance-schema.html)
+- [gRPC health checking protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
+- [SMTP in RFC 5321](https://www.rfc-editor.org/rfc/rfc5321) and [STARTTLS in RFC 3207](https://www.rfc-editor.org/rfc/rfc3207)
+- [NTPv4 and SNTP in RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)
+- [RDAP bootstrap in RFC 9224](https://www.rfc-editor.org/rfc/rfc9224) and [RDAP responses in RFC 9083](https://www.rfc-editor.org/rfc/rfc9083)
