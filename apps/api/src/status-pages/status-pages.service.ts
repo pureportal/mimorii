@@ -29,6 +29,11 @@ interface StatusPageRow {
   slug: string;
   published: number;
   show_uptime: number;
+  description: string;
+  accent_color: string | null;
+  website_url: string | null;
+  show_logo: number;
+  has_logo: boolean;
   created_at: string;
   updated_at: string;
   subscriber_count: number;
@@ -70,14 +75,19 @@ export class StatusPagesService {
     await this.database.transaction(async () => {
       await this.database.run(
         `INSERT INTO status_pages
-         (id, team_id, name, slug, published, show_uptime, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, team_id, name, slug, published, show_uptime, description, accent_color, website_url,
+          show_logo, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         teamId,
         input.name.trim(),
         input.slug.toLowerCase(),
         input.published ? 1 : 0,
         input.showUptime === false ? 0 : 1,
+        input.description?.trim() ?? "",
+        input.accentColor ?? null,
+        input.websiteUrl ?? null,
+        input.showLogo === false ? 0 : 1,
         userId,
         now,
         now
@@ -107,12 +117,17 @@ export class StatusPagesService {
       : await this.resourceIds(id);
     await this.database.transaction(async () => {
       await this.database.run(
-        `UPDATE status_pages SET name = ?, slug = ?, published = ?, show_uptime = ?, updated_at = ?
+        `UPDATE status_pages SET name = ?, slug = ?, published = ?, show_uptime = ?,
+         description = ?, accent_color = ?, website_url = ?, show_logo = ?, updated_at = ?
          WHERE id = ? AND team_id = ?`,
         input.name?.trim() ?? current.name,
         input.slug?.toLowerCase() ?? current.slug,
         (input.published ?? Boolean(current.published)) ? 1 : 0,
         (input.showUptime ?? Boolean(current.show_uptime)) ? 1 : 0,
+        input.description?.trim() ?? current.description,
+        input.accentColor === undefined ? current.accent_color : input.accentColor,
+        input.websiteUrl === undefined ? current.website_url : input.websiteUrl,
+        (input.showLogo ?? Boolean(current.show_logo)) ? 1 : 0,
         new Date().toISOString(),
         id,
         teamId
@@ -197,11 +212,7 @@ export class StatusPagesService {
   }
 
   async publicPage(id: string): Promise<PublicStatusPage> {
-    const row = await this.database.get<StatusPageRow>(
-      `${this.selectSql()} WHERE sp.id = ? AND sp.published = 1 GROUP BY sp.id`,
-      id
-    );
-    if (!row) throw new NotFoundException("Status page not found");
+    const row = await this.publishedRow(id);
     const resourceIds = await this.resourceIds(row.id);
     const components = await this.components(row.id, row.team_id);
     const maintenance = await this.maintenance.visibleForResources(
@@ -252,6 +263,13 @@ export class StatusPagesService {
       name: row.name,
       slug: row.slug,
       state,
+      description: row.description,
+      accentColor: row.accent_color,
+      websiteUrl: row.website_url,
+      logoUrl:
+        row.show_logo && row.has_logo
+          ? `/public/status-pages/${row.id}/${encodeURIComponent(row.slug)}/logo`
+          : null,
       showUptime: Boolean(row.show_uptime),
       subscriptionsEnabled: this.mail.available(),
       components: publicComponents,
@@ -285,15 +303,22 @@ export class StatusPagesService {
     };
   }
 
+  async publicLogo(id: string): Promise<{ image_data: Buffer; updated_at: string }> {
+    const logo = await this.database.get<{ image_data: Buffer; updated_at: string }>(
+      `SELECT tl.image_data, tl.updated_at FROM status_pages sp
+       JOIN team_logos tl ON tl.team_id = sp.team_id
+       WHERE sp.id = ? AND sp.published = 1 AND sp.show_logo = 1`,
+      id
+    );
+    if (!logo) throw new NotFoundException("Status page logo not found");
+    return logo;
+  }
+
   async subscribe(id: string, input: SubscribeStatusPageDto): Promise<{ accepted: true }> {
     if (!this.mail.available()) {
       throw new BadRequestException("Email subscriptions are unavailable");
     }
-    const page = await this.database.get<StatusPageRow>(
-      `${this.selectSql()} WHERE sp.id = ? AND sp.published = 1 GROUP BY sp.id`,
-      id
-    );
-    if (!page) throw new NotFoundException("Status page not found");
+    const page = await this.publishedRow(id);
     const email = input.email.trim().toLowerCase();
     const existing = await this.database.get<{ id: string; verified_at: string | null }>(
       "SELECT id, verified_at FROM status_subscribers WHERE status_page_id = ? AND email = ?",
@@ -364,8 +389,19 @@ export class StatusPagesService {
 
   private selectSql(): string {
     return `SELECT sp.*, COUNT(DISTINCT CASE WHEN ss.verified_at IS NOT NULL
-      THEN ss.id END) AS subscriber_count FROM status_pages sp
+      THEN ss.id END) AS subscriber_count,
+      EXISTS (SELECT 1 FROM team_logos tl WHERE tl.team_id = sp.team_id) AS has_logo
+      FROM status_pages sp
       LEFT JOIN status_subscribers ss ON ss.status_page_id = sp.id`;
+  }
+
+  private async publishedRow(id: string): Promise<StatusPageRow> {
+    const row = await this.database.get<StatusPageRow>(
+      `${this.selectSql()} WHERE sp.id = ? AND sp.published = 1 GROUP BY sp.id`,
+      id
+    );
+    if (!row) throw new NotFoundException("This status page isn't published");
+    return row;
   }
 
   private async requireRow(teamId: string, id: string): Promise<StatusPageRow> {
@@ -472,6 +508,10 @@ export class StatusPagesService {
       slug: row.slug,
       published: Boolean(row.published),
       showUptime: Boolean(row.show_uptime),
+      description: row.description,
+      accentColor: row.accent_color,
+      websiteUrl: row.website_url,
+      showLogo: Boolean(row.show_logo),
       resourceIds: await this.resourceIds(row.id),
       subscriberCount: row.subscriber_count,
       createdAt: row.created_at,

@@ -762,6 +762,10 @@ export interface StatusPageSummary {
   slug: string;
   published: boolean;
   showUptime: boolean;
+  description: string;
+  accentColor: string | null;
+  websiteUrl: string | null;
+  showLogo: boolean;
   resourceIds: string[];
   subscriberCount: number;
   createdAt: string;
@@ -816,6 +820,10 @@ export interface PublicStatusPage {
   name: string;
   slug: string;
   state: "operational" | "degraded" | "outage" | "maintenance";
+  description: string;
+  accentColor: string | null;
+  websiteUrl: string | null;
+  logoUrl: string | null;
   showUptime: boolean;
   subscriptionsEnabled: boolean;
   components: StatusPageComponent[];

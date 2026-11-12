@@ -267,12 +267,18 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
         `SELECT table_name, column_name FROM information_schema.columns
          WHERE table_schema = 'public'
            AND ((table_name = 'resources' AND column_name = 'log_query')
+             OR (table_name = 'status_pages'
+               AND column_name IN ('description', 'accent_color', 'website_url', 'show_logo'))
              OR (table_name = 'password_reset_tokens' AND column_name = 'token_hash'))
          ORDER BY table_name, column_name`
       );
       expect(releaseColumns).toEqual([
         { table_name: "password_reset_tokens", column_name: "token_hash" },
         { table_name: "resources", column_name: "log_query" },
+        { table_name: "status_pages", column_name: "accent_color" },
+        { table_name: "status_pages", column_name: "description" },
+        { table_name: "status_pages", column_name: "show_logo" },
+        { table_name: "status_pages", column_name: "website_url" },
       ]);
 
       const teamSlugColumn = await database.all<{ column_name: string }>(

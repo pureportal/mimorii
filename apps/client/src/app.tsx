@@ -125,6 +125,7 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
     <Suspense fallback={<LoadingState />}>
       <Routes>
         <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
+        <Route path="/status/:id/:slug" element={<PublicStatusPageView />} />
         <Route element={androidClient ? <AndroidClientLayout /> : <PublicLayout />}>
           <Route
             path="/"
@@ -140,7 +141,6 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/imprint" element={<ImprintPage />} />
           <Route path="/invite/:token" element={<InvitePage />} />
-          <Route path="/status/:id/:slug" element={<PublicStatusPageView />} />
           <Route path="/dashboard/:id/:slug" element={<DashboardViewPage />} />
         </Route>
         <Route path="/app" element={<ProtectedLayout />}>

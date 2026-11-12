@@ -15,6 +15,12 @@ export class Migration20261113000000 extends Migration {
 
       CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id, created_at DESC);
 
+      ALTER TABLE status_pages
+        ADD COLUMN description TEXT NOT NULL DEFAULT '',
+        ADD COLUMN accent_color TEXT CHECK (accent_color ~ '^#[0-9a-f]{6}$'),
+        ADD COLUMN website_url TEXT,
+        ADD COLUMN show_logo INTEGER NOT NULL DEFAULT 1;
+
       ALTER TABLE resources ADD COLUMN log_query TEXT;
 
       ALTER TABLE checks
@@ -39,6 +45,11 @@ export class Migration20261113000000 extends Migration {
 
       ALTER TABLE resources DROP COLUMN log_query;
 
+      ALTER TABLE status_pages
+        DROP COLUMN show_logo,
+        DROP COLUMN website_url,
+        DROP COLUMN accent_color,
+        DROP COLUMN description;
       DROP TABLE password_reset_tokens;
     `);
   }

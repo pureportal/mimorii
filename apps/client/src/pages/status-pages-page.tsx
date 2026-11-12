@@ -4,23 +4,25 @@ import type {
   StatusPageSummary,
 } from "@mimorii/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Globe2, Pencil, Plus, Radio, Trash2, Users } from "lucide-react";
+import { BadgeCheck, ExternalLink, Globe2, Pencil, Plus, Radio, Trash2, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { ResourcePicker } from "../components/resource-picker";
+import { StatusBadgeDialog } from "../components/status-badge-dialog";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
 import { Field, FieldLabel } from "../components/ui/field";
-import { Input } from "../components/ui/input";
+import { Input, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount } from "../lib/format";
+import { slugify } from "../lib/slug";
 import { statusPagePath } from "../lib/status-page-links";
 
 export function StatusPagesPage() {
@@ -31,6 +33,7 @@ export function StatusPagesPage() {
   const [selected, setSelected] = useState<StatusPageSummary | null>(null);
   const [subscribersPage, setSubscribersPage] = useState<StatusPageSummary | null>(null);
   const [deletePage, setDeletePage] = useState<StatusPageSummary | null>(null);
+  const [badgePage, setBadgePage] = useState<StatusPageSummary | null>(null);
   const pages = useQuery({
     queryKey: ["status-pages", teamId],
     queryFn: () => api<StatusPageSummary[]>(`/teams/${teamId}/status-pages`),
@@ -136,11 +139,16 @@ export function StatusPagesPage() {
                 </div>
                 <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
                   {page.published ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link to={statusPagePath(page.id, page.slug)} target="_blank">
-                        <ExternalLink /> Open
-                      </Link>
-                    </Button>
+                    <>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to={statusPagePath(page.id, page.slug)} target="_blank">
+                          <ExternalLink /> Open
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setBadgePage(page)}>
+                        <BadgeCheck /> Badge
+                      </Button>
+                    </>
                   ) : null}
                   {canManage ? (
                     <>
@@ -182,6 +190,12 @@ export function StatusPagesPage() {
         resources={resources.data ?? []}
         teamId={teamId}
         onSaved={refresh}
+      />
+      <StatusBadgeDialog
+        page={badgePage}
+        onOpenChange={(open) => {
+          if (!open) setBadgePage(null);
+        }}
       />
       <SubscribersDialog
         page={subscribersPage}
@@ -315,12 +329,19 @@ function StatusPageDialog({
   onSaved: () => Promise<unknown>;
 }) {
   const [resourceIds, setResourceIds] = useState(page?.resourceIds ?? []);
+  const [accentColor, setAccentColor] = useState(page?.accentColor ?? null);
+  const [slug, setSlug] = useState(page?.slug ?? "");
+  const [slugTouched, setSlugTouched] = useState(Boolean(page));
   const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!resourceIds.length) return toast.error("Select at least one resource");
     const form = new FormData(event.currentTarget);
+    const text = (name: string) => {
+      const value = form.get(name);
+      return typeof value === "string" ? value : "";
+    };
     setSaving(true);
     try {
       await api(`/teams/${teamId}/status-pages${page ? `/${page.id}` : ""}`, {
@@ -331,6 +352,10 @@ function StatusPageDialog({
           resourceIds,
           published: form.get("published") === "on",
           showUptime: form.get("showUptime") === "on",
+          showLogo: form.get("showLogo") === "on",
+          description: text("description"),
+          websiteUrl: text("websiteUrl").trim() || null,
+          accentColor,
         }),
       });
       await onSaved();
@@ -354,6 +379,9 @@ function StatusPageDialog({
               id="status-page-name"
               name="name"
               defaultValue={page?.name}
+              onChange={(event) => {
+                if (!slugTouched) setSlug(slugify(event.target.value));
+              }}
               required
               maxLength={100}
             />
@@ -363,13 +391,63 @@ function StatusPageDialog({
             <Input
               id="status-page-slug"
               name="slug"
-              defaultValue={page?.slug}
+              value={slug}
+              onChange={(event) => {
+                setSlugTouched(true);
+                setSlug(event.target.value.toLowerCase());
+              }}
+              placeholder="service-status"
               required
               minLength={3}
               maxLength={80}
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="status-page-description">Description</FieldLabel>
+            <Textarea
+              id="status-page-description"
+              name="description"
+              defaultValue={page?.description}
+              maxLength={280}
+              className="min-h-16"
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Field>
+              <FieldLabel htmlFor="status-page-website">Website</FieldLabel>
+              <Input
+                id="status-page-website"
+                name="websiteUrl"
+                type="url"
+                placeholder="https://"
+                defaultValue={page?.websiteUrl ?? ""}
+                maxLength={500}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="status-page-accent">Accent</FieldLabel>
+              <div className="flex h-11 items-center gap-2">
+                <input
+                  id="status-page-accent"
+                  type="color"
+                  value={accentColor ?? "#a892ff"}
+                  onChange={(event) => setAccentColor(event.target.value.toLowerCase())}
+                  className="h-10 w-14 cursor-pointer rounded-lg border border-line bg-surface p-1"
+                />
+                {accentColor ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAccentColor(null)}
+                  >
+                    Reset
+                  </Button>
+                ) : null}
+              </div>
+            </Field>
+          </div>
           <Field>
             <FieldLabel>Components</FieldLabel>
             <ResourcePicker resources={resources} value={resourceIds} onChange={setResourceIds} />
@@ -392,6 +470,15 @@ function StatusPageDialog({
                 className="size-4 accent-violet-strong"
               />
               Show uptime
+            </label>
+            <label className="flex items-center gap-3 text-sm font-medium">
+              <input
+                name="showLogo"
+                type="checkbox"
+                defaultChecked={page?.showLogo ?? true}
+                className="size-4 accent-violet-strong"
+              />
+              Show team logo
             </label>
           </div>
           <DialogFooter>

@@ -7,9 +7,12 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   Length,
   Matches,
+  MaxLength,
+  ValidateIf,
 } from "class-validator";
 
 export class CreateStatusPageDto {
@@ -40,6 +43,30 @@ export class CreateStatusPageDto {
   @IsOptional()
   @IsBoolean()
   showUptime?: boolean;
+
+  @ApiPropertyOptional({ maxLength: 280 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(280)
+  description?: string;
+
+  @ApiPropertyOptional({ nullable: true, pattern: "^#[0-9a-f]{6}$" })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(/^#[0-9a-f]{6}$/, { message: "Accent color must be a hex color such as #ff7a90" })
+  accentColor?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(500)
+  websiteUrl?: string | null;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  showLogo?: boolean;
 }
 
 export class UpdateStatusPageDto extends PartialType(CreateStatusPageDto) {}
