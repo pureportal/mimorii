@@ -13,13 +13,14 @@ import { createSecret, hashSecret, verifySignedReference } from "../common/crypt
 import { DatabaseService } from "../database/database.service.js";
 import { IncidentsService } from "../incidents/incidents.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
-import { NotificationsService } from "../notifications/notifications.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import type {
   CreateStatusPageDto,
   SubscribeStatusPageDto,
   UpdateStatusPageDto,
 } from "./status-pages.dto.js";
+import { MailService } from "../common/mail.service.js";
+import { publicBaseUrl } from "../common/public-url.js";
 
 interface StatusPageRow {
   id: string;
@@ -46,7 +47,7 @@ export class StatusPagesService {
     private readonly access: TeamAccessService,
     private readonly incidents: IncidentsService,
     private readonly maintenance: MaintenanceService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
     private readonly audit: AuditService,
     private readonly health: ResourceHealthService
   ) {}
@@ -252,7 +253,7 @@ export class StatusPagesService {
       slug: row.slug,
       state,
       showUptime: Boolean(row.show_uptime),
-      subscriptionsEnabled: this.notifications.emailAvailable(),
+      subscriptionsEnabled: this.mail.available(),
       components: publicComponents,
       incidents: incidents.map((incident) => ({
         id: incident.id,
@@ -285,7 +286,7 @@ export class StatusPagesService {
   }
 
   async subscribe(id: string, input: SubscribeStatusPageDto): Promise<{ accepted: true }> {
-    if (!this.notifications.emailAvailable()) {
+    if (!this.mail.available()) {
       throw new BadRequestException("Email subscriptions are unavailable");
     }
     const page = await this.database.get<StatusPageRow>(
@@ -326,8 +327,8 @@ export class StatusPagesService {
         now
       );
     }
-    const baseUrl = (process.env.MIMORII_PUBLIC_URL ?? "http://localhost:4310").replace(/\/$/, "");
-    await this.notifications.sendTransactionalEmail(
+    const baseUrl = publicBaseUrl();
+    await this.mail.send(
       email,
       `Confirm ${page.name} updates`,
       `${baseUrl}/status/${page.id}/${page.slug}?verify=${encodeURIComponent(token)}`

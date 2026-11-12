@@ -7,7 +7,6 @@ import type {
   NotificationEvent,
 } from "@mimorii/contracts";
 import { createHmac, randomUUID } from "node:crypto";
-import nodemailer from "nodemailer";
 import { AuditService } from "../common/audit.service.js";
 import {
   createSignedReference,
@@ -28,6 +27,8 @@ import type {
   CreateNotificationChannelDto,
   UpdateNotificationChannelDto,
 } from "./notifications.dto.js";
+import { MailService } from "../common/mail.service.js";
+import { publicBaseUrl } from "../common/public-url.js";
 
 interface EmailConfiguration {
   recipients: string[];
@@ -95,7 +96,8 @@ export class NotificationsService {
     private readonly audit: AuditService,
     private readonly policies: NotificationPoliciesService,
     private readonly pushDeliveries: PushDeliveryService,
-    private readonly pushEndpoints: PushEndpointsService
+    private readonly pushEndpoints: PushEndpointsService,
+    private readonly mail: MailService
   ) {}
 
   async list(userId: string, teamId: string): Promise<NotificationChannelSummary[]> {
@@ -560,35 +562,11 @@ export class NotificationsService {
   ): Promise<void> {
     const title = typeof payload.title === "string" ? payload.title : "Mimorii notification";
     const message = typeof payload.message === "string" ? payload.message : "";
-    await this.sendTransactionalEmail(
+    await this.mail.send(
       configuration.recipients,
       `[Mimorii] ${title}`,
       [title, message, `Event: ${event}`].filter(Boolean).join("\n\n")
     );
-  }
-
-  emailAvailable(): boolean {
-    return Boolean(process.env.MIMORII_SMTP_HOST && process.env.MIMORII_EMAIL_FROM);
-  }
-
-  async sendTransactionalEmail(
-    to: string | string[],
-    subject: string,
-    text: string
-  ): Promise<void> {
-    const host = process.env.MIMORII_SMTP_HOST;
-    const from = process.env.MIMORII_EMAIL_FROM;
-    if (!host || !from) throw new Error("SMTP is not configured");
-    const port = Number(process.env.MIMORII_SMTP_PORT ?? 587);
-    const user = process.env.MIMORII_SMTP_USER;
-    const password = process.env.MIMORII_SMTP_PASSWORD;
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: process.env.MIMORII_SMTP_SECURE === "true",
-      ...(user && password ? { auth: { user, pass: password } } : {}),
-    });
-    await transporter.sendMail({ from, to, subject, text });
   }
 
   private async enqueueStatusSubscribers(
@@ -644,12 +622,9 @@ export class NotificationsService {
       const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
       const title = typeof payload.title === "string" ? payload.title : "Status update";
       const message = typeof payload.message === "string" ? payload.message : "";
-      const baseUrl = (process.env.MIMORII_PUBLIC_URL ?? "http://localhost:4310").replace(
-        /\/$/,
-        ""
-      );
+      const baseUrl = publicBaseUrl();
       const unsubscribe = createSignedReference("status-unsubscribe", row.subscriber_id);
-      await this.sendTransactionalEmail(
+      await this.mail.send(
         row.email,
         `[${row.page_name}] ${title}`,
         [

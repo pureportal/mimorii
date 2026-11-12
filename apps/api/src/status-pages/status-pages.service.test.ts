@@ -4,7 +4,7 @@ import type { ResourceHealthService } from "../common/resource-health.service.js
 import type { DatabaseService } from "../database/database.service.js";
 import type { IncidentsService } from "../incidents/incidents.service.js";
 import type { MaintenanceService } from "../maintenance/maintenance.service.js";
-import type { NotificationsService } from "../notifications/notifications.service.js";
+import type { MailService } from "../common/mail.service.js";
 import type { TeamAccessService } from "../teams/team-access.service.js";
 import { StatusPagesService } from "./status-pages.service.js";
 
@@ -44,7 +44,7 @@ describe("StatusPagesService", () => {
       {} as TeamAccessService,
       { forResources: vi.fn(async () => []) } as unknown as IncidentsService,
       { visibleForResources: vi.fn(async () => []) } as unknown as MaintenanceService,
-      { emailAvailable: vi.fn(() => false) } as unknown as NotificationsService,
+      { available: vi.fn(() => false) } as unknown as MailService,
       {} as AuditService,
       health as unknown as ResourceHealthService
     );

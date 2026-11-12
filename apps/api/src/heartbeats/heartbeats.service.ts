@@ -17,6 +17,7 @@ import type {
   HeartbeatSignalDto,
   UpdateHeartbeatMonitorDto,
 } from "./heartbeats.dto.js";
+import { publicBaseUrl } from "../common/public-url.js";
 
 interface HeartbeatRow {
   id: string;
@@ -565,7 +566,7 @@ export class HeartbeatsService {
   }
 
   private createdResult(row: HeartbeatSummaryRow, token: string): CreatedHeartbeatMonitor {
-    const baseUrl = (process.env.MIMORII_PUBLIC_URL ?? "http://localhost:4310").replace(/\/$/, "");
+    const baseUrl = publicBaseUrl();
     const apiBase = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
     return {
       heartbeat: this.map(row),

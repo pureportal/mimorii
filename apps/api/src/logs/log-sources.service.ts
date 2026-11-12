@@ -13,6 +13,7 @@ import { LogIngestionService } from "./log-ingestion.service.js";
 import { reservedLogLabel, validateLogLabels } from "./log-labels.js";
 import type { CreateLogSourceDto, UpdateLogSourceDto } from "./logs.dto.js";
 import { LogsAccessService } from "./logs-access.service.js";
+import { publicBaseUrl } from "../common/public-url.js";
 
 interface LogSourceRow {
   id: string;
@@ -203,7 +204,7 @@ function statsSince(): string {
 }
 
 function ingestionEndpoints(): LogIngestionEndpoints {
-  const baseUrl = (process.env.MIMORII_PUBLIC_URL ?? "http://localhost:4310").replace(/\/$/, "");
+  const baseUrl = publicBaseUrl();
   const apiBase = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
   return {
     native: `${apiBase}/logs/push`,

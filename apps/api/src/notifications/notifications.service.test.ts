@@ -28,6 +28,7 @@ describe("notification occurrence queue", () => {
       {} as never,
       { routedChannelIds: vi.fn().mockResolvedValue(new Set([channel.id])) } as never,
       pushDeliveries as never,
+      {} as never,
       {} as never
     );
     const payload = {
@@ -57,6 +58,7 @@ describe("notification occurrence queue", () => {
       } as never,
       { require: vi.fn(async () => ({ role: "owner" })) } as never,
       { record: vi.fn(async () => undefined) } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never
