@@ -81,7 +81,10 @@ describe.skipIf(!databaseConfigured)("Mimorii management", () => {
     expect(smtp.body.config.target).toEqual({ host: "127.0.0.1", port: 465, security: "tls" });
     await create("grpc", { target: { host: "127.0.0.1", service: "bad service" } }).expect(400);
     const ntp = await create("ntp", { target: { host: "127.0.0.1" } }).expect(201);
-    expect(ntp.body.config).toEqual({ target: { host: "127.0.0.1", port: 123 }, offsetWarningMs: 500 });
+    expect(ntp.body.config).toEqual({
+      target: { host: "127.0.0.1", port: 123 },
+      offsetWarningMs: 500,
+    });
     await create("domain", { target: { domain: "example.com" } }, { intervalSeconds: 600 })
       .expect(400)
       .expect(({ body }) =>

@@ -88,9 +88,9 @@ describe("StatusPagesService", () => {
         {} as ResourceHealthService
       );
 
-      await expect(
-        service.subscribe("page-1", { email: "Reader@example.com" })
-      ).resolves.toEqual({ accepted: true });
+      await expect(service.subscribe("page-1", { email: "Reader@example.com" })).resolves.toEqual({
+        accepted: true,
+      });
 
       expect(mail.send).toHaveBeenCalledTimes(emails);
       expect(database.run).toHaveBeenCalledTimes(emails);
