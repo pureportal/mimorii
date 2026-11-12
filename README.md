@@ -132,12 +132,24 @@ Verify the service and inspect its logs with:
 systemctl --user is-enabled mimorii-agent-desktop.service
 systemctl --user is-active mimorii-agent-desktop.service
 loginctl show-user "$USER" --property=Linger --value
-journalctl --user --unit mimorii-agent-desktop.service --lines 50 --no-pager
+mimorii-agent-desktop logs --lines 50
 ```
 
 The first two commands should print `enabled` and `active`; the linger setting should be `yes`. If enrollment completed but service setup failed, fix the reported issue and run `mimorii-agent-desktop service install`.
 
-`mimorii-agent-desktop status` shows when the agent last reached the server, when it last uploaded telemetry, how many snapshots are waiting, and the current error, if any. The Windows application shows the same information. While the server is unreachable, the agent keeps up to 2,880 snapshots locally, dropping the oldest first, and uploads them in batches after it reconnects.
+### Everyday agent commands
+
+| Command                                     | Shows                                                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mimorii-agent-desktop status`              | Service state, server, last contact and upload, queued snapshots, the latest checks, and the current error. Add `--watch` to keep it updating. |
+| `mimorii-agent-desktop doctor`              | A checklist of enrollment, encryption, server, service, activity, and errors, with the next step for each problem.                             |
+| `mimorii-agent-desktop activity`            | The checks this agent ran recently, with their targets and results.                                                                            |
+| `mimorii-agent-desktop logs --follow`       | New log entries as they are written.                                                                                                           |
+| `mimorii-agent-desktop completions <shell>` | Tab completion for bash, zsh, fish, elvish, or PowerShell.                                                                                     |
+
+`status`, `doctor`, and `activity` accept `--json` for scripts. To enable tab completion in PowerShell, add `mimorii-agent-desktop completions powershell | Out-String | Invoke-Expression` to your profile.
+
+On Windows, the Mimorii Agent application shows the same overview, activity, network access, diagnostics, and logs. While the server is unreachable, the agent keeps up to 2,880 snapshots locally, dropping the oldest first, and uploads them in batches after it reconnects.
 
 ### Update the desktop agent
 
