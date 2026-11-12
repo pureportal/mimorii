@@ -28,7 +28,9 @@ import type {
   UpdateNotificationChannelDto,
 } from "./notifications.dto.js";
 import { MailService } from "../common/mail.service.js";
+import { pinnedRequest } from "../common/pinned-request.js";
 import { publicBaseUrl } from "../common/public-url.js";
+import { TargetSafetyService, UnsafeTargetException } from "../common/target-safety.service.js";
 
 interface EmailConfiguration {
   recipients: string[];
@@ -97,7 +99,8 @@ export class NotificationsService {
     private readonly policies: NotificationPoliciesService,
     private readonly pushDeliveries: PushDeliveryService,
     private readonly pushEndpoints: PushEndpointsService,
-    private readonly mail: MailService
+    private readonly mail: MailService,
+    private readonly targets: TargetSafetyService
   ) {}
 
   async list(userId: string, teamId: string): Promise<NotificationChannelSummary[]> {
@@ -395,10 +398,8 @@ export class NotificationsService {
     }
     if (input.type === "webhook") {
       if (!input.webhookUrl) throw new BadRequestException("Webhook URL is required");
-      const url = new URL(input.webhookUrl);
-      if (!new Set(["http:", "https:"]).has(url.protocol) || url.username || url.password) {
-        throw new BadRequestException("Webhook URL is invalid");
-      }
+      const url = this.targets.validateHttpUrl(input.webhookUrl);
+      await this.targets.resolvePublicHost(url.hostname);
       return { url: url.toString(), secret: input.webhookSecret?.trim() || null };
     }
     if (!this.pushEndpoints.deliveryAvailable()) {
@@ -528,14 +529,21 @@ export class NotificationsService {
       headers["x-mimorii-signature"] =
         `sha256=${createHmac("sha256", configuration.secret).update(`${timestamp}.${body}`).digest("hex")}`;
     }
-    const response = await fetch(configuration.url, {
+    const url = this.targets.validateHttpUrl(configuration.url);
+    const [address] = await this.targets.resolvePublicHost(url.hostname).catch((error: unknown) => {
+      if (error instanceof UnsafeTargetException) {
+        throw new PermanentNotificationDeliveryError(error.message);
+      }
+      throw error;
+    });
+    const response = await pinnedRequest(url, address!, {
       method: "POST",
       headers,
       body,
-      redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      timeoutMs: 10_000,
+      maximumBytes: 1_024 * 1_024,
     });
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       const message = `Webhook returned HTTP ${response.status}`;
       if (
         response.status >= 400 &&
@@ -548,7 +556,7 @@ export class NotificationsService {
       if (response.status === 429 || response.status >= 500) {
         throw new RetryableNotificationDeliveryError(
           message,
-          retryAfter(response.headers.get("retry-after"))
+          retryAfter(response.headers["retry-after"])
         );
       }
       throw new Error(message);
@@ -716,7 +724,7 @@ function retryAt(attempt: number, retryAfterMs: number | null = null): string {
   return new Date(Date.now() + Math.max(base, retryAfterMs ?? 0) + jitter).toISOString();
 }
 
-function retryAfter(value: string | null): number | null {
+function retryAfter(value: string | undefined): number | null {
   if (!value) return null;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1_000, 86_400_000);

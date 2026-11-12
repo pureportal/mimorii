@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiProduces, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import { AuthGuard } from "../auth/auth.guard.js";
@@ -138,6 +139,7 @@ export class PublicStatusPagesController {
   }
 
   @Post(":id/:slug/subscribers")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   subscribe(
     @Param("id") id: string,
     @Param("slug") _slug: string,

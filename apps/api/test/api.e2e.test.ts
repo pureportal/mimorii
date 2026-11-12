@@ -662,7 +662,38 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .expect(200);
     expect(overview.body).toMatchObject({ resources: 1, checks: 1, passing: 1, uptime24h: 100 });
 
+    const privateWebhook = await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/notifications/channels`)
+      .set("authorization", authorization)
+      .send({
+        name: "Private webhook",
+        type: "webhook",
+        webhookUrl: new URL("/webhook", fixtureUrl).toString(),
+        enabled: true,
+      })
+      .expect(201);
+
     process.env.MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS = "false";
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/notifications/channels`)
+      .set("authorization", authorization)
+      .send({
+        name: "Metadata webhook",
+        type: "webhook",
+        webhookUrl: "http://169.254.169.254/latest/meta-data/",
+        enabled: true,
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/notifications/channels/${privateWebhook.body.id}/test`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          status: "failed",
+          error: "Target cannot use a private or reserved network",
+        })
+      );
     const unsafeResource = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources`)
       .set("authorization", authorization)

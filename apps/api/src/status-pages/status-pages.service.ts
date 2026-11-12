@@ -22,6 +22,8 @@ import type {
 import { MailService } from "../common/mail.service.js";
 import { publicBaseUrl } from "../common/public-url.js";
 
+const confirmationResendIntervalMs = 5 * 60_000;
+
 interface StatusPageRow {
   id: string;
   team_id: string;
@@ -320,12 +322,22 @@ export class StatusPagesService {
     }
     const page = await this.publishedRow(id);
     const email = input.email.trim().toLowerCase();
-    const existing = await this.database.get<{ id: string; verified_at: string | null }>(
-      "SELECT id, verified_at FROM status_subscribers WHERE status_page_id = ? AND email = ?",
+    const existing = await this.database.get<{
+      id: string;
+      verified_at: string | null;
+      created_at: string;
+    }>(
+      "SELECT id, verified_at, created_at FROM status_subscribers WHERE status_page_id = ? AND email = ?",
       page.id,
       email
     );
-    if (existing?.verified_at) return { accepted: true };
+    if (
+      existing &&
+      (existing.verified_at ||
+        new Date(existing.created_at).getTime() > Date.now() - confirmationResendIntervalMs)
+    ) {
+      return { accepted: true };
+    }
     const subscriberId = existing?.id ?? randomUUID();
     const token = createSecret("mim_status");
     const now = new Date().toISOString();

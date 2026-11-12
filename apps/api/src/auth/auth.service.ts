@@ -40,6 +40,8 @@ interface UserProfileRow {
 
 @Injectable()
 export class AuthService {
+  private readonly unknownAccountPasswordHash = hashPassword(randomUUID());
+
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
@@ -109,7 +111,11 @@ export class AuthService {
   async login(input: LoginDto): Promise<SignInChallenge> {
     const email = input.email.trim().toLowerCase();
     const user = await this.database.get<UserRow>("SELECT * FROM users WHERE email = ?", email);
-    if (!user || !(await verifyPassword(input.password, user.password_hash)) || user.disabled_at) {
+    const passwordMatches = await verifyPassword(
+      input.password,
+      user?.password_hash ?? (await this.unknownAccountPasswordHash)
+    );
+    if (!user || !passwordMatches || user.disabled_at) {
       throw new UnauthorizedException("Email or password is incorrect");
     }
     return this.twoFactor.createSignInChallenge({

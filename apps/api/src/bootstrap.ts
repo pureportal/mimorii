@@ -21,9 +21,18 @@ import { publicOrigin } from "./auth/oauth-config.js";
 import { allowedCorsMethods, configuredCorsOrigins } from "./cors.js";
 import { setupSwagger } from "./openapi/swagger.js";
 
+const clientContentSecurityPolicy = [
+  "script-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
 export async function createApplication(): Promise<INestApplication> {
   publicOrigin();
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+  configureTrustedProxies(app);
   app.setGlobalPrefix("api", {
     exclude: [
       { path: ".well-known/oauth-protected-resource/api/mcp", method: RequestMethod.GET },
@@ -62,6 +71,13 @@ export async function createApplication(): Promise<INestApplication> {
   setupSwagger(app);
   configureClientApplication(app);
   return app;
+}
+
+function configureTrustedProxies(app: INestApplication): void {
+  const configured = process.env.MIMORII_TRUST_PROXY?.trim();
+  if (!configured) return;
+  const expressApplication: Express = app.getHttpAdapter().getInstance();
+  expressApplication.set("trust proxy", /^\d+$/.test(configured) ? Number(configured) : configured);
 }
 
 function configureLogIngestionParsers(app: INestApplication): void {
@@ -109,7 +125,16 @@ function configureClientApplication(app: INestApplication): void {
     "/.well-known",
     serveStatic(join(clientRoot, ".well-known"), { dotfiles: "allow", index: false })
   );
-  app.use(serveStatic(clientRoot, { index: false }));
+  app.use(
+    serveStatic(clientRoot, {
+      index: false,
+      setHeaders: (response, filePath) => {
+        if (filePath.endsWith(".html")) {
+          response.setHeader("Content-Security-Policy", clientContentSecurityPolicy);
+        }
+      },
+    })
+  );
   const expressApplication: Express = app.getHttpAdapter().getInstance();
   expressApplication.get("/{*path}", (request: Request, response: Response, next: NextFunction) => {
     if (
@@ -120,6 +145,7 @@ function configureClientApplication(app: INestApplication): void {
       next();
       return;
     }
+    response.set("Content-Security-Policy", clientContentSecurityPolicy);
     response.sendFile(indexPath);
   });
 }

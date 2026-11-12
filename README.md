@@ -183,6 +183,8 @@ Mimorii also provides start and failure URLs for long-running jobs. A missed sch
 ## Run Mimorii safely
 
 - Put Mimorii behind HTTPS before exposing it to the internet or enrolling remote agents.
+- Behind a reverse proxy, set `MIMORII_TRUST_PROXY` to the proxy address or subnet (for example `172.16.0.0/12`) or to the number of proxy hops, so sign-in rate limits apply per visitor instead of to everyone at once. Leave it empty when Mimorii is reached directly.
+- Direct checks and webhooks cannot reach private or reserved addresses unless `MIMORII_ALLOW_PRIVATE_DIRECT_TARGETS=true`. Enable it only when everyone who can manage a team is trusted on your network.
 - Keep `.env`, database backups, agent keys, API tokens, and notification credentials private.
 - Back up PostgreSQL and test that the backup can be restored.
 - Keep the default single Mimorii application instance unless you provide external scheduler coordination.

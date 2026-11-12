@@ -58,4 +58,42 @@ describe("StatusPagesService", () => {
     ]);
     expect(health.forResources).toHaveBeenCalledWith("team-1", ["resource-1"]);
   });
+
+  it.each([
+    { minutesAgo: 1, emails: 0 },
+    { minutesAgo: 10, emails: 1 },
+  ])(
+    "resends a pending confirmation only after the cooldown ($minutesAgo minutes)",
+    async ({ minutesAgo, emails }) => {
+      const page = { id: "page-1", name: "Status", slug: "status", published: 1 };
+      const pending = {
+        id: "subscriber-1",
+        verified_at: null,
+        created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+      };
+      const database = {
+        get: vi.fn(async (sql: string) =>
+          sql.includes("FROM status_subscribers WHERE") ? pending : page
+        ),
+        run: vi.fn(async () => ({ changes: 1 })),
+      };
+      const mail = { available: vi.fn(() => true), send: vi.fn(async () => undefined) };
+      const service = new StatusPagesService(
+        database as unknown as DatabaseService,
+        {} as TeamAccessService,
+        {} as IncidentsService,
+        {} as MaintenanceService,
+        mail as unknown as MailService,
+        {} as AuditService,
+        {} as ResourceHealthService
+      );
+
+      await expect(
+        service.subscribe("page-1", { email: "Reader@example.com" })
+      ).resolves.toEqual({ accepted: true });
+
+      expect(mail.send).toHaveBeenCalledTimes(emails);
+      expect(database.run).toHaveBeenCalledTimes(emails);
+    }
+  );
 });

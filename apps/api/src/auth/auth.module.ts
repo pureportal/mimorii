@@ -33,7 +33,7 @@ function jwtSecret(): string {
     JwtModule.register({
       secret: jwtSecret(),
       signOptions: { issuer: "mimorii", audience: "mimorii-web" },
-      verifyOptions: { issuer: "mimorii", audience: "mimorii-web" },
+      verifyOptions: { issuer: "mimorii", audience: "mimorii-web", algorithms: ["HS256"] },
     }),
   ],
   controllers: [AuthController, OAuthController, TwoFactorController],
