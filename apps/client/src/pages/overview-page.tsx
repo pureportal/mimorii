@@ -1,9 +1,25 @@
-import type { OverviewAnalytics, ResourceStatus, ResourceSummary } from "@mimorii/contracts";
+import type {
+  CheckSummary,
+  IncidentSummary,
+  OverviewAnalytics,
+  ResourceSummary,
+} from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowRight, Clock3, Gauge, Plus, TriangleAlert } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  CalendarClock,
+  Clock3,
+  Gauge,
+  Plus,
+  ShieldCheck,
+  TriangleAlert,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
+import { Sparkline } from "../components/sparkline";
 import { AvailabilityBars, LatencyArea, type TimelinePoint } from "../components/timeline-charts";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -11,7 +27,9 @@ import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { formatLatency, formatPercent } from "../lib/format";
+import { expiringChecks } from "../lib/expiring-checks";
+import { monitorStatusPriority } from "../lib/monitor-status";
+import { formatDuration, formatLatency, formatPercent } from "../lib/format";
 import { resourceKindLabels, resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function OverviewPage() {
@@ -25,6 +43,16 @@ export function OverviewPage() {
   const resources = useQuery({
     queryKey: ["resources", teamId],
     queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
+    refetchInterval: 30_000,
+  });
+  const activeIncidents = useQuery({
+    queryKey: ["incidents", teamId, "active"],
+    queryFn: () => api<IncidentSummary[]>(`/teams/${teamId}/incidents?status=active&limit=5`),
+    refetchInterval: 30_000,
+  });
+  const checks = useQuery({
+    queryKey: ["checks", teamId],
+    queryFn: () => api<CheckSummary[]>(`/teams/${teamId}/checks`),
     refetchInterval: 30_000,
   });
 
@@ -44,7 +72,18 @@ export function OverviewPage() {
   const allGood = attentionNeeded === 0 && data.pending === 0;
   const timeline = lastDayTimeline(data, Date.now());
   const attentionFirst = (resources.data ?? []).toSorted(
-    (left, right) => statusPriority[left.status] - statusPriority[right.status]
+    (left, right) => monitorStatusPriority[left.status] - monitorStatusPriority[right.status]
+  );
+  const monitors = data.checks + data.heartbeats;
+  const expiring = expiringChecks(checks.data ?? []).slice(0, 6);
+  const incidents = activeIncidents.data ?? [];
+  const uptimeTrend = timeline.map((point) => {
+    const total = point.up + point.degraded + point.down;
+    return total ? ((point.up + point.degraded) / total) * 100 : null;
+  });
+  const uptimeFloor = Math.min(
+    99,
+    ...uptimeTrend.filter((value): value is number => value !== null)
   );
 
   return (
@@ -83,24 +122,48 @@ export function OverviewPage() {
           label="Uptime · 24h"
           value={formatPercent(data.uptime24h)}
           tone="mint"
-        />
+          to={appRoutes.reports}
+        >
+          <Sparkline values={uptimeTrend} domain={[uptimeFloor, 100]} />
+        </Metric>
         <Metric
           icon={Clock3}
           label="Average latency"
           value={formatLatency(data.averageLatencyMs)}
           tone="lavender"
-        />
+          to={appRoutes.reports}
+        >
+          <Sparkline values={timeline.map((point) => point.latencyMs)} />
+        </Metric>
         <Metric
           icon={Activity}
           label="Passing monitors"
-          value={`${data.passing} / ${data.checks + data.heartbeats}`}
+          value={`${data.passing} / ${monitors}`}
           tone="coral"
-        />
+          to={appRoutes.checks}
+        >
+          {monitors ? (
+            <div
+              role="meter"
+              aria-label="Passing monitors"
+              aria-valuemin={0}
+              aria-valuemax={monitors}
+              aria-valuenow={data.passing}
+              className="h-2 overflow-hidden rounded-full bg-success/15"
+            >
+              <div
+                className="h-full rounded-full bg-success"
+                style={{ width: `${(data.passing / monitors) * 100}%` }}
+              />
+            </div>
+          ) : null}
+        </Metric>
         <Metric
           icon={TriangleAlert}
           label="Open incidents"
           value={String(data.openIncidents)}
           tone="warning"
+          to={appRoutes.incidents}
         />
       </section>
 
@@ -193,22 +256,93 @@ export function OverviewPage() {
           </CardContent>
         </Card>
       </section>
+
+      {incidents.length || expiring.length ? (
+        <section className="grid gap-4 xl:grid-cols-2">
+          {incidents.length ? (
+            <Card className="min-w-0">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
+                <h3 className="font-display font-bold">Active incidents</h3>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to={appRoutes.incidents}>
+                    View all <ArrowRight />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-1 px-3 pb-3 pt-0 sm:p-5 sm:pt-2">
+                {incidents.map((incident) => (
+                  <Link
+                    key={incident.id}
+                    to={appRoutes.incidents}
+                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-ink/4"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-danger/10 text-danger">
+                      <TriangleAlert className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{incident.title}</p>
+                      <p className="truncate text-xs text-muted">
+                        {[
+                          incident.resources
+                            .map((resource) => resourceNames.get(resource.id) ?? resource.name)
+                            .join(", "),
+                          formatDuration(incident.durationSeconds),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <StatusBadge status={incident.status} />
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+          {expiring.length ? (
+            <Card className="min-w-0">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
+                <h3 className="font-display font-bold">Expiring soon</h3>
+              </CardHeader>
+              <CardContent className="space-y-1 px-3 pb-3 pt-0 sm:p-5 sm:pt-2">
+                {expiring.map(({ check, subject, daysRemaining }) => {
+                  const Icon = subject === "Domain" ? CalendarClock : ShieldCheck;
+                  return (
+                    <Link
+                      key={check.id}
+                      to={appRoutes.check(check.id)}
+                      className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-ink/4"
+                    >
+                      <span
+                        className={`grid size-9 shrink-0 place-items-center rounded-xl ${daysRemaining < 0 ? "bg-danger/10 text-danger" : "bg-warning/16 text-warning-strong"}`}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{check.name}</p>
+                        <p className="truncate text-xs text-muted">
+                          {subject} · {resourceNames.get(check.resourceId)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold">
+                        {daysRemaining < 0
+                          ? "Expired"
+                          : daysRemaining === 0
+                            ? "Today"
+                            : `${daysRemaining} d`}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
 
 const HOUR_MS = 3_600_000;
-
-const statusPriority: Record<ResourceStatus, number> = {
-  down: 0,
-  critical: 1,
-  warning: 2,
-  degraded: 3,
-  pending: 4,
-  up: 5,
-  okay: 5,
-  paused: 6,
-};
 
 function lastDayTimeline(data: OverviewAnalytics, now: number): TimelinePoint[] {
   const currentHour = Math.floor(now / HOUR_MS) * HOUR_MS;
@@ -235,11 +369,15 @@ function Metric({
   label,
   value,
   tone,
+  to,
+  children,
 }: {
   icon: typeof Gauge;
   label: string;
   value: string;
   tone: "mint" | "lavender" | "coral" | "warning";
+  to: string;
+  children?: ReactNode;
 }) {
   const colors = {
     mint: "bg-mint/20 text-success-strong",
@@ -248,16 +386,22 @@ function Metric({
     warning: "bg-warning/16 text-warning-strong",
   };
   return (
-    <Card className="min-w-0 p-4">
-      <div className="flex items-center gap-3">
-        <span className={`grid size-8 place-items-center rounded-lg ${colors[tone]}`}>
-          <Icon className="size-4" />
-        </span>
-        <span className="min-w-0 text-xs font-medium leading-4 text-muted">{label}</span>
-      </div>
-      <p className="mt-4 font-display text-[clamp(1.45rem,7vw,2rem)] font-black leading-none tracking-tight">
-        {value}
-      </p>
-    </Card>
+    <Link
+      to={to}
+      className="block min-w-0 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-coral-strong"
+    >
+      <Card className="flex h-full min-w-0 flex-col p-4 transition hover:border-lavender">
+        <div className="flex items-center gap-3">
+          <span className={`grid size-8 place-items-center rounded-lg ${colors[tone]}`}>
+            <Icon className="size-4" />
+          </span>
+          <span className="min-w-0 text-xs font-medium leading-4 text-muted">{label}</span>
+        </div>
+        <p className="mt-4 font-display text-[clamp(1.45rem,7vw,2rem)] font-black leading-none tracking-tight">
+          {value}
+        </p>
+        {children ? <div className="mt-auto pt-3">{children}</div> : null}
+      </Card>
+    </Link>
   );
 }

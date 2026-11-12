@@ -201,7 +201,7 @@ describe("ChecksPage actions", () => {
     renderPage();
 
     const upRow = (await screen.findByText("Availability")).closest("article");
-    const criticalRow = screen.getByText("Disk usage").closest("article");
+    const criticalRow = screen.getByText("Disk usage", { selector: "p" }).closest("article");
     const downRow = screen.getByText("Offline host").closest("article");
 
     expect(

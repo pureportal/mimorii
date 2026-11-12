@@ -1,8 +1,14 @@
-import type { CheckSummary, ResourceSummary } from "@mimorii/contracts";
+import {
+  checkTypes,
+  type CheckBulkAction,
+  type CheckBulkResult,
+  type CheckSummary,
+  type MonitorStatus,
+  type ResourceSummary,
+} from "@mimorii/contracts";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
   Eye,
   MoreHorizontal,
   Pause,
@@ -20,6 +26,8 @@ import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckDialog, type CheckPayload } from "../components/check-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
 import { CheckStatusIndicator } from "../components/check-status-indicator";
+import { CheckTypeIcon } from "../components/check-type-icon";
+import { ExportMenu } from "../components/export-menu";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -29,7 +37,9 @@ import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { checkPassingLabel } from "../lib/check-health";
-import { formatPercent, formatRelative } from "../lib/format";
+import { checkTypeLabels } from "../lib/check-types";
+import { formatCount, formatPercent, formatRelative } from "../lib/format";
+import { monitorStatusPriority } from "../lib/monitor-status";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
 
 export function ChecksPage() {
@@ -39,6 +49,10 @@ export function ChecksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [type, setType] = useState("all");
+  const [sort, setSort] = useState<CheckSort>("attention");
+  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
+  const [bulkDelete, setBulkDelete] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState<CheckSummary | null>(null);
@@ -95,22 +109,62 @@ export function ChecksPage() {
     onError: (error) => toast.error(error.message),
     onSettled: () => setDeleteCheck(null),
   });
+  const bulk = useMutation({
+    mutationFn: ({ action, ids }: { action: CheckBulkAction; ids: string[] }) =>
+      api<CheckBulkResult>(`/teams/${teamId}/checks/bulk`, {
+        method: "POST",
+        ...jsonBody({ action, ids }),
+      }),
+    onSuccess: async (result, { action }) => {
+      setSelection(new Set());
+      await refresh();
+      toast.success(`${formatCount(result.affected, "check")} ${bulkOutcomes[action]}`);
+    },
+    onError: (error) => toast.error(error.message),
+    onSettled: () => setBulkDelete(false),
+  });
 
   const resourceNames = useMemo(() => resourceOptionLabels(resources.data ?? []), [resources.data]);
-  const filtered = useMemo(
+  const scoped = useMemo(
     () =>
       checks.data?.filter(
         (check) =>
           (!resourceId || check.resourceId === resourceId) &&
-          (status === "all" || check.status === status) &&
-          `${check.name} ${resourceNames.get(check.resourceId) ?? ""} ${check.type}`
+          (type === "all" || check.type === type) &&
+          `${check.name} ${resourceNames.get(check.resourceId) ?? ""} ${checkTypeLabels[check.type]}`
             .toLowerCase()
             .includes(search.toLowerCase())
       ) ?? [],
-    [checks.data, resourceId, resourceNames, search, status]
+    [checks.data, resourceId, resourceNames, search, type]
   );
-  const hasFilters = Boolean(search.trim()) || Boolean(resourceId) || status !== "all";
+  const filtered = useMemo(
+    () =>
+      scoped
+        .filter((check) => status === "all" || check.status === status)
+        .toSorted(checkComparators[sort]),
+    [scoped, sort, status]
+  );
+  const stateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const check of scoped) counts.set(check.status, (counts.get(check.status) ?? 0) + 1);
+    return counts;
+  }, [scoped]);
+  const presentTypes = checkTypes.filter((candidate) =>
+    checks.data?.some((check) => check.type === candidate)
+  );
+  const hasFilters =
+    Boolean(search.trim()) || Boolean(resourceId) || status !== "all" || type !== "all";
   const visibleChecks = filtered.slice(0, visibleCount);
+  const selectedIds = filtered.flatMap((check) => (selection.has(check.id) ? [check.id] : []));
+  const canManage = activeTeam!.role !== "viewer";
+  const canDelete = activeTeam!.role === "owner" || activeTeam!.role === "admin";
+  const toggleSelected = (id: string) =>
+    setSelection((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const detailsCheck = checks.data?.find((check) => check.id === detailsCheckId) ?? null;
 
   const openCheckDetails = (checkId: string) => {
@@ -172,54 +226,164 @@ export function ChecksPage() {
               </option>
             ))}
           </Select>
+          {presentTypes.length > 1 ? (
+            <Select
+              aria-label="Type"
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+              className="w-40"
+            >
+              <option value="all">All types</option>
+              {presentTypes.map((value) => (
+                <option key={value} value={value}>
+                  {checkTypeLabels[value]}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           <Select
             aria-label="State"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="w-32"
+            className="w-36"
           >
             <option value="all">All states</option>
-            <option value="up">Up</option>
-            <option value="degraded">Degraded</option>
-            <option value="okay">Okay</option>
-            <option value="warning">Warning</option>
-            <option value="critical">Critical</option>
-            <option value="down">Down</option>
-            <option value="paused">Paused</option>
-            <option value="pending">Pending</option>
+            {stateOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} ({stateCounts.get(option.value) ?? 0})
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Sort checks"
+            value={sort}
+            onChange={(event) =>
+              setSort(checkSorts.find((value) => value === event.target.value) ?? "attention")
+            }
+            className="w-48"
+          >
+            <option value="attention">Needs attention</option>
+            <option value="name">Name</option>
+            <option value="checked">Last run</option>
+            <option value="availability">Lowest availability</option>
           </Select>
           <p className="w-full self-center text-sm text-muted sm:w-auto">
             {filtered.length.toLocaleString()} {filtered.length === 1 ? "check" : "checks"}
           </p>
         </div>
-        <Button
-          variant="coral"
-          onClick={() => {
-            setSelected(null);
-            setDialogOpen(true);
-          }}
-          disabled={!resources.data?.length}
-        >
-          <Plus /> Add check
-        </Button>
+        <div className="flex flex-wrap items-start gap-2">
+          <ExportMenu
+            choices={[{ dataset: "checks", label: "Checks" }]}
+            parameters={{ resourceId }}
+          />
+          <Button
+            variant="coral"
+            onClick={() => {
+              setSelected(null);
+              setDialogOpen(true);
+            }}
+            disabled={!resources.data?.length}
+          >
+            <Plus /> Add check
+          </Button>
+        </div>
       </div>
 
       {filtered.length ? (
         <Card data-guide-page="checks-list">
           <CardContent className="divide-y divide-line p-0">
+            {canManage ? (
+              <div className="flex min-h-12 flex-wrap items-center gap-2 px-4 py-2 sm:px-5">
+                <label className="flex items-center gap-2.5 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all checks"
+                    checked={selectedIds.length === filtered.length}
+                    ref={(element) => {
+                      if (element) {
+                        element.indeterminate =
+                          selectedIds.length > 0 && selectedIds.length < filtered.length;
+                      }
+                    }}
+                    onChange={() =>
+                      setSelection(
+                        new Set(
+                          selectedIds.length === filtered.length
+                            ? []
+                            : filtered.map((check) => check.id)
+                        )
+                      )
+                    }
+                    className="size-4 accent-[var(--color-lavender)]"
+                  />
+                  {selectedIds.length ? `${selectedIds.length.toLocaleString()} selected` : null}
+                </label>
+                {selectedIds.length ? (
+                  <div className="ml-auto flex flex-wrap gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={bulk.isPending}
+                      onClick={() => bulk.mutate({ action: "run", ids: selectedIds })}
+                    >
+                      <RefreshCw /> Run now
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={bulk.isPending}
+                      onClick={() => bulk.mutate({ action: "pause", ids: selectedIds })}
+                    >
+                      <Pause /> Pause
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={bulk.isPending}
+                      onClick={() => bulk.mutate({ action: "enable", ids: selectedIds })}
+                    >
+                      <Play /> Enable
+                    </Button>
+                    {canDelete ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-danger hover:text-danger"
+                        disabled={bulk.isPending}
+                        onClick={() => setBulkDelete(true)}
+                      >
+                        <Trash2 /> Delete
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {visibleChecks.map((check) => (
               <article
                 key={check.id}
                 className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.5rem] gap-x-3 gap-y-4 px-4 py-4 transition-colors hover:bg-ink/[.018] sm:px-5 lg:grid-cols-[minmax(240px,1fr)_2.75rem_minmax(210px,.8fr)_110px_135px_2.5rem] lg:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                    <Activity className="size-4" />
+                  {canManage ? (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${check.name}`}
+                      checked={selection.has(check.id)}
+                      onChange={() => toggleSelected(check.id)}
+                      className="size-4 shrink-0 accent-[var(--color-lavender)]"
+                    />
+                  ) : null}
+                  <span
+                    className="grid size-10 shrink-0 place-items-center rounded-xl bg-lavender-soft text-violet-strong"
+                    title={checkTypeLabels[check.type]}
+                  >
+                    <CheckTypeIcon type={check.type} className="size-4" />
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{check.name}</p>
                     <p className="mt-1 truncate text-xs text-muted">
-                      {resourceNames.get(check.resourceId)} · {checkTypeLabel(check.type)}
+                      {resourceNames.get(check.resourceId)} · {checkTypeLabels[check.type]}
                     </p>
                   </div>
                 </div>
@@ -287,6 +451,7 @@ export function ChecksPage() {
                 onClick={() => {
                   setSearch("");
                   setStatus("all");
+                  setType("all");
                   const next = new URLSearchParams(searchParams);
                   next.delete("resourceId");
                   setSearchParams(next, { replace: true });
@@ -340,9 +505,48 @@ export function ChecksPage() {
           if (deleteCheck) remove.mutate(deleteCheck.id);
         }}
       />
+      <ConfirmationDialog
+        open={bulkDelete}
+        onOpenChange={setBulkDelete}
+        title={`Delete ${formatCount(selectedIds.length, "check")}?`}
+        description="Their monitoring history will also be deleted."
+        confirmLabel="Delete checks"
+        pending={bulk.isPending}
+        onConfirm={() => bulk.mutate({ action: "delete", ids: selectedIds })}
+      />
     </div>
   );
 }
+
+const checkSorts = ["attention", "name", "checked", "availability"] as const;
+type CheckSort = (typeof checkSorts)[number];
+
+const checkComparators: Record<CheckSort, (left: CheckSummary, right: CheckSummary) => number> = {
+  attention: (left, right) =>
+    monitorStatusPriority[left.status] - monitorStatusPriority[right.status] ||
+    left.name.localeCompare(right.name),
+  name: (left, right) => left.name.localeCompare(right.name),
+  checked: (left, right) => (right.lastCheckedAt ?? "").localeCompare(left.lastCheckedAt ?? ""),
+  availability: (left, right) => (left.passing24h ?? 101) - (right.passing24h ?? 101),
+};
+
+const stateOptions: Array<{ value: MonitorStatus; label: string }> = [
+  { value: "up", label: "Up" },
+  { value: "degraded", label: "Degraded" },
+  { value: "okay", label: "Okay" },
+  { value: "warning", label: "Warning" },
+  { value: "critical", label: "Critical" },
+  { value: "down", label: "Down" },
+  { value: "paused", label: "Paused" },
+  { value: "pending", label: "Pending" },
+];
+
+const bulkOutcomes: Record<CheckBulkAction, string> = {
+  run: "queued",
+  pause: "paused",
+  enable: "enabled",
+  delete: "deleted",
+};
 
 function CheckStat({ label, value }: { label: string; value: string }) {
   return (
@@ -417,20 +621,4 @@ function CheckAction({
       {label}
     </DropdownMenu.Item>
   );
-}
-
-function checkTypeLabel(type: CheckSummary["type"]): string {
-  return (
-    {
-      http: "HTTP",
-      tcp: "TCP port",
-      dns: "DNS record",
-      icmp: "ICMP ping",
-      wan: "WAN reachability",
-      host: "Host health",
-      disk: "Disk usage",
-      docker: "Docker",
-      database: "Database",
-    } as const
-  )[type];
 }

@@ -12,7 +12,6 @@ import type {
 import { resourceAlertOperators } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
   ArrowLeft,
   Battery,
   Bell,
@@ -32,6 +31,7 @@ import { toast } from "sonner";
 import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
 import { CheckHistoryChart } from "../components/check-history-chart";
+import { CheckTypeIcon } from "../components/check-type-icon";
 import { ErrorState, LoadingState, StateArtwork } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
 import { ResourceImageDialog } from "../components/resource-image-dialog";
@@ -292,7 +292,7 @@ export function ResourceDetailPage() {
                 <div key={check.id} className="rounded-xl border border-line p-3">
                   <div className="flex items-center gap-3">
                     <span className="grid size-9 place-items-center rounded-xl bg-lavender-soft text-violet-strong">
-                      <Activity className="size-4" />
+                      <CheckTypeIcon type={check.type} className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{check.name}</p>

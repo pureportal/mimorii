@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
-import { checkTypes, type CheckType } from "@mimorii/contracts";
 import {
+  checkBulkActions,
+  checkTypes,
+  type CheckBulkAction,
+  type CheckType,
+} from "@mimorii/contracts";
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -12,6 +20,19 @@ import {
   Max,
   Min,
 } from "class-validator";
+
+export class BulkCheckActionDto {
+  @ApiProperty({ enum: checkBulkActions })
+  @IsIn(checkBulkActions)
+  action!: CheckBulkAction;
+
+  @ApiProperty({ type: [String], format: "uuid", minItems: 1, maxItems: 500 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsUUID("all", { each: true })
+  ids!: string[];
+}
 
 export class CheckExecutionDto {
   @ApiProperty({ enum: ["direct", "agent"] })

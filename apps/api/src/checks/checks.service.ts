@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
+  CheckBulkResult,
   CheckConfig,
   CheckExecution,
   CheckSummary,
@@ -15,7 +16,7 @@ import { resolveMonitorStatus } from "../common/health-status.js";
 import { DatabaseService } from "../database/database.service.js";
 import { TeamAccessService } from "../teams/team-access.service.js";
 import { CheckConfigService } from "./check-config.service.js";
-import type { CreateCheckDto, UpdateCheckDto } from "./checks.dto.js";
+import type { BulkCheckActionDto, CreateCheckDto, UpdateCheckDto } from "./checks.dto.js";
 import type { CheckRow } from "./checks.types.js";
 import { ResultsService } from "./results.service.js";
 import { TargetSafetyService } from "../common/target-safety.service.js";
@@ -230,6 +231,45 @@ export class ChecksService {
       subjectType: "check",
       subjectId: id,
     });
+  }
+
+  async bulk(userId: string, teamId: string, input: BulkCheckActionDto): Promise<CheckBulkResult> {
+    await this.access.require(userId, teamId, input.action === "delete" ? "admin" : "member");
+    const ids = [...new Set(input.ids)];
+    const now = new Date().toISOString();
+    const statements = {
+      run: `UPDATE checks SET next_check_at = ?
+        WHERE team_id = ? AND id IN (?) AND enabled = 1 RETURNING id`,
+      pause: `UPDATE checks SET enabled = 0, current_status = 'paused', next_check_at = NULL,
+        updated_at = ? WHERE team_id = ? AND id IN (?) AND enabled = 1 RETURNING id`,
+      enable: `UPDATE checks SET enabled = 1,
+        current_status = CASE WHEN current_status = 'paused' THEN 'pending' ELSE current_status END,
+        next_check_at = COALESCE(next_check_at, ?::timestamptz), updated_at = ?
+        WHERE team_id = ? AND id IN (?) AND enabled = 0 RETURNING id`,
+      delete: "DELETE FROM checks WHERE team_id = ? AND id IN (?) RETURNING id",
+    } as const;
+    const parameters = {
+      run: [now, teamId, ids],
+      pause: [now, teamId, ids],
+      enable: [now, now, teamId, ids],
+      delete: [teamId, ids],
+    } as const;
+    const affected = await this.database.all<{ id: string }>(
+      statements[input.action],
+      ...parameters[input.action]
+    );
+    if (input.action !== "run") {
+      for (const { id } of affected) {
+        await this.audit.record({
+          teamId,
+          userId,
+          action: input.action === "delete" ? "check.deleted" : "check.updated",
+          subjectType: "check",
+          subjectId: id,
+        });
+      }
+    }
+    return { affected: affected.length };
   }
 
   async history(

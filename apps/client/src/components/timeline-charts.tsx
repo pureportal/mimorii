@@ -32,6 +32,7 @@ interface AvailabilityChartPoint extends TimelinePoint {
 }
 
 const axisTick = { fill: chartColors.muted, fontSize: 11 };
+const noDataStubShare = 8;
 
 export function AvailabilityBars({
   points,
@@ -105,7 +106,15 @@ export function AvailabilityBars({
 
 export function LatencyArea({ points }: { points: TimelinePoint[] }) {
   const gradientId = `latency-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const sparse = points.filter((point) => point.latencyMs !== null).length < 3;
+  const isolated = new Set(
+    points.flatMap((point, index) =>
+      point.latencyMs !== null &&
+      (points[index - 1]?.latencyMs ?? null) === null &&
+      (points[index + 1]?.latencyMs ?? null) === null
+        ? [index]
+        : []
+    )
+  );
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -136,8 +145,20 @@ export function LatencyArea({ points }: { points: TimelinePoint[] }) {
         <Area
           type="monotone"
           dataKey="latencyMs"
-          connectNulls
-          dot={sparse ? { r: 3, fill: chartColors.lavender, strokeWidth: 0 } : false}
+          connectNulls={false}
+          dot={(props: { cx?: number; cy?: number; index?: number }) =>
+            props.index !== undefined && isolated.has(props.index) && props.cx !== undefined ? (
+              <circle
+                key={props.index}
+                cx={props.cx}
+                cy={props.cy}
+                r={3}
+                fill={chartColors.lavender}
+              />
+            ) : (
+              <g key={props.index} />
+            )
+          }
           stroke={chartColors.lavender}
           strokeWidth={2.5}
           fill={`url(#${gradientId})`}
@@ -155,7 +176,7 @@ function availabilityPoint(point: TimelinePoint): AvailabilityChartPoint {
     upShare: share(point.up),
     degradedShare: share(point.degraded),
     downShare: share(point.down),
-    noDataShare: total ? 0 : 100,
+    noDataShare: total ? 0 : noDataStubShare,
   };
 }
 

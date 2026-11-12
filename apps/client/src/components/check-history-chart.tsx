@@ -56,7 +56,9 @@ interface CombinedThreshold {
 }
 
 export function CheckHistoryChart({ check, results }: CheckHistoryChartProps) {
-  const charts = createSeriesCharts(check, results).slice(0, 2);
+  const charts = createSeriesCharts(check, results)
+    .filter((chart, index) => index === 0 || !constantSeries(chart.points))
+    .slice(0, 2);
   const axes = charts.reduce<Array<{ scale: CheckMetricScale; metricKey: string; index: number }>>(
     (items, chart, index) => {
       if (!items.some((item) => item.scale === chart.scale)) {
@@ -224,6 +226,11 @@ function createSeriesCharts(check: CheckSummary, results: CheckResult[]): Series
       };
     }
   );
+}
+
+function constantSeries(points: CheckMetricChartPoint[]): boolean {
+  const [first] = points;
+  return first !== undefined && points.every((point) => point.value === first.value);
 }
 
 function combinedThresholds(charts: SeriesChart[]): CombinedThreshold[] {

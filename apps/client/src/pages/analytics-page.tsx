@@ -14,6 +14,7 @@ import { cn } from "../lib/cn";
 import { isHealthCheckType } from "../lib/check-health";
 import { formatCount, formatDuration, formatLatency, formatPercent } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
+import { ExportMenu } from "../components/export-menu";
 
 export function AnalyticsPage() {
   const { activeTeam } = useAuth();
@@ -58,27 +59,42 @@ export function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div role="group" aria-label="Report range" className="flex flex-wrap gap-1.5">
-        {rangePresets.map((days) => {
-          const range = dateRange(days);
-          const selected = range.from === from && range.to === to;
-          return (
-            <Button
-              key={days}
-              type="button"
-              size="sm"
-              variant={selected ? "outline" : "ghost"}
-              aria-pressed={selected}
-              className={cn(selected && "border-lavender text-violet-strong")}
-              onClick={() => {
-                setFrom(range.from);
-                setTo(range.to);
-              }}
-            >
-              {days} days
-            </Button>
-          );
-        })}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Report range" className="flex flex-wrap gap-1.5">
+          {rangePresets.map((days) => {
+            const range = dateRange(days);
+            const selected = range.from === from && range.to === to;
+            return (
+              <Button
+                key={days}
+                type="button"
+                size="sm"
+                variant={selected ? "outline" : "ghost"}
+                aria-pressed={selected}
+                className={cn(selected && "border-lavender text-violet-strong")}
+                onClick={() => {
+                  setFrom(range.from);
+                  setTo(range.to);
+                }}
+              >
+                {days} days
+              </Button>
+            );
+          })}
+        </div>
+        <ExportMenu
+          choices={[
+            { dataset: "availability", label: "Daily availability" },
+            { dataset: "check-results", label: "Check results" },
+            { dataset: "incidents", label: "Incidents" },
+          ]}
+          parameters={{
+            from: new Date(`${from}T00:00:00`).toISOString(),
+            to: new Date(`${to}T23:59:59.999`).toISOString(),
+            resourceId,
+            checkId,
+          }}
+        />
       </div>
 
       <Card data-guide-page="reports-filters" className="p-4">

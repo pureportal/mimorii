@@ -27,6 +27,7 @@ import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatDateTimeRange } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
+import { ExportMenu } from "../components/export-menu";
 
 export type OperationsView = "incidents" | "maintenance";
 
@@ -125,30 +126,38 @@ export function OperationsPage({ view }: { view: OperationsView }) {
             {activeMaintenance} active maintenance
           </StatusBadge>
         </div>
-        {canManage ? (
-          resources.data?.length ? (
-            <Button
-              variant="coral"
-              onClick={() => {
-                if (view === "incidents") {
-                  setEditingIncident(null);
-                  setIncidentOpen(true);
-                } else {
-                  setEditingMaintenance(null);
-                  setMaintenanceOpen(true);
-                }
-              }}
-            >
-              <Plus /> {view === "incidents" ? "Declare incident" : "Schedule maintenance"}
-            </Button>
-          ) : (
-            <Button asChild variant="coral">
-              <Link to={appRoutes.newResource}>
-                <Plus /> Add resource
-              </Link>
-            </Button>
-          )
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {view === "incidents" ? (
+            <ExportMenu
+              choices={[{ dataset: "incidents", label: "Incidents" }]}
+              parameters={{ from: new Date(Date.now() - 90 * 86_400_000).toISOString() }}
+            />
+          ) : null}
+          {canManage ? (
+            resources.data?.length ? (
+              <Button
+                variant="coral"
+                onClick={() => {
+                  if (view === "incidents") {
+                    setEditingIncident(null);
+                    setIncidentOpen(true);
+                  } else {
+                    setEditingMaintenance(null);
+                    setMaintenanceOpen(true);
+                  }
+                }}
+              >
+                <Plus /> {view === "incidents" ? "Declare incident" : "Schedule maintenance"}
+              </Button>
+            ) : (
+              <Button asChild variant="coral">
+                <Link to={appRoutes.newResource}>
+                  <Plus /> Add resource
+                </Link>
+              </Button>
+            )
+          ) : null}
+        </div>
       </div>
 
       <SectionTabs

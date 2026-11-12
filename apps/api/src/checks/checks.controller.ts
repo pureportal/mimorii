@@ -15,7 +15,7 @@ import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
 import { CheckOrchestratorService } from "./check-orchestrator.service.js";
-import { CreateCheckDto, UpdateCheckDto } from "./checks.dto.js";
+import { BulkCheckActionDto, CreateCheckDto, UpdateCheckDto } from "./checks.dto.js";
 import { ChecksService } from "./checks.service.js";
 
 @ApiTags("Checks")
@@ -45,6 +45,16 @@ export class ChecksController {
     @Param("id") id: string
   ) {
     return this.checks.get(user.id, teamId, id);
+  }
+
+  @Post("bulk")
+  @HttpCode(200)
+  bulk(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Body() input: BulkCheckActionDto
+  ) {
+    return this.checks.bulk(user.id, teamId, input);
   }
 
   @Post()

@@ -610,6 +610,13 @@ export type CheckConfig =
 
 export type CheckExecution = { kind: "direct" } | { kind: "agent"; agentId: string };
 
+export const checkBulkActions = ["run", "pause", "enable", "delete"] as const;
+export type CheckBulkAction = (typeof checkBulkActions)[number];
+
+export interface CheckBulkResult {
+  affected: number;
+}
+
 export interface CheckSummary {
   id: string;
   resourceId: string;

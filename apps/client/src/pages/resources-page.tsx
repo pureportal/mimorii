@@ -4,6 +4,7 @@ import { Boxes, Globe2, Plus, Search, Waypoints } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { ExportMenu } from "../components/export-menu";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
 import { StatusBadge } from "../components/ui/badge";
@@ -15,7 +16,9 @@ import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
+import { cn } from "../lib/cn";
 import { formatRelative } from "../lib/format";
+import { monitorStatusAccents, monitorStatusPriority } from "../lib/monitor-status";
 import { resourceKindLabels } from "../lib/resource-option-labels";
 
 export function ResourcesPage() {
@@ -25,6 +28,7 @@ export function ResourcesPage() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState<ResourceSort>("attention");
   const queryClient = useQueryClient();
   const resources = useQuery({
     queryKey: ["resources", teamId],
@@ -38,8 +42,8 @@ export function ResourcesPage() {
   const open = searchParams.get("new") === "1";
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return (
-      resources.data?.filter(
+    return (resources.data ?? [])
+      .filter(
         (resource) =>
           (kind === "all" || resource.kind === kind) &&
           (status === "all" ||
@@ -47,9 +51,9 @@ export function ResourcesPage() {
           `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`
             .toLowerCase()
             .includes(query)
-      ) ?? []
-    );
-  }, [kind, resources.data, search, status]);
+      )
+      .toSorted(resourceComparators[sort]);
+  }, [kind, resources.data, search, sort, status]);
   const hasFilters = Boolean(search.trim()) || kind !== "all" || status !== "all";
 
   const invalidate = async () => {
@@ -109,13 +113,28 @@ export function ResourcesPage() {
             <option value="pending">Pending</option>
             <option value="maintenance">Maintenance</option>
           </Select>
+          <Select
+            aria-label="Sort resources"
+            value={sort}
+            onChange={(event) =>
+              setSort(resourceSorts.find((value) => value === event.target.value) ?? "attention")
+            }
+            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-48"
+          >
+            <option value="attention">Needs attention</option>
+            <option value="name">Name</option>
+            <option value="checked">Last check</option>
+          </Select>
           <p className="w-full text-sm text-muted sm:w-auto">
             {filtered.length.toLocaleString()} {filtered.length === 1 ? "resource" : "resources"}
           </p>
         </div>
-        <Button variant="coral" onClick={() => setSearchParams({ new: "1" })}>
-          <Plus /> Add resource
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportMenu choices={[{ dataset: "resources", label: "Resources" }]} />
+          <Button variant="coral" onClick={() => setSearchParams({ new: "1" })}>
+            <Plus /> Add resource
+          </Button>
+        </div>
       </div>
 
       {filtered.length ? (
@@ -164,34 +183,65 @@ export function ResourcesPage() {
   );
 }
 
+const resourceSorts = ["attention", "name", "checked"] as const;
+type ResourceSort = (typeof resourceSorts)[number];
+
+const resourceComparators: Record<
+  ResourceSort,
+  (left: ResourceSummary, right: ResourceSummary) => number
+> = {
+  attention: (left, right) =>
+    monitorStatusPriority[left.status] - monitorStatusPriority[right.status] ||
+    left.name.localeCompare(right.name),
+  name: (left, right) => left.name.localeCompare(right.name),
+  checked: (left, right) => (right.lastCheckedAt ?? "").localeCompare(left.lastCheckedAt ?? ""),
+};
+
 function ResourceCard({ resource }: { resource: ResourceSummary }) {
+  const accent = monitorStatusAccents[resource.status];
   return (
     <Link
       to={appRoutes.resource(resource.id)}
       className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-coral-strong"
     >
-      <Card className="group h-full p-5 transition hover:-translate-y-0.5 hover:border-lavender hover:shadow-[0_18px_40px_-26px_rgba(68,54,128,.45)]">
+      <Card className="group relative h-full overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-lavender hover:shadow-[0_18px_40px_-26px_rgba(68,54,128,.45)]">
+        {accent ? (
+          <span aria-hidden="true" className={cn("absolute inset-x-0 top-0 h-1", accent)} />
+        ) : null}
         <div className="flex items-start gap-4">
           <ResourceImage resource={resource} className="size-11" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="truncate font-display font-bold">{resource.name}</h2>
-              <div className="flex items-center gap-1.5">
-                {resource.inMaintenance ? <StatusBadge status="maintenance" /> : null}
-                <StatusBadge status={resource.status} />
-              </div>
-            </div>
+            <h2 className="line-clamp-2 break-words font-display font-bold">{resource.name}</h2>
             <p className="mt-1 truncate text-sm text-muted">
               {resource.agent?.platform ?? resourceKindLabels[resource.kind]}
             </p>
           </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <StatusBadge status={resource.status} />
+            {resource.inMaintenance ? <StatusBadge status="maintenance" /> : null}
+          </div>
         </div>
-        <div className="mt-7 grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
           <div>
             <p className="text-xs text-muted">Passing checks</p>
             <p className="mt-1 font-semibold">
               {resource.checksPassing} / {resource.checksTotal}
             </p>
+            {resource.checksTotal ? (
+              <div
+                role="meter"
+                aria-label={`Passing checks for ${resource.name}`}
+                aria-valuemin={0}
+                aria-valuemax={resource.checksTotal}
+                aria-valuenow={resource.checksPassing}
+                className="mt-2 h-1 overflow-hidden rounded-full bg-success/15"
+              >
+                <div
+                  className="h-full rounded-full bg-success"
+                  style={{ width: `${(resource.checksPassing / resource.checksTotal) * 100}%` }}
+                />
+              </div>
+            ) : null}
           </div>
           <div>
             <p className="text-xs text-muted">Last check</p>
