@@ -49,6 +49,78 @@
         ]
       }
     },
+    "/api/auth/password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/password-reset/inspect": {
+      "post": {
+        "operationId": "inspectPasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/password-reset/complete": {
+      "post": {
+        "operationId": "completePasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetCompleteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/api/auth/refresh": {
       "post": {
         "operationId": "refresh",
@@ -556,6 +628,44 @@
         ],
         "responses": {
           "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Global administration"
+        ]
+      }
+    },
+    "/api/admin/users/{id}/password-reset": {
+      "post": {
+        "operationId": "issuePasswordReset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPasswordResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -1318,6 +1428,42 @@
             "in": "query",
             "schema": {
               "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Logs"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/logs/incidents/{incidentId}": {
+      "get": {
+        "operationId": "incident",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "incidentId",
+            "required": true,
+            "in": "path",
+            "schema": {
               "type": "string"
             }
           }
@@ -5561,6 +5707,44 @@
         ]
       }
     },
+    "/api/teams/{teamId}/checks/bulk": {
+      "post": {
+        "operationId": "bulk",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCheckActionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Checks"
+        ]
+      }
+    },
     "/api/teams/{teamId}/checks/{id}/history": {
       "get": {
         "operationId": "history",
@@ -6497,6 +6681,70 @@
         ]
       }
     },
+    "/api/teams/{teamId}/exports": {
+      "get": {
+        "operationId": "catalog",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Exports"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/exports/{dataset}": {
+      "get": {
+        "operationId": "download",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dataset",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Exports"
+        ]
+      }
+    },
     "/api/teams/{teamId}/analytics/overview": {
       "get": {
         "operationId": "overview",
@@ -6984,6 +7232,68 @@
         ]
       }
     },
+    "/api/public/status-pages/{id}/{slug}/badge.svg": {
+      "get": {
+        "operationId": "badge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Public status"
+        ]
+      }
+    },
+    "/api/public/status-pages/{id}/{slug}/logo": {
+      "get": {
+        "operationId": "logo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Public status"
+        ]
+      }
+    },
     "/api/public/status-pages/{id}/{slug}/subscribers": {
       "post": {
         "operationId": "subscribe",
@@ -7330,6 +7640,50 @@
           "password"
         ]
       },
+      "PasswordResetRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "aiko@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "PasswordResetTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "PasswordResetCompleteDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128
+          },
+          "code": {
+            "type": "string",
+            "description": "Authenticator code or recovery code"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
+      },
       "RefreshSessionDto": {
         "type": "object",
         "properties": {
@@ -7564,6 +7918,17 @@
           "disabled",
           "expectedIsGlobalAdmin",
           "expectedDisabled"
+        ]
+      },
+      "AdminPasswordResetDto": {
+        "type": "object",
+        "properties": {
+          "sendEmail": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sendEmail"
         ]
       },
       "UpdateTeamLogsDto": {
@@ -8693,6 +9058,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "logQuery": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -8726,6 +9096,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "logQuery": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
           }
         }
       },
@@ -8869,6 +9244,33 @@
           }
         }
       },
+      "BulkCheckActionDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "run",
+              "pause",
+              "enable",
+              "delete"
+            ]
+          },
+          "ids": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "ids"
+        ]
+      },
       "CheckExecutionDto": {
         "type": "object",
         "properties": {
@@ -8908,10 +9310,15 @@
               "dns",
               "icmp",
               "wan",
+              "tls",
+              "smtp",
+              "grpc",
+              "ntp",
+              "domain",
+              "database",
               "host",
               "disk",
-              "docker",
-              "database"
+              "docker"
             ]
           },
           "config": {
@@ -8984,10 +9391,15 @@
               "dns",
               "icmp",
               "wan",
+              "tls",
+              "smtp",
+              "grpc",
+              "ntp",
+              "domain",
+              "database",
               "host",
               "disk",
-              "docker",
-              "database"
+              "docker"
             ]
           },
           "config": {
@@ -9945,6 +10357,24 @@
           "showUptime": {
             "type": "boolean",
             "default": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "accentColor": {
+            "type": "object",
+            "nullable": true,
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "websiteUrl": {
+            "type": "object",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "showLogo": {
+            "type": "boolean",
+            "default": true
           }
         },
         "required": [
@@ -9980,6 +10410,24 @@
             "default": false
           },
           "showUptime": {
+            "type": "boolean",
+            "default": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "accentColor": {
+            "type": "object",
+            "nullable": true,
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "websiteUrl": {
+            "type": "object",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "showLogo": {
             "type": "boolean",
             "default": true
           }
