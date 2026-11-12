@@ -26,6 +26,8 @@ interface CheckSummaryRow extends CheckRow {
   agent_last_seen_at: string | null;
   agent_collection_interval_seconds: number | null;
   latest_metrics_json: string | null;
+  latest_message: string | null;
+  latest_status_code: number | null;
   passing_24h: number | null;
   passing_30d: number | null;
 }
@@ -293,18 +295,23 @@ export class ChecksService {
         a.kind AS agent_kind,
         a.last_seen_at AS agent_last_seen_at,
         a.collection_interval_seconds AS agent_collection_interval_seconds,
-        (SELECT latest.metrics_json FROM check_results latest
-          WHERE latest.check_id = c.id
-          ORDER BY latest.checked_at DESC, latest.id DESC LIMIT 1) AS latest_metrics_json,
+        latest.metrics_json AS latest_metrics_json,
+        latest.message AS latest_message,
+        latest.status_code AS latest_status_code,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
           THEN CASE WHEN cr.status = 'up' THEN 100.0 ELSE 0.0 END END) AS passing_24h,
         AVG(CASE WHEN cr.checked_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '30 days'
           THEN CASE WHEN cr.status = 'up' THEN 100.0 ELSE 0.0 END END) AS passing_30d
       FROM checks c
       LEFT JOIN agents a ON a.id = c.agent_id
+      LEFT JOIN LATERAL (
+        SELECT metrics_json, message, status_code FROM check_results
+        WHERE check_id = c.id
+        ORDER BY checked_at DESC, id DESC LIMIT 1
+      ) latest ON TRUE
       LEFT JOIN check_results cr ON cr.check_id = c.id
       WHERE ${where}
-      GROUP BY c.id, a.id
+      GROUP BY c.id, a.id, latest.metrics_json, latest.message, latest.status_code
       ORDER BY LOWER(c.name)`;
   }
 
@@ -342,6 +349,9 @@ export class ChecksService {
       lastCheckedAt: row.last_checked_at,
       nextCheckAt: row.next_check_at,
       lastLatencyMs: row.last_latency_ms,
+      lastMessage: row.latest_message,
+      lastStatusCode: row.latest_status_code,
+      agentOffline: reporterOffline,
       latestMetrics,
       passing24h: row.passing_24h,
       passing30d: row.passing_30d,

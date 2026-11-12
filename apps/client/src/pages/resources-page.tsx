@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ExportMenu } from "../components/export-menu";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
+import { StatusReason, resourceReason } from "../components/status-reason";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -215,6 +216,11 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
             <p className="mt-1 truncate text-sm text-muted">
               {resource.agent?.platform ?? resourceKindLabels[resource.kind]}
             </p>
+            <StatusReason
+              reason={resourceReason(resource)}
+              status={resource.status}
+              className="mt-1.5"
+            />
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <StatusBadge status={resource.status} />
@@ -225,7 +231,9 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
           <div>
             <p className="text-xs text-muted">Passing checks</p>
             <p className="mt-1 font-semibold">
-              {resource.checksPassing} / {resource.checksTotal}
+              {resource.checksTotal
+                ? `${resource.checksPassing} / ${resource.checksTotal}`
+                : "No checks"}
             </p>
             {resource.checksTotal ? (
               <div
@@ -243,10 +251,21 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
               </div>
             ) : null}
           </div>
-          <div>
-            <p className="text-xs text-muted">Last check</p>
-            <p className="mt-1 font-semibold">{formatRelative(resource.lastCheckedAt)}</p>
-          </div>
+          {!resource.checksTotal && resource.agent ? (
+            <div>
+              <p className="text-xs text-muted">Agent last seen</p>
+              <p className="mt-1 font-semibold">
+                {resource.agent.lastSeenAt
+                  ? formatRelative(resource.agent.lastSeenAt)
+                  : "Never connected"}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs text-muted">Last check</p>
+              <p className="mt-1 font-semibold">{formatRelative(resource.lastCheckedAt)}</p>
+            </div>
+          )}
         </div>
         {resource.tags.length ? (
           <div className="mt-4 flex flex-wrap gap-1.5">

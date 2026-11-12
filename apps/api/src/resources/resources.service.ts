@@ -4,6 +4,7 @@ import type {
   AgentStatus,
   MonitorStatus,
   ResourceKind,
+  ResourceProblem,
   ResourceSummary,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
@@ -16,6 +17,15 @@ import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import { logStreamMatchers, parseLogQueryInput } from "../logs/log-query-sql.js";
 import { LogSearchService } from "../logs/log-search.service.js";
 import type { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
+
+interface ProblemRow {
+  resource_id: string;
+  source: ResourceProblem["source"];
+  id: string;
+  name: string;
+  status: ResourceProblem["status"];
+  message: string | null;
+}
 
 interface ResourceRow {
   id: string;
@@ -55,12 +65,15 @@ export class ResourcesService {
       this.selectSql("WHERE r.team_id = ?"),
       teamId
     );
-    const statuses = await this.health.forResources(
-      teamId,
-      rows.map((resource) => resource.id)
-    );
+    const ids = rows.map((resource) => resource.id);
+    const [statuses, problems] = await Promise.all([
+      this.health.forResources(teamId, ids),
+      this.problems(teamId, ids),
+    ]);
     return Promise.all(
-      rows.map((resource) => this.map(resource, statuses.get(resource.id) ?? "pending"))
+      rows.map((resource) =>
+        this.map(resource, statuses.get(resource.id) ?? "pending", problems.get(resource.id) ?? [])
+      )
     );
   }
 
@@ -72,8 +85,11 @@ export class ResourcesService {
       id
     );
     if (!row) throw new NotFoundException("Resource not found");
-    const statuses = await this.health.forResources(teamId, [row.id]);
-    return this.map(row, statuses.get(row.id) ?? "pending");
+    const [statuses, problems] = await Promise.all([
+      this.health.forResources(teamId, [row.id]),
+      this.problems(teamId, [row.id]),
+    ]);
+    return this.map(row, statuses.get(row.id) ?? "pending", problems.get(row.id) ?? []);
   }
 
   async create(userId: string, teamId: string, input: CreateResourceDto): Promise<ResourceSummary> {
@@ -214,7 +230,52 @@ export class ResourcesService {
       ORDER BY LOWER(r.name)`;
   }
 
-  private async map(row: ResourceRow, status: MonitorStatus): Promise<ResourceSummary> {
+  private async problems(
+    teamId: string,
+    resourceIds: string[]
+  ): Promise<Map<string, ResourceProblem[]>> {
+    const problems = new Map<string, ResourceProblem[]>();
+    if (!resourceIds.length) return problems;
+    const rows = await this.database.all<ProblemRow>(
+      `SELECT c.resource_id, 'check' AS source, c.id, c.name, c.current_status AS status,
+         latest.message
+       FROM checks c
+       LEFT JOIN LATERAL (
+         SELECT message FROM check_results WHERE check_id = c.id
+         ORDER BY checked_at DESC, id DESC LIMIT 1
+       ) latest ON TRUE
+       WHERE c.team_id = ? AND c.resource_id IN (?) AND c.enabled = 1
+         AND c.current_status IN ('down', 'degraded')
+       UNION ALL
+       SELECT hm.resource_id, 'heartbeat', hm.id, hm.name, hm.current_status, hm.last_message
+       FROM heartbeat_monitors hm
+       WHERE hm.team_id = ? AND hm.resource_id IN (?) AND hm.enabled = 1
+         AND hm.current_status = 'down'
+       ORDER BY status DESC, name`,
+      teamId,
+      resourceIds,
+      teamId,
+      resourceIds
+    );
+    for (const row of rows) {
+      const list = problems.get(row.resource_id) ?? [];
+      list.push({
+        source: row.source,
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        message: row.message,
+      });
+      problems.set(row.resource_id, list);
+    }
+    return problems;
+  }
+
+  private async map(
+    row: ResourceRow,
+    status: MonitorStatus,
+    problems: ResourceProblem[]
+  ): Promise<ResourceSummary> {
     return {
       id: row.id,
       teamId: row.team_id,
@@ -234,6 +295,7 @@ export class ResourcesService {
           }
         : null,
       status,
+      problems,
       checksPassing: row.checks_passing,
       checksTotal: row.checks_total,
       lastCheckedAt: row.last_checked_at,

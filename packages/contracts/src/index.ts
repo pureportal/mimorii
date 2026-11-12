@@ -374,12 +374,21 @@ export interface ResourceSummary {
   logQuery: string | null;
   agent: ResourceAgentSummary | null;
   status: ResourceStatus;
+  problems: ResourceProblem[];
   checksPassing: number;
   checksTotal: number;
   lastCheckedAt: string | null;
   inMaintenance: boolean;
   imageUpdatedAt: string | null;
   createdAt: string;
+}
+
+export interface ResourceProblem {
+  source: "check" | "heartbeat";
+  id: string;
+  name: string;
+  status: "down" | "degraded";
+  message: string | null;
 }
 
 export interface ResourceAgentSummary {
@@ -636,6 +645,9 @@ export interface CheckSummary {
   lastCheckedAt: string | null;
   nextCheckAt: string | null;
   lastLatencyMs: number | null;
+  lastMessage: string | null;
+  lastStatusCode: number | null;
+  agentOffline: boolean;
   latestMetrics: Record<string, number | string | boolean | null>;
   passing24h: number | null;
   passing30d: number | null;

@@ -60,6 +60,7 @@ function createResource(
     description: null,
     tags: [],
     logQuery: null,
+    problems: [],
     agent: overrides.agent
       ? {
           id: `agent-${overrides.id}`,

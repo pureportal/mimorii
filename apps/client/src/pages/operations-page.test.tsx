@@ -25,6 +25,7 @@ const resource: ResourceSummary = {
   description: null,
   tags: [],
   logQuery: null,
+  problems: [],
   agent: null,
   status: "okay",
   checksPassing: 1,

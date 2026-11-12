@@ -65,6 +65,7 @@ describe("ResourcesService", () => {
           agent_last_seen_at: "2026-08-25T11:59:30.000Z",
           agent_collection_interval_seconds: 30,
         })),
+        all: vi.fn(async () => []),
       };
 
       await expect(
@@ -93,6 +94,7 @@ describe("ResourcesService", () => {
           agent_collection_interval_seconds: 30,
           checks_total: 1,
         })),
+        all: vi.fn(async () => []),
       };
 
       await expect(service(database).get("user-1", "team-1", "resource-1")).resolves.toMatchObject({
@@ -109,6 +111,7 @@ describe("ResourcesService", () => {
     const database = {
       get: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce(row),
       run: vi.fn(async () => ({ changes: 1 })),
+      all: vi.fn(async () => []),
     };
     const resources = service(database);
 

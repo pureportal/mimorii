@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { CheckDetailsDialog } from "../components/check-details-dialog";
 import { CheckDialog, type CheckPayload } from "../components/check-dialog";
 import { CheckHealthSummary } from "../components/check-health-summary";
+import { StatusReason, checkReason } from "../components/status-reason";
 import { CheckStatusIndicator } from "../components/check-status-indicator";
 import { CheckTypeIcon } from "../components/check-type-icon";
 import { ExportMenu } from "../components/export-menu";
@@ -385,6 +386,11 @@ export function ChecksPage() {
                     <p className="mt-1 truncate text-xs text-muted">
                       {resourceNames.get(check.resourceId)} · {checkTypeLabels[check.type]}
                     </p>
+                    <StatusReason
+                      reason={checkReason(check)}
+                      status={check.status}
+                      className="mt-1"
+                    />
                   </div>
                 </div>
                 <div

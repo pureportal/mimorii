@@ -25,6 +25,7 @@ import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { api } from "../lib/api";
+import { StatusReason, resourceReason } from "../components/status-reason";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { expiringChecks } from "../lib/expiring-checks";
@@ -242,7 +243,13 @@ export function OverviewPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{resourceNames.get(resource.id)}</p>
-                  <p className="truncate text-xs text-muted">{resourceKindLabels[resource.kind]}</p>
+                  {resourceReason(resource) ? (
+                    <StatusReason reason={resourceReason(resource)} status={resource.status} />
+                  ) : (
+                    <p className="truncate text-xs text-muted">
+                      {resourceKindLabels[resource.kind]}
+                    </p>
+                  )}
                 </div>
                 <StatusBadge status={resource.status} />
               </Link>

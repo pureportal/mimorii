@@ -25,6 +25,7 @@ const resource: ResourceSummary = {
   description: null,
   tags: [],
   logQuery: null,
+  problems: [],
   agent: null,
   status: "up",
   checksPassing: 1,
@@ -53,6 +54,9 @@ const healthCheck: CheckSummary = {
   },
   execution: { kind: "agent", agentId: "agent-1" },
   lastLatencyMs: null,
+  lastMessage: null,
+  lastStatusCode: null,
+  agentOffline: false,
   latestMetrics: {
     cpuPercent: 35,
     memoryPercent: 62,
@@ -67,6 +71,9 @@ const diskCheck: CheckSummary = {
   config: { mount: "C:", warningPercent: 85, criticalPercent: 95 },
   execution: { kind: "agent", agentId: "agent-1" },
   lastLatencyMs: null,
+  lastMessage: null,
+  lastStatusCode: null,
+  agentOffline: false,
   latestMetrics: { mount: "C:", usedPercent: 97.3 },
 };
 const staleCheck: CheckSummary = {
@@ -76,6 +83,9 @@ const staleCheck: CheckSummary = {
   config: healthCheck.config,
   execution: { kind: "agent", agentId: "agent-1" },
   lastLatencyMs: null,
+  lastMessage: null,
+  lastStatusCode: null,
+  agentOffline: false,
   latestMetrics: { agentTimeout: true },
 };
 
@@ -307,6 +317,9 @@ function createCheck(id: string, name: string, enabled: boolean): CheckSummary {
     lastCheckedAt: "2026-08-24T08:00:00.000Z",
     nextCheckAt: enabled ? "2026-08-24T08:01:00.000Z" : null,
     lastLatencyMs: 42,
+    lastMessage: null,
+    lastStatusCode: null,
+    agentOffline: false,
     latestMetrics: { responseBytes: 128 },
     passing24h: 100,
     passing30d: 99.9,
