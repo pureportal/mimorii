@@ -53,8 +53,12 @@ import { Input, Select, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
-import { checkPassingLabel, createCheckHistorySeries } from "../lib/check-health";
-import { formatPercent, formatRelative } from "../lib/format";
+import {
+  checkPassingLabel,
+  createCheckHistorySeries,
+  isValidityCheckType,
+} from "../lib/check-health";
+import { formatInterval, formatPercent, formatRelative } from "../lib/format";
 import { resourceKindLabels } from "../lib/resource-option-labels";
 
 export function ResourceDetailPage() {
@@ -90,7 +94,10 @@ export function ResourceDetailPage() {
     queryKey: ["agents", teamId],
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),
   });
-  const activeCheckId = selectedCheckId ?? checks.data?.[0]?.id ?? null;
+  const activeCheckId =
+    selectedCheckId ??
+    (checks.data?.find((check) => !isValidityCheckType(check.type)) ?? checks.data?.[0])?.id ??
+    null;
   const history = useQuery({
     queryKey: ["history", teamId, activeCheckId],
     queryFn: () => api<CheckResult[]>(`/teams/${teamId}/checks/${activeCheckId}/history?limit=500`),
@@ -155,7 +162,7 @@ export function ResourceDetailPage() {
         data-guide-page="resource-heading"
         className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"
       >
-        <div>
+        <div className="min-w-0 flex-1">
           <Button asChild variant="ghost" size="sm" className="-ml-3 mb-2">
             <Link to={appRoutes.resources}>
               <ArrowLeft /> Resources
@@ -198,7 +205,7 @@ export function ResourceDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
           {activeTeam!.logsEnabled && resource.data.logQuery ? (
             <Button asChild variant="outline">
               <Link
@@ -318,8 +325,10 @@ export function ResourceDetailPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{check.name}</p>
                       <p className="text-xs text-muted">
-                        {checkExecutionLabel(check.execution, agents.data ?? [])} ·{" "}
-                        {checkPassingLabel(check.type)} {formatPercent(check.passing24h)}
+                        {checkExecutionLabel(check.execution, agents.data ?? [])}
+                        {check.passing24h !== null
+                          ? ` · ${checkPassingLabel(check.type)} ${formatPercent(check.passing24h)}`
+                          : ""}
                       </p>
                     </div>
                     <StatusBadge status={check.status} />
@@ -333,10 +342,16 @@ export function ResourceDetailPage() {
                       <Eye />
                     </Button>
                   </div>
-                  <CheckHealthSummary check={check} className="mt-3" />
+                  {check.lastCheckedAt ? (
+                    <CheckHealthSummary check={check} className="mt-3" />
+                  ) : null}
                   <div className="mt-2 flex justify-between text-[11px] text-muted">
-                    <span>{check.intervalSeconds}s interval</span>
-                    <span>{formatRelative(check.lastCheckedAt)}</span>
+                    <span>Every {formatInterval(check.intervalSeconds)}</span>
+                    <span>
+                      {check.lastCheckedAt
+                        ? formatRelative(check.lastCheckedAt)
+                        : "Waiting for first run"}
+                    </span>
                   </div>
                 </div>
               ))}

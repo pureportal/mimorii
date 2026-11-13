@@ -129,6 +129,10 @@ export function isHealthCheckType(type: CheckType): boolean {
 
 const validityCheckTypes = new Set<CheckType>(["tls", "domain"]);
 
+export function isValidityCheckType(type: CheckType): boolean {
+  return validityCheckTypes.has(type);
+}
+
 export function checkPassingLabel(type: CheckType): "Availability" | "Healthy" {
   return isHealthCheckType(type) || validityCheckTypes.has(type) ? "Healthy" : "Availability";
 }
