@@ -26,15 +26,17 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { Throttle } from "@nestjs/throttler";
 import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
 import { AuthGuard } from "../auth/auth.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import type { AuthenticatedUser } from "../common/rows.js";
 import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
-import { CreateResourceDto, UpdateResourceDto } from "./resources.dto.js";
+import { CreateResourceDto, DiscoverWebsiteDto, UpdateResourceDto } from "./resources.dto.js";
 import { ResourcesService } from "./resources.service.js";
 import { ResourceImagesService } from "./resource-images.service.js";
+import { WebsiteDiscoveryService } from "./website-discovery.service.js";
 
 interface UploadedResourceImage {
   buffer: Buffer;
@@ -52,6 +54,7 @@ export class ResourcesController {
   constructor(
     private readonly resources: ResourcesService,
     private readonly images: ResourceImagesService,
+    private readonly discovery: WebsiteDiscoveryService,
     private readonly telemetry: ResourceTelemetryService
   ) {}
 
@@ -129,6 +132,17 @@ export class ResourcesController {
     @Body() input: CreateResourceDto
   ) {
     return this.resources.create(user.id, teamId, input);
+  }
+
+  @Post("discover")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  discover(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Body() input: DiscoverWebsiteDto
+  ) {
+    return this.discovery.discover(user.id, teamId, input.url);
   }
 
   @Patch(":id")

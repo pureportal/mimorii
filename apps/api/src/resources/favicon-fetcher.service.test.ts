@@ -41,11 +41,20 @@ describe("favicon retrieval", () => {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         response.end(`
           <html><head>
+            <title>Pricing · Website   Labs</title>
+            <meta name="description" content="  Uptime for   every team ">
             <base href="/assets/">
             <link rel="icon" href="small.png" sizes="16x16">
             <link rel="shortcut icon" href="large.png" sizes="192x192">
           </head></html>
         `);
+        return;
+      }
+      if (request.url === "/large") {
+        response.writeHead(200, { "content-type": "text/html" });
+        response.end(
+          `<html><head><title>Large Website</title></head><body>${"x".repeat(700_000)}</body></html>`
+        );
         return;
       }
       if (request.url === "/assets/large.png") {
@@ -82,6 +91,48 @@ describe("favicon retrieval", () => {
     expect([...pixel.subarray(0, 3)]).toEqual([240, 80, 100]);
     expect(resolveStrictPublicHost).toHaveBeenCalledTimes(3);
     expect(resolveStrictPublicHost).toHaveBeenCalledWith("website.test");
+  });
+
+  it("reads the brand, description and final address of a website", async () => {
+    const inspection = await new FaviconFetcherService(targets).inspect(
+      `http://website.test:${port}/tracked`
+    );
+
+    expect(inspection).toMatchObject({
+      reachable: true,
+      name: "Website Labs",
+      description: "Uptime for every team",
+    });
+    expect(inspection.finalUrl.pathname).toBe("/home");
+    expect(inspection.requestedUrl.pathname).toBe("/tracked");
+    expect(inspection.icon).toBeInstanceOf(Buffer);
+  });
+
+  it("reads the brand from the start of a large page", async () => {
+    const inspection = await new FaviconFetcherService(targets).inspect(
+      `http://website.test:${port}/large`
+    );
+
+    expect(inspection).toMatchObject({ reachable: true, name: "Large Website" });
+  });
+
+  it("reports an address that answers with an error as reachable", async () => {
+    const inspection = await new FaviconFetcherService(targets).inspect(
+      `http://website.test:${port}/missing`
+    );
+
+    expect(inspection).toMatchObject({ reachable: true, name: null, description: null });
+  });
+
+  it("reports an address that cannot be resolved as unreachable", async () => {
+    resolveStrictPublicHost.mockRejectedValueOnce(new Error("unresolved"));
+    resolveStrictPublicHost.mockRejectedValueOnce(new Error("unresolved"));
+
+    const inspection = await new FaviconFetcherService(targets).inspect(
+      `http://offline.test:${port}/`
+    );
+
+    expect(inspection).toMatchObject({ reachable: false, name: null, icon: null });
   });
 
   it("falls back to the conventional root favicon", async () => {

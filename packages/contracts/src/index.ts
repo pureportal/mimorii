@@ -1291,6 +1291,21 @@ export type ResourceFaviconRefresh =
   | { status: "updated"; imageUpdatedAt: string }
   | { status: "queued"; imageUpdatedAt: null };
 
+export type WebsiteCheckSuggestion = { name: string; intervalSeconds: number } & (
+  | { type: "http"; config: HttpCheckConfig }
+  | { type: "tls"; config: TlsCheckConfig }
+  | { type: "domain"; config: DomainCheckConfig }
+);
+
+export interface WebsiteDiscovery {
+  url: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  reachable: boolean;
+  checks: WebsiteCheckSuggestion[];
+}
+
 export interface AgentHeartbeatResponse {
   acceptedAt: string;
   acceptedSnapshots: number;

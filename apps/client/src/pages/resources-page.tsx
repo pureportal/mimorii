@@ -1,9 +1,10 @@
-import type { AgentSummary, CheckType, ResourceSummary } from "@mimorii/contracts";
+import type { AgentSummary, MonitorStatus, ResourceSummary } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Globe2, Plus, Search, Waypoints } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { AddResourceDialog } from "../components/add-resource-dialog";
 import { ExportMenu } from "../components/export-menu";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
 import { ResourceImage } from "../components/resource-image";
@@ -11,10 +12,8 @@ import { StatusReason, resourceReason } from "../components/status-reason";
 import { StatusBadge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "../components/ui/field";
 import { Input, Select } from "../components/ui/input";
-import { api, jsonBody } from "../lib/api";
+import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { cn } from "../lib/cn";
@@ -28,7 +27,7 @@ export function ResourcesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<ResourceStatusFilter | "all">("all");
   const [sort, setSort] = useState<ResourceSort>("attention");
   const queryClient = useQueryClient();
   const resources = useQuery({
@@ -41,20 +40,36 @@ export function ResourcesPage() {
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),
   });
   const open = searchParams.get("new") === "1";
-  const filtered = useMemo(() => {
+  const searched = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return (resources.data ?? [])
-      .filter(
-        (resource) =>
-          (kind === "all" || resource.kind === kind) &&
-          (status === "all" ||
-            (status === "maintenance" ? resource.inMaintenance : resource.status === status)) &&
-          `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`
-            .toLowerCase()
-            .includes(query)
-      )
-      .toSorted(resourceComparators[sort]);
-  }, [kind, resources.data, search, sort, status]);
+    return (resources.data ?? []).filter(
+      (resource) =>
+        (kind === "all" || resource.kind === kind) &&
+        `${resource.name} ${resource.kind} ${resource.tags.join(" ")}`.toLowerCase().includes(query)
+    );
+  }, [kind, resources.data, search]);
+  const filtered = useMemo(
+    () =>
+      searched
+        .filter(
+          (resource) =>
+            status === "all" ||
+            (status === "maintenance" ? resource.inMaintenance : resource.status === status)
+        )
+        .toSorted(resourceComparators[sort]),
+    [searched, sort, status]
+  );
+  const statusCounts = useMemo(() => {
+    const counts = new Map<ResourceStatusFilter, number>();
+    for (const resource of searched) {
+      counts.set(resource.status, (counts.get(resource.status) ?? 0) + 1);
+      if (resource.inMaintenance) counts.set("maintenance", (counts.get("maintenance") ?? 0) + 1);
+    }
+    return resourceStatusFilters.flatMap((value) => {
+      const count = counts.get(value);
+      return count ? [{ value, count }] : [];
+    });
+  }, [searched]);
   const hasFilters = Boolean(search.trim()) || kind !== "all" || status !== "all";
 
   const invalidate = async () => {
@@ -69,72 +84,69 @@ export function ResourcesPage() {
   if (resources.isError) return <ErrorState retry={() => void resources.refetch()} />;
 
   return (
-    <div className="space-y-6">
-      <div
-        data-guide-page="resources-toolbar"
-        className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
-      >
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <Input
-              type="search"
-              aria-label="Search resources"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search resources"
-              className="pl-10"
-            />
+    <div className="space-y-5">
+      <div data-guide-page="resources-toolbar" className="space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="relative w-full min-w-48 md:w-auto md:max-w-md md:flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <Input
+                type="search"
+                aria-label="Search resources"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search resources"
+                className="pl-10"
+              />
+            </div>
+            <Select
+              aria-label="Resource kind"
+              value={kind}
+              onChange={(event) => setKind(event.target.value)}
+              className="w-[calc(50%-0.25rem)] md:w-36"
+            >
+              <option value="all">All kinds</option>
+              <option value="host">Hosts</option>
+              <option value="device">Devices</option>
+              <option value="service">Services</option>
+            </Select>
+            <Select
+              aria-label="Sort resources"
+              value={sort}
+              onChange={(event) =>
+                setSort(resourceSorts.find((value) => value === event.target.value) ?? "attention")
+              }
+              className="w-[calc(50%-0.25rem)] md:w-44"
+            >
+              <option value="attention">Needs attention</option>
+              <option value="name">Name</option>
+              <option value="checked">Last check</option>
+            </Select>
           </div>
-          <Select
-            aria-label="Resource kind"
-            value={kind}
-            onChange={(event) => setKind(event.target.value)}
-            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-36"
-          >
-            <option value="all">All kinds</option>
-            <option value="host">Hosts</option>
-            <option value="device">Devices</option>
-            <option value="service">Services</option>
-          </Select>
-          <Select
-            aria-label="Resource state"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-36"
-          >
-            <option value="all">All states</option>
-            <option value="up">Up</option>
-            <option value="degraded">Degraded</option>
-            <option value="okay">Okay</option>
-            <option value="warning">Warning</option>
-            <option value="critical">Critical</option>
-            <option value="down">Down</option>
-            <option value="paused">Paused</option>
-            <option value="pending">Pending</option>
-            <option value="maintenance">Maintenance</option>
-          </Select>
-          <Select
-            aria-label="Sort resources"
-            value={sort}
-            onChange={(event) =>
-              setSort(resourceSorts.find((value) => value === event.target.value) ?? "attention")
-            }
-            className="w-[calc(50%-0.25rem)] min-w-32 sm:w-48"
-          >
-            <option value="attention">Needs attention</option>
-            <option value="name">Name</option>
-            <option value="checked">Last check</option>
-          </Select>
-          <p className="w-full text-sm text-muted sm:w-auto">
-            {filtered.length.toLocaleString()} {filtered.length === 1 ? "resource" : "resources"}
-          </p>
+          <div className="flex items-center gap-2">
+            <ExportMenu choices={[{ dataset: "resources", label: "Resources" }]} />
+            <Button variant="coral" onClick={() => setSearchParams({ new: "1" })}>
+              <Plus /> Add resource
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ExportMenu choices={[{ dataset: "resources", label: "Resources" }]} />
-          <Button variant="coral" onClick={() => setSearchParams({ new: "1" })}>
-            <Plus /> Add resource
-          </Button>
+        <div role="group" aria-label="Resource state" className="flex flex-wrap gap-1.5">
+          <StatusFilterChip
+            label="All"
+            count={searched.length}
+            active={status === "all"}
+            onClick={() => setStatus("all")}
+          />
+          {statusCounts.map(({ value, count }) => (
+            <StatusFilterChip
+              key={value}
+              label={resourceStatusLabels[value]}
+              count={count}
+              tone={value}
+              active={status === value}
+              onClick={() => setStatus(status === value ? "all" : value)}
+            />
+          ))}
         </div>
       </div>
 
@@ -170,7 +182,7 @@ export function ResourcesPage() {
         />
       )}
 
-      <QuickResourceDialog
+      <AddResourceDialog
         open={open}
         onOpenChange={(value) => setSearchParams(value ? { new: "1" } : {})}
         teamId={teamId}
@@ -181,6 +193,76 @@ export function ResourcesPage() {
         }}
       />
     </div>
+  );
+}
+
+const resourceStatusFilters = [
+  "down",
+  "critical",
+  "warning",
+  "degraded",
+  "pending",
+  "up",
+  "okay",
+  "paused",
+  "maintenance",
+] as const satisfies readonly (MonitorStatus | "maintenance")[];
+type ResourceStatusFilter = (typeof resourceStatusFilters)[number];
+
+const resourceStatusLabels: Record<ResourceStatusFilter, string> = {
+  down: "Down",
+  critical: "Critical",
+  warning: "Warning",
+  degraded: "Degraded",
+  pending: "Pending",
+  up: "Up",
+  okay: "Okay",
+  paused: "Paused",
+  maintenance: "Maintenance",
+};
+
+const statusDots: Record<ResourceStatusFilter, string> = {
+  down: "bg-danger",
+  critical: "bg-danger",
+  warning: "bg-warning",
+  degraded: "bg-warning",
+  pending: "bg-lavender",
+  up: "bg-success",
+  okay: "bg-success",
+  paused: "bg-muted",
+  maintenance: "bg-violet-strong",
+};
+
+function StatusFilterChip({
+  label,
+  count,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  tone?: ResourceStatusFilter;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition",
+        active
+          ? "border-lavender bg-lavender-soft text-violet-strong"
+          : "border-line bg-surface text-muted hover:border-lavender hover:text-ink"
+      )}
+    >
+      {tone ? (
+        <span aria-hidden="true" className={cn("size-2 rounded-full", statusDots[tone])} />
+      ) : null}
+      {label} <span className="tabular-nums text-ink/70">{count}</span>
+    </button>
   );
 }
 
@@ -282,320 +364,4 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
       </Card>
     </Link>
   );
-}
-
-type SetupMode = "website" | "port" | "service";
-
-function suggestedResourceName(mode: SetupMode, target: string, port: string): string {
-  const value = target.trim();
-  if (!value || mode === "service") return "";
-  if (mode === "port") return port ? `${value}:${port}` : value;
-  try {
-    return new URL(value).hostname;
-  } catch {
-    return "";
-  }
-}
-
-function QuickResourceDialog({
-  open,
-  onOpenChange,
-  teamId,
-  agents,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  teamId: string;
-  agents: AgentSummary[];
-  onCreated: () => Promise<void>;
-}) {
-  const [mode, setMode] = useState<SetupMode>("website");
-  const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
-  const [port, setPort] = useState("443");
-  const [agentId, setAgentId] = useState("");
-  const [interval, setInterval] = useState("60");
-  const [timeout, setTimeoutValue] = useState("5000");
-  const [statusCode, setStatusCode] = useState("200");
-  const [content, setContent] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setError("");
-      setBusy(false);
-    }
-  }, [open]);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    let resourceId: string | null = null;
-    try {
-      const resource = await api<ResourceSummary>(`/teams/${teamId}/resources`, {
-        method: "POST",
-        ...jsonBody({
-          name: name.trim() || suggestedResourceName(mode, target, port),
-          kind: "service",
-          tags: [],
-        }),
-      });
-      resourceId = resource.id;
-      const check = defaultCheck(mode, target, port, statusCode, content);
-      if (check) {
-        await api(`/teams/${teamId}/checks`, {
-          method: "POST",
-          ...jsonBody({
-            resourceId,
-            name: check.name,
-            type: check.type,
-            config: check.config,
-            execution: agentId ? { kind: "agent", agentId } : { kind: "direct" },
-            intervalSeconds: Number(interval),
-            timeoutMs: Number(timeout),
-            failureThreshold: 2,
-            recoveryThreshold: 1,
-            enabled: true,
-          }),
-        });
-      }
-      if (mode === "website") {
-        try {
-          await api(`/teams/${teamId}/resources/${resourceId}/favicon`, { method: "POST" });
-        } catch {
-          toast.error("Favicon could not be retrieved. Use Update favicon to try again.");
-        }
-      }
-      await onCreated();
-      onOpenChange(false);
-      setName("");
-    } catch (cause) {
-      if (resourceId)
-        await api(`/teams/${teamId}/resources/${resourceId}`, { method: "DELETE" }).catch(
-          () => undefined
-        );
-      setError(cause instanceof Error ? cause.message : "Resource could not be added");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader title="Add resource" />
-        <form className="grid gap-5" onSubmit={submit}>
-          <div className="grid grid-cols-3 gap-2">
-            <ModeButton
-              active={mode === "website"}
-              icon={Globe2}
-              label="Website"
-              onClick={() => {
-                setMode("website");
-                setTarget("");
-              }}
-            />
-            <ModeButton
-              active={mode === "port"}
-              icon={Waypoints}
-              label="Port"
-              onClick={() => {
-                setMode("port");
-                setTarget("");
-              }}
-            />
-            <ModeButton
-              active={mode === "service"}
-              icon={Boxes}
-              label="Service"
-              onClick={() => {
-                setMode("service");
-                setTarget("");
-                setAgentId("");
-              }}
-            />
-          </div>
-          <Field>
-            <FieldLabel htmlFor="resource-name">Name</FieldLabel>
-            <Input
-              id="resource-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={
-                suggestedResourceName(mode, target, port) ||
-                (mode === "website" ? "Main website" : "Production service")
-              }
-              maxLength={100}
-              required={mode === "service"}
-            />
-          </Field>
-          {mode !== "service" ? (
-            <div className={mode === "port" ? "grid gap-4 sm:grid-cols-[1fr_120px]" : "grid gap-4"}>
-              <Field>
-                <FieldLabel htmlFor="resource-target">
-                  {mode === "website" ? "URL" : mode === "port" ? "Host" : "Hostname"}
-                </FieldLabel>
-                <Input
-                  id="resource-target"
-                  type={mode === "website" ? "url" : "text"}
-                  placeholder={mode === "website" ? "https://example.com/" : "example.com"}
-                  value={target}
-                  onChange={(event) => setTarget(event.target.value)}
-                  required
-                />
-              </Field>
-              {mode === "port" ? (
-                <Field>
-                  <FieldLabel htmlFor="resource-port">Port</FieldLabel>
-                  <Input
-                    id="resource-port"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={port}
-                    onChange={(event) => setPort(event.target.value)}
-                    required
-                  />
-                </Field>
-              ) : null}
-            </div>
-          ) : null}
-          {mode === "website" || mode === "port" ? (
-            <Field>
-              <FieldLabel htmlFor="resource-agent">Agent</FieldLabel>
-              <Select
-                id="resource-agent"
-                value={agentId}
-                onChange={(event) => setAgentId(event.target.value)}
-              >
-                <option value="">Direct</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.resourceName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
-
-          {mode !== "service" ? (
-            <details className="rounded-2xl border border-line px-4 py-3">
-              <summary className="text-sm font-semibold">Advanced</summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                {mode === "website" ? (
-                  <>
-                    <Field>
-                      <FieldLabel htmlFor="quick-status">Expected status</FieldLabel>
-                      <Input
-                        id="quick-status"
-                        type="number"
-                        min={100}
-                        max={599}
-                        value={statusCode}
-                        onChange={(event) => setStatusCode(event.target.value)}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="quick-content">Response contains</FieldLabel>
-                      <Input
-                        id="quick-content"
-                        value={content}
-                        onChange={(event) => setContent(event.target.value)}
-                        maxLength={512}
-                      />
-                    </Field>
-                  </>
-                ) : null}
-                <Field>
-                  <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
-                  <Input
-                    id="quick-interval"
-                    type="number"
-                    min={30}
-                    max={86400}
-                    value={interval}
-                    onChange={(event) => setInterval(event.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="quick-timeout">Timeout · ms</FieldLabel>
-                  <Input
-                    id="quick-timeout"
-                    type="number"
-                    min={250}
-                    max={30000}
-                    value={timeout}
-                    onChange={(event) => setTimeoutValue(event.target.value)}
-                  />
-                </Field>
-              </div>
-            </details>
-          ) : null}
-          <FieldError>{error}</FieldError>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="coral" disabled={busy}>
-              {busy ? "Adding…" : "Add resource"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ModeButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof Globe2;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`grid min-h-20 place-items-center gap-1 rounded-2xl border p-3 text-xs font-semibold transition ${active ? "border-lavender bg-lavender-soft text-violet-strong" : "border-line bg-surface text-muted hover:border-lavender"}`}
-    >
-      <Icon className="size-5" />
-      {label}
-    </button>
-  );
-}
-
-function defaultCheck(
-  mode: SetupMode,
-  target: string,
-  port: string,
-  status: string,
-  content: string
-): { name: string; type: CheckType; config: Record<string, unknown> } | null {
-  if (mode === "website")
-    return {
-      name: "HTTP availability",
-      type: "http",
-      config: {
-        target: { url: target, method: "GET" },
-        expectedStatuses: [Number(status)],
-        ...(content ? { responseContains: content } : {}),
-        followRedirects: true,
-        validateTls: true,
-      },
-    };
-  if (mode === "port")
-    return {
-      name: `TCP ${port}`,
-      type: "tcp",
-      config: { target: { host: target, port: Number(port) } },
-    };
-  return null;
 }

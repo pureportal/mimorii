@@ -7,11 +7,17 @@ import { ResourcesController } from "./resources.controller.js";
 import { ResourcesService } from "./resources.service.js";
 import { FaviconFetcherService } from "./favicon-fetcher.service.js";
 import { ResourceImagesService } from "./resource-images.service.js";
+import { WebsiteDiscoveryService } from "./website-discovery.service.js";
 
 @Module({
   imports: [AuthModule, TeamsModule, MaintenanceModule, LogsModule],
   controllers: [ResourcesController],
-  providers: [FaviconFetcherService, ResourceImagesService, ResourcesService],
+  providers: [
+    FaviconFetcherService,
+    ResourceImagesService,
+    ResourcesService,
+    WebsiteDiscoveryService,
+  ],
   exports: [ResourceImagesService, ResourcesService],
 })
 export class ResourcesModule {}

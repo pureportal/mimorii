@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { ResourceSummary } from "@mimorii/contracts";
@@ -134,12 +134,18 @@ describe("ResourcesPage add dialog", () => {
     renderPage("/");
     await screen.findByText("Database host");
 
-    fireEvent.change(screen.getByLabelText("Resource kind"), { target: { value: "service" } });
-    expect(screen.queryByText("Database host")).not.toBeInTheDocument();
-    expect(screen.getByText("Public API")).toBeInTheDocument();
+    const states = screen.getByRole("group", { name: "Resource state" });
+    expect(within(states).getByRole("button", { name: "All 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    fireEvent.click(within(states).getByRole("button", { name: "Down 1" }));
+    expect(screen.getByText("Database host")).toBeInTheDocument();
+    expect(screen.queryByText("Public API")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Resource state"), { target: { value: "down" } });
+    fireEvent.change(screen.getByLabelText("Resource kind"), { target: { value: "service" } });
     expect(screen.getByText("No matching resources")).toBeInTheDocument();
+    expect(within(states).getByRole("button", { name: "Up 1" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByText("Database host")).toBeInTheDocument();

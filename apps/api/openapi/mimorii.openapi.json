@@ -5309,6 +5309,44 @@
         ]
       }
     },
+    "/api/teams/{teamId}/resources/discover": {
+      "post": {
+        "operationId": "discover",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverWebsiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resources"
+        ]
+      }
+    },
     "/api/teams/{teamId}/resources/{id}/favicon": {
       "post": {
         "operationId": "refreshFavicon",
@@ -9068,6 +9106,18 @@
         "required": [
           "name",
           "kind"
+        ]
+      },
+      "DiscoverWebsiteDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "UpdateResourceDto": {

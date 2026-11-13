@@ -67,3 +67,10 @@ export function formatInitials(name: string): string {
       : Array.from(words[0] ?? "").slice(0, 2);
   return letters.join("").toUpperCase();
 }
+
+export function formatInterval(seconds: number): string {
+  if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 86_400) return `${Number((seconds / 3_600).toFixed(1))} hr`;
+  const days = Number((seconds / 86_400).toFixed(1));
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}

@@ -1,19 +1,32 @@
-import type { AgentSummary, ResourceFaviconRefresh, ResourceSummary } from "@mimorii/contracts";
+import type {
+  AgentSummary,
+  ResourceFaviconRefresh,
+  ResourceSummary,
+  WebsiteDiscovery,
+} from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResourcesPage } from "./resources-page";
 
-const { apiMock, apiBlobMock, createCheckMock, refreshFaviconMock, successMock, errorMock } =
-  vi.hoisted(() => ({
-    apiMock: vi.fn(),
-    apiBlobMock: vi.fn(),
-    createCheckMock: vi.fn(),
-    refreshFaviconMock: vi.fn<() => Promise<ResourceFaviconRefresh>>(),
-    successMock: vi.fn(),
-    errorMock: vi.fn(),
-  }));
+const {
+  apiMock,
+  apiBlobMock,
+  createCheckMock,
+  discoveryMock,
+  refreshFaviconMock,
+  successMock,
+  errorMock,
+} = vi.hoisted(() => ({
+  apiMock: vi.fn(),
+  apiBlobMock: vi.fn(),
+  createCheckMock: vi.fn(),
+  discoveryMock: vi.fn<() => Promise<WebsiteDiscovery>>(),
+  refreshFaviconMock: vi.fn<() => Promise<ResourceFaviconRefresh>>(),
+  successMock: vi.fn(),
+  errorMock: vi.fn(),
+}));
 
 vi.mock("../lib/api", () => ({
   api: apiMock,
@@ -62,6 +75,43 @@ const agent: AgentSummary = {
   createdAt: website.createdAt,
 };
 
+const discovery: WebsiteDiscovery = {
+  url: "https://website.test/status",
+  name: "Website Labs",
+  description: "Uptime for every team",
+  icon: null,
+  reachable: true,
+  checks: [
+    {
+      type: "http",
+      name: "Website availability",
+      intervalSeconds: 60,
+      config: {
+        target: { url: "https://website.test/status", method: "GET" },
+        expectedStatuses: [200],
+        followRedirects: true,
+        validateTls: true,
+      },
+    },
+    {
+      type: "tls",
+      name: "TLS certificate",
+      intervalSeconds: 21_600,
+      config: {
+        target: { host: "website.test", port: 443 },
+        certificateWarningDays: 30,
+        validateTls: true,
+      },
+    },
+    {
+      type: "domain",
+      name: "Domain registration",
+      intervalSeconds: 86_400,
+      config: { target: { domain: "website.test" }, expiryWarningDays: 30 },
+    },
+  ],
+};
+
 const imageUpdatedAt = "2026-09-12T10:01:00.000Z";
 let savedResource: ResourceSummary | null;
 let queryClient: QueryClient;
@@ -71,6 +121,7 @@ beforeEach(() => {
   savedResource = null;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   createCheckMock.mockResolvedValue({ id: "check-1" });
+  discoveryMock.mockResolvedValue(discovery);
   refreshFaviconMock.mockResolvedValue({ status: "updated", imageUpdatedAt });
   apiBlobMock.mockResolvedValue(new Blob(["favicon"], { type: "image/png" }));
   class MockURL extends URL {
@@ -89,6 +140,9 @@ beforeEach(() => {
     }
     if (path === "/teams/team-1/checks" && options?.method === "POST") {
       return createCheckMock();
+    }
+    if (path === "/teams/team-1/resources/discover" && options?.method === "POST") {
+      return discoveryMock();
     }
     if (path === "/teams/team-1/resources/resource-1/favicon" && options?.method === "POST") {
       const result = await refreshFaviconMock();
@@ -134,6 +188,76 @@ async function openCreation(mode: "Website" | "Port" | "Service" = "Website") {
   return dialog;
 }
 
+function renderCreation() {
+  render(
+    <MemoryRouter initialEntries={["/?new=1"]}>
+      <QueryClientProvider client={queryClient}>
+        <ResourcesPage />
+      </QueryClientProvider>
+    </MemoryRouter>
+  );
+  return screen.findByRole("dialog");
+}
+
+describe("website discovery", () => {
+  it("names the website after its brand and adds the selected discovered checks", async () => {
+    const dialog = await renderCreation();
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "website.test/status" },
+    });
+
+    expect(await within(dialog).findByText("Website Labs", {}, { timeout: 3_000 })).toBeVisible();
+    expect(within(dialog).getByText("website.test/status · Uptime for every team")).toBeVisible();
+    expect(within(dialog).getByLabelText("Name")).toHaveAttribute("placeholder", "Website Labs");
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Domain registration/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add resource" }));
+
+    await waitFor(() => expect(createCheckMock).toHaveBeenCalledTimes(2));
+    expect(apiMock).toHaveBeenCalledWith("/teams/team-1/resources", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Website Labs",
+        kind: "service",
+        description: "Uptime for every team",
+        tags: [],
+      }),
+    });
+    const checkBodies = apiMock.mock.calls
+      .filter(([path, options]) => path === "/teams/team-1/checks" && options?.method === "POST")
+      .map(([, options]) => JSON.parse(String(options.body)));
+    expect(checkBodies.map((body) => [body.type, body.intervalSeconds])).toEqual([
+      ["http", 60],
+      ["tls", 21_600],
+    ]);
+    expect(apiMock).toHaveBeenCalledWith("/teams/team-1/resources/discover", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://website.test/status" }),
+    });
+  });
+
+  it("asks for an agent when Mimorii cannot reach the website", async () => {
+    discoveryMock.mockResolvedValueOnce({ ...discovery, reachable: false, name: "website.test" });
+    const dialog = await renderCreation();
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "https://website.test" },
+    });
+
+    expect(
+      await within(dialog).findByText(
+        "Mimorii can't reach this address. Run the checks from an agent on its network.",
+        {},
+        { timeout: 3_000 }
+      )
+    ).toBeVisible();
+    fireEvent.change(within(dialog).getByLabelText("Run from"), { target: { value: agent.id } });
+    expect(
+      within(dialog).queryByText(
+        "Mimorii can't reach this address. Run the checks from an agent on its network."
+      )
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("website creation favicons", () => {
   it("retrieves the favicon after saving the HTTP check and displays the stored image", async () => {
     let finishCheck!: () => void;
@@ -153,7 +277,7 @@ describe("website creation favicons", () => {
       method: "POST",
       body: JSON.stringify({
         resourceId: website.id,
-        name: "HTTP availability",
+        name: "Website availability",
         type: "http",
         config: {
           target: { url: "https://website.test/status", method: "GET" },
@@ -213,7 +337,7 @@ describe("website creation favicons", () => {
       vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
       refreshFaviconMock.mockResolvedValueOnce({ status: "queued", imageUpdatedAt: null });
       const dialog = await openCreation();
-      fireEvent.change(within(dialog).getByLabelText("Agent"), { target: { value: agent.id } });
+      fireEvent.change(within(dialog).getByLabelText("Run from"), { target: { value: agent.id } });
 
       fireEvent.click(within(dialog).getByRole("button", { name: "Add resource" }));
 

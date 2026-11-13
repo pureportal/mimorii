@@ -3,6 +3,7 @@ import { Radio } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../lib/app-navigation";
+import { formatInterval } from "../lib/format";
 import {
   FoxytailHighlights,
   HeartbeatFacts,
@@ -53,11 +54,4 @@ export function HeartbeatCard({
       </div>
     </Card>
   );
-}
-
-export function formatInterval(seconds: number): string {
-  if (seconds < 3_600) return `${Math.round(seconds / 60)} min`;
-  if (seconds < 86_400) return `${Number((seconds / 3_600).toFixed(1))} hr`;
-  const days = Number((seconds / 86_400).toFixed(1));
-  return `${days} ${days === 1 ? "day" : "days"}`;
 }

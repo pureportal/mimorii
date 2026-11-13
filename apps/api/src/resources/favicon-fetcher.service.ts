@@ -12,6 +12,8 @@ const maximumPageBytes = 512 * 1024;
 const maximumRedirects = 3;
 const maximumCandidates = 12;
 const retrievalTimeoutMs = 8_000;
+const maximumNameLength = 100;
+const maximumDescriptionLength = 500;
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 interface RemoteResponse {
@@ -20,13 +22,36 @@ interface RemoteResponse {
   headers: IncomingHttpHeaders;
 }
 
+interface BodyLimit {
+  bytes: number;
+  truncate: boolean;
+}
+
+const pageLimit: BodyLimit = { bytes: maximumPageBytes, truncate: true };
+const imageLimit: BodyLimit = { bytes: imageAssetMaxBytes, truncate: false };
+
 interface FaviconCandidate {
   score: number;
   url: URL;
 }
 
+interface WebsiteDocument {
+  icons: FaviconCandidate[];
+  name: string | null;
+  description: string | null;
+}
+
+export interface WebsiteInspection {
+  requestedUrl: URL;
+  finalUrl: URL;
+  reachable: boolean;
+  name: string | null;
+  description: string | null;
+  icon: Buffer | null;
+}
+
 export class FaviconRetrievalError extends Error {
-  constructor() {
+  constructor(readonly statusCode: number | null = null) {
     super("Favicon could not be retrieved");
     this.name = "FaviconRetrievalError";
   }
@@ -37,33 +62,54 @@ export class FaviconFetcherService {
   constructor(private readonly targets: TargetSafetyService) {}
 
   async retrieve(websiteUrl: string): Promise<Buffer> {
+    const { icon } = await this.inspect(websiteUrl);
+    if (!icon) throw new FaviconRetrievalError();
+    return icon;
+  }
+
+  async inspect(websiteUrl: string): Promise<WebsiteInspection> {
     const deadline = Date.now() + retrievalTimeoutMs;
-    const initialUrl = this.targets.validateHttpUrl(websiteUrl);
-    let pageUrl = initialUrl;
-    let candidates: FaviconCandidate[] = [];
+    const requestedUrl = this.targets.validateHttpUrl(websiteUrl);
+    let finalUrl = requestedUrl;
+    let reachable = false;
+    let document: WebsiteDocument = { icons: [], name: null, description: null };
 
     try {
       const page = await this.fetch(
-        initialUrl,
-        maximumPageBytes,
+        requestedUrl,
+        pageLimit,
         "text/html,application/xhtml+xml",
         deadline
       );
-      pageUrl = page.finalUrl;
+      finalUrl = page.finalUrl;
+      reachable = true;
       if (this.isHtml(page.headers["content-type"])) {
-        candidates = discoverFavicons(page.body.toString("utf8"), page.finalUrl);
+        document = readWebsiteDocument(page.body.toString("utf8"), page.finalUrl);
       }
-    } catch {
-      candidates = [];
+    } catch (error) {
+      reachable = error instanceof FaviconRetrievalError && error.statusCode !== null;
     }
 
-    candidates.push({ score: -1, url: new URL("/favicon.ico", pageUrl.origin) });
-    const uniqueCandidates = candidates.filter(
+    const candidates = [
+      ...document.icons,
+      { score: -1, url: new URL("/favicon.ico", finalUrl.origin) },
+    ].filter(
       (candidate, index, all) =>
         all.findIndex((other) => other.url.href === candidate.url.href) === index
     );
+    const icon = await this.retrieveCandidate(
+      candidates.slice(0, maximumCandidates),
+      deadline
+    ).catch(() => null);
 
-    return this.retrieveCandidate(uniqueCandidates.slice(0, maximumCandidates), deadline);
+    return {
+      requestedUrl,
+      finalUrl,
+      reachable,
+      name: document.name,
+      description: document.description,
+      icon,
+    };
   }
 
   private async retrieveCandidate(
@@ -74,7 +120,7 @@ export class FaviconFetcherService {
     const candidate = candidates[index];
     if (!candidate || Date.now() >= deadline) throw new FaviconRetrievalError();
     try {
-      const image = await this.fetch(candidate.url, imageAssetMaxBytes, "image/*", deadline);
+      const image = await this.fetch(candidate.url, imageLimit, "image/*", deadline);
       return await optimizeImageAsset(image.body, faviconDimension, true);
     } catch {
       return this.retrieveCandidate(candidates, deadline, index + 1);
@@ -83,7 +129,7 @@ export class FaviconFetcherService {
 
   private async fetch(
     input: URL,
-    maximumBytes: number,
+    limit: BodyLimit,
     accept: string,
     deadline: number,
     redirects = 0
@@ -93,7 +139,7 @@ export class FaviconFetcherService {
       this.targets.resolveStrictPublicHost(url.hostname),
       deadline
     );
-    const response = await this.request(url, addresses[0]!.address, maximumBytes, accept, deadline);
+    const response = await this.request(url, addresses[0]!.address, limit, accept, deadline);
 
     if (redirectStatuses.has(response.statusCode)) {
       if (!response.headers.location || redirects >= maximumRedirects) {
@@ -101,14 +147,14 @@ export class FaviconFetcherService {
       }
       return this.fetch(
         new URL(response.headers.location, url),
-        maximumBytes,
+        limit,
         accept,
         deadline,
         redirects + 1
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw new FaviconRetrievalError();
+      throw new FaviconRetrievalError(response.statusCode);
     }
     return { body: response.body, finalUrl: url, headers: response.headers };
   }
@@ -116,7 +162,7 @@ export class FaviconFetcherService {
   private request(
     url: URL,
     address: string,
-    maximumBytes: number,
+    limit: BodyLimit,
     accept: string,
     deadline: number
   ): Promise<{ body: Buffer; headers: IncomingHttpHeaders; statusCode: number }> {
@@ -147,6 +193,7 @@ export class FaviconFetcherService {
           headers: {
             accept,
             "accept-encoding": "identity",
+            "accept-language": "en",
             host: url.host,
             "user-agent": "Mimorii/5 favicon-fetcher",
           },
@@ -157,7 +204,7 @@ export class FaviconFetcherService {
         },
         (response) => {
           const contentLength = Number(response.headers["content-length"]);
-          if (Number.isFinite(contentLength) && contentLength > maximumBytes) {
+          if (!limit.truncate && Number.isFinite(contentLength) && contentLength > limit.bytes) {
             response.destroy(new FaviconRetrievalError());
             fail(new FaviconRetrievalError());
             return;
@@ -165,20 +212,29 @@ export class FaviconFetcherService {
 
           const chunks: Buffer[] = [];
           let bytes = 0;
-          response.on("data", (chunk: Buffer) => {
-            bytes += chunk.length;
-            if (bytes > maximumBytes) {
-              response.destroy(new FaviconRetrievalError());
-              return;
-            }
-            chunks.push(chunk);
-          });
-          response.on("end", () => {
+          const complete = () =>
             succeed({
               body: Buffer.concat(chunks),
               headers: response.headers,
               statusCode: response.statusCode ?? 0,
             });
+          response.on("data", (chunk: Buffer) => {
+            const remaining = limit.bytes - bytes;
+            bytes += chunk.length;
+            if (bytes <= limit.bytes) {
+              chunks.push(chunk);
+              return;
+            }
+            if (!limit.truncate) {
+              response.destroy(new FaviconRetrievalError());
+              return;
+            }
+            chunks.push(chunk.subarray(0, remaining));
+            complete();
+            response.destroy();
+          });
+          response.on("end", () => {
+            complete();
           });
           response.on("error", fail);
         }
@@ -197,16 +253,14 @@ export class FaviconFetcherService {
   }
 }
 
-function discoverFavicons(html: string, documentUrl: URL): FaviconCandidate[] {
-  const document = parse(html);
-  const elements = descendants(document);
+function readWebsiteDocument(html: string, documentUrl: URL): WebsiteDocument {
+  const elements = descendants(parse(html));
   const baseHref = elements
     .filter((element) => element.tagName === "base")
     .map((element) => attribute(element, "href"))
     .find(Boolean);
   const baseUrl = resolveHttpUrl(baseHref, documentUrl) ?? documentUrl;
-
-  return elements
+  const icons = elements
     .filter((element) => element.tagName === "link")
     .flatMap((element) => {
       const rel = (attribute(element, "rel") ?? "").toLowerCase().split(/\s+/);
@@ -217,6 +271,61 @@ function discoverFavicons(html: string, documentUrl: URL): FaviconCandidate[] {
       return url ? [{ score: iconScore(attribute(element, "sizes")), url }] : [];
     })
     .toSorted((left, right) => right.score - left.score);
+  const metaElements = elements.filter((element) => element.tagName === "meta");
+  const meta = (key: string) => {
+    const element = metaElements.find((candidate) =>
+      [attribute(candidate, "property"), attribute(candidate, "name")].some(
+        (value) => value?.toLowerCase() === key
+      )
+    );
+    return collapseWhitespace(element && attribute(element, "content"));
+  };
+  const title = collapseWhitespace(
+    textContent(elements.find((element) => element.tagName === "title"))
+  );
+  const name =
+    meta("og:site_name") ??
+    meta("application-name") ??
+    meta("apple-mobile-web-app-title") ??
+    brandFromTitle(title, documentUrl.hostname);
+  const description = meta("description") ?? meta("og:description");
+  return {
+    icons,
+    name: name?.slice(0, maximumNameLength) ?? null,
+    description: description?.slice(0, maximumDescriptionLength) ?? null,
+  };
+}
+
+function brandFromTitle(title: string | null, hostname: string): string | null {
+  if (!title) return null;
+  const segments = title
+    .split(/\s+[|·•–—-]\s+/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length >= 2)
+    .toSorted((left, right) => left.length - right.length);
+  const hostLabels = hostname
+    .toLowerCase()
+    .split(".")
+    .slice(0, -1)
+    .filter((label) => label.length >= 3 && label !== "www");
+  return (
+    segments.find((segment) => {
+      const compact = segment.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return hostLabels.some((label) => compact.includes(label.replace(/[^a-z0-9]/g, "")));
+    }) ??
+    segments[0] ??
+    null
+  );
+}
+
+function textContent(element: DefaultTreeAdapterTypes.Element | undefined): string | undefined {
+  return element?.childNodes
+    .map((node) => ("value" in node && node.nodeName === "#text" ? node.value : ""))
+    .join("");
+}
+
+function collapseWhitespace(value: string | undefined): string | null {
+  return value ? value.replace(/\s+/g, " ").trim() || null : null;
 }
 
 function descendants(root: DefaultTreeAdapterTypes.Node): DefaultTreeAdapterTypes.Element[] {

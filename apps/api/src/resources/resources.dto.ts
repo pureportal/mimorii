@@ -43,3 +43,10 @@ export class CreateResourceDto {
 }
 
 export class UpdateResourceDto extends PartialType(CreateResourceDto) {}
+
+export class DiscoverWebsiteDto {
+  @ApiProperty({ maxLength: 2_048 })
+  @IsString()
+  @Length(1, 2_048)
+  url!: string;
+}

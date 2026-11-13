@@ -40,12 +40,13 @@ export function ResourceImage({
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden rounded-xl bg-lavender-soft text-violet-strong",
+        "grid shrink-0 place-items-center overflow-hidden rounded-xl text-violet-strong",
+        source ? "bg-white" : "bg-lavender-soft",
         className
       )}
     >
       {source ? (
-        <img alt="" className="size-full object-contain p-1" src={source} />
+        <img alt="" className="size-full object-contain p-1.5" src={source} />
       ) : (
         <Icon aria-hidden="true" className={cn("size-5", iconClassName)} />
       )}
