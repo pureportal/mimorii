@@ -62,7 +62,8 @@ describe("website discovery", () => {
   });
 
   it("names a website after its host when the page has no brand", async () => {
-    const access = { require: vi.fn(async () => ({})) } as unknown as TeamAccessService;
+    const requireAccess = vi.fn(async () => ({}));
+    const access = { require: requireAccess } as unknown as TeamAccessService;
     const favicons = {
       inspect: vi.fn(async () => ({
         requestedUrl: new URL("https://www.example.com"),
@@ -86,6 +87,6 @@ describe("website discovery", () => {
       icon: null,
       reachable: false,
     });
-    expect(access.require).toHaveBeenCalledWith("user", "team", "member");
+    expect(requireAccess).toHaveBeenCalledWith("user", "team", "member");
   });
 });
