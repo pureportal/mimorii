@@ -24,6 +24,7 @@ import { Input, Select } from "../components/ui/input";
 import { api, getServerUrl, jsonBody } from "../lib/api";
 import { createAgentEnrollmentCode } from "../lib/agent-enrollment";
 import { appRoutes } from "../lib/app-navigation";
+import { useCreateIntent } from "../lib/create-intent";
 import { useAuth } from "../lib/auth";
 import { formatRelative } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
@@ -62,6 +63,7 @@ export function AgentsPage() {
   const [editingAgent, setEditingAgent] = useState<AgentSummary | null>(null);
   const [confirmation, setConfirmation] = useState<AgentConfirmation | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  useCreateIntent(true, () => setCreateOpen(true));
   const agents = useQuery({
     queryKey: ["agents", teamId],
     queryFn: () => api<AgentSummary[]>(`/teams/${teamId}/agents`),

@@ -36,6 +36,7 @@ import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Input, Select } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
+import { useCreateIntent } from "../lib/create-intent";
 import { useAuth } from "../lib/auth";
 import { checkPassingLabel } from "../lib/check-health";
 import { checkTypeLabels } from "../lib/check-types";
@@ -167,6 +168,11 @@ export function ChecksPage() {
       return next;
     });
   const detailsCheck = checks.data?.find((check) => check.id === detailsCheckId) ?? null;
+  useCreateIntent(resources.isSuccess && canManage, () => {
+    if (!resources.data?.length) return;
+    setSelected(null);
+    setDialogOpen(true);
+  });
 
   const openCheckDetails = (checkId: string) => {
     const next = new URLSearchParams(searchParams);

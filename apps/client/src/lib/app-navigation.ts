@@ -1,4 +1,5 @@
-import { appRoutes } from "@mimorii/contracts";
+import { appRoutes, type OverviewAnalytics } from "@mimorii/contracts";
+import { createIntentPath } from "./create-intent";
 
 export { appRoutes } from "@mimorii/contracts";
 
@@ -180,6 +181,64 @@ export const navigationGroups: readonly NavigationGroup[] = [
     ],
   },
 ];
+
+export interface NavigationBadge {
+  count: number;
+  label: string;
+  tone: "danger" | "info";
+}
+
+export type NavigationBadges = Partial<Record<NavigationItemId, NavigationBadge>>;
+
+export function navigationBadges(
+  overview: Pick<OverviewAnalytics, "openIncidents" | "activeMaintenance" | "breachedObjectives">
+): NavigationBadges {
+  const badges: NavigationBadges = {};
+  if (overview.openIncidents) {
+    badges.incidents = { count: overview.openIncidents, label: "open", tone: "danger" };
+  }
+  if (overview.activeMaintenance) {
+    badges.maintenance = { count: overview.activeMaintenance, label: "active", tone: "info" };
+  }
+  if (overview.breachedObjectives) {
+    badges["service-goals"] = {
+      count: overview.breachedObjectives,
+      label: "breached",
+      tone: "danger",
+    };
+  }
+  return badges;
+}
+
+export interface CreateDestination {
+  id: "resource" | "check" | "heartbeat" | "agent" | "incident" | "status-page" | "dashboard";
+  label: string;
+  to: string;
+  teamAdmin?: boolean;
+}
+
+export const createDestinations: readonly CreateDestination[] = [
+  { id: "resource", label: "Resource", to: appRoutes.newResource },
+  { id: "check", label: "Check", to: createIntentPath(appRoutes.checks) },
+  { id: "heartbeat", label: "Heartbeat", to: createIntentPath(appRoutes.heartbeats) },
+  { id: "agent", label: "Agent", to: createIntentPath(appRoutes.agents) },
+  { id: "incident", label: "Incident", to: createIntentPath(appRoutes.incidents) },
+  {
+    id: "status-page",
+    label: "Status page",
+    to: createIntentPath(appRoutes.statusPages),
+    teamAdmin: true,
+  },
+  { id: "dashboard", label: "Dashboard", to: appRoutes.dashboardNew, teamAdmin: true },
+];
+
+export function visibleCreateDestinations(
+  teamRole: "owner" | "admin" | "member" | "viewer"
+): CreateDestination[] {
+  if (teamRole === "viewer") return [];
+  const teamAdmin = teamRole === "owner" || teamRole === "admin";
+  return createDestinations.filter((destination) => !destination.teamAdmin || teamAdmin);
+}
 
 export const mobilePrimaryItemIds = new Set<NavigationItemId>([
   "overview",

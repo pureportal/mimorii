@@ -24,6 +24,7 @@ import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Select, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
+import { useCreateIntent } from "../lib/create-intent";
 import { useAuth } from "../lib/auth";
 import { formatCount, formatDateTimeRange } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
@@ -56,6 +57,16 @@ export function OperationsPage({ view }: { view: OperationsView }) {
   const resources = useQuery({
     queryKey: ["resources", teamId],
     queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
+  });
+  useCreateIntent(resources.isSuccess && activeTeam!.role !== "viewer", () => {
+    if (!resources.data?.length) return;
+    if (view === "incidents") {
+      setEditingIncident(null);
+      setIncidentOpen(true);
+    } else {
+      setEditingMaintenance(null);
+      setMaintenanceOpen(true);
+    }
   });
 
   const refresh = async () => {

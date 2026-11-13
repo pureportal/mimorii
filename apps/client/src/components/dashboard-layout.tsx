@@ -1,4 +1,5 @@
-import type { TeamSummary } from "@mimorii/contracts";
+import type { OverviewAnalytics, TeamSummary } from "@mimorii/contracts";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   BarChart3,
@@ -27,14 +28,19 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
+import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import {
   appRoutes,
   isNavigationItemActive,
   isNavigationSubitemActive,
   mobilePrimaryItemIds,
+  navigationBadges,
   navigationContext,
+  visibleCreateDestinations,
   visibleNavigationGroups,
+  type NavigationBadge,
+  type NavigationBadges,
   type NavigationGroup,
   type NavigationItem,
   type NavigationItemId,
@@ -43,6 +49,7 @@ import { cn } from "../lib/cn";
 import { formatInitials } from "../lib/format";
 import { Brand } from "./brand";
 import { CommandPalette } from "./command-palette";
+import { CreateMenu } from "./create-menu";
 import { DeviceNotificationPrompt } from "./device-notification-prompt";
 import { ProductGuide } from "./guide/product-guide";
 import { SponsorFavicon } from "./sponsor-favicon";
@@ -77,6 +84,12 @@ export function ProtectedLayout() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const navigationRef = useRef<HTMLElement>(null);
+  const overview = useQuery({
+    queryKey: ["overview", activeTeam?.id],
+    queryFn: () => api<OverviewAnalytics>(`/teams/${activeTeam!.id}/analytics/overview`),
+    enabled: Boolean(activeTeam),
+    refetchInterval: 60_000,
+  });
   useEffect(() => {
     const openSearch = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
@@ -144,6 +157,7 @@ export function ProtectedLayout() {
     logs: activeTeam.logsEnabled,
   });
   const context = navigationContext(location.pathname);
+  const badges = overview.data ? navigationBadges(overview.data) : {};
 
   return (
     <div className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
@@ -170,6 +184,7 @@ export function ProtectedLayout() {
               group={group}
               pathname={location.pathname}
               nestedLabel={context.nestedLabel}
+              badges={badges}
             />
           ))}
         </nav>
@@ -226,7 +241,8 @@ export function ProtectedLayout() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <CreateMenu destinations={visibleCreateDestinations(activeTeam.role)} />
             <Button
               type="button"
               variant="outline"
@@ -267,6 +283,7 @@ export function ProtectedLayout() {
       />
       <MobileNavigation
         groups={groups}
+        badges={badges}
         activeTeamId={activeTeam.id}
         teams={session.teams}
         onTeamChange={setActiveTeamId}
@@ -291,10 +308,12 @@ function DesktopNavigationGroup({
   group,
   pathname,
   nestedLabel,
+  badges,
 }: {
   group: NavigationGroup;
   pathname: string;
   nestedLabel?: string;
+  badges: NavigationBadges;
 }) {
   const active = group.items.some((item) => isNavigationItemActive(pathname, item));
   return (
@@ -314,6 +333,7 @@ function DesktopNavigationGroup({
             item={item}
             pathname={pathname}
             nestedLabel={nestedLabel}
+            badge={badges[item.id]}
           />
         ))}
       </div>
@@ -325,10 +345,12 @@ function DesktopNavigationItem({
   item,
   pathname,
   nestedLabel,
+  badge,
 }: {
   item: NavigationItem;
   pathname: string;
   nestedLabel?: string;
+  badge?: NavigationBadge;
 }) {
   const Icon = navigationIcons[item.id];
   const active = isNavigationItemActive(pathname, item);
@@ -349,6 +371,7 @@ function DesktopNavigationItem({
         ) : null}
         <Icon className="size-[18px] shrink-0" />
         <span className="truncate">{item.label}</span>
+        {badge ? <NavigationCount badge={badge} /> : null}
       </Link>
       {active && item.children ? (
         <div className="ml-[21px] mt-1 space-y-0.5 border-l border-lavender/45 pl-4">
@@ -378,6 +401,21 @@ function DesktopNavigationItem({
   );
 }
 
+function NavigationCount({ badge }: { badge: NavigationBadge }) {
+  return (
+    <span
+      className={cn(
+        "ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums",
+        badge.tone === "danger" ? "bg-danger/15 text-danger" : "bg-lavender-soft text-violet-strong"
+      )}
+    >
+      <span className="sr-only">, </span>
+      {badge.count}
+      <span className="sr-only"> {badge.label}</span>
+    </span>
+  );
+}
+
 function DisabledNavigationItem({ item, className }: { item: NavigationItem; className: string }) {
   const Icon = navigationIcons[item.id];
   return (
@@ -400,6 +438,7 @@ function DisabledNavigationItem({ item, className }: { item: NavigationItem; cla
 
 function MobileNavigation({
   groups,
+  badges,
   activeTeamId,
   teams,
   onTeamChange,
@@ -407,6 +446,7 @@ function MobileNavigation({
   onGuideOpen,
 }: {
   groups: NavigationGroup[];
+  badges: NavigationBadges;
   activeTeamId: string;
   teams: TeamSummary[];
   onTeamChange: (id: string) => void;
@@ -525,6 +565,7 @@ function MobileNavigation({
                         ) : null}
                         <Icon className="size-[18px] shrink-0" />
                         <span className="min-w-0 truncate">{item.label}</span>
+                        {badges[item.id] ? <NavigationCount badge={badges[item.id]!} /> : null}
                       </Link>
                     );
                   })}

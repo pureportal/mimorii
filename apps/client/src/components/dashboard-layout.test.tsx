@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,6 +6,9 @@ import { appPaths, appRoutes } from "../lib/app-navigation";
 import { useAuth } from "../lib/auth";
 import { ProtectedLayout } from "./dashboard-layout";
 
+const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
+
+vi.mock("../lib/api", () => ({ api: apiMock }));
 vi.mock("../lib/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("./sponsor-favicon", () => ({
   SponsorFavicon: () => <div data-testid="sponsor-favicon" />,
@@ -14,6 +18,8 @@ const useAuthMock = vi.mocked(useAuth);
 
 describe("ProtectedLayout navigation", () => {
   beforeEach(() => {
+    apiMock.mockReset();
+    apiMock.mockResolvedValue({ openIncidents: 0, activeMaintenance: 0, breachedObjectives: 0 });
     useAuthMock.mockReturnValue({
       session: {
         accessToken: "session-token",
@@ -123,6 +129,42 @@ describe("ProtectedLayout navigation", () => {
     expect(within(dialog).getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 
+  it("counts open incidents, active maintenance and breached goals in the navigation", async () => {
+    apiMock.mockResolvedValue({ openIncidents: 3, activeMaintenance: 1, breachedObjectives: 0 });
+    renderLayout(appRoutes.resource("resource-1"));
+
+    const desktop = screen.getByRole("navigation", { name: "Primary navigation" });
+    const incidents = await within(desktop).findByText("3", {}, { timeout: 10_000 });
+    expect(incidents.closest("a")).toHaveAttribute("href", appRoutes.incidents);
+    expect(incidents.closest("a")).toHaveTextContent(/Incidents\W*3\W*open/);
+    expect(within(desktop).getByText("1").closest("a")).toHaveAttribute(
+      "href",
+      appRoutes.maintenance
+    );
+    expect(within(desktop).getByRole("link", { name: "Service goals" })).toBeVisible();
+    expect(apiMock).toHaveBeenCalledWith("/teams/team-1/analytics/overview");
+  });
+
+  it("offers every creation flow from the header", async () => {
+    renderLayout(appRoutes.resource("resource-1"));
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Create" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Resource" })).toHaveAttribute(
+      "href",
+      appRoutes.newResource
+    );
+    expect(within(menu).getByRole("menuitem", { name: "Check" })).toHaveAttribute(
+      "href",
+      `${appRoutes.checks}?new=1`
+    );
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(7);
+  });
+
   it("shows one Guide entry and opens contextual help from the sidebar", () => {
     renderLayout(appRoutes.resource("resource-1"));
 
@@ -150,13 +192,16 @@ describe("ProtectedLayout navigation", () => {
 });
 
 function renderLayout(path: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/app" element={<ProtectedLayout />}>
-          <Route path={appPaths.resource} element={<div>Resource page</div>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/app" element={<ProtectedLayout />}>
+            <Route path={appPaths.resource} element={<div>Resource page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }

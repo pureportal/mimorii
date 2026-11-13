@@ -19,6 +19,7 @@ import { ConfirmationDialog } from "../components/ui/confirmation-dialog";
 import { Select } from "../components/ui/input";
 import { api } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
+import { useCreateIntent } from "../lib/create-intent";
 import { useAuth } from "../lib/auth";
 import { formatCount } from "../lib/format";
 import { resourceOptionLabels } from "../lib/resource-option-labels";
@@ -48,6 +49,11 @@ export function HeartbeatsPage() {
   const resources = useQuery({
     queryKey: ["resources", teamId],
     queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
+  });
+  useCreateIntent(resources.isSuccess && activeTeam!.role !== "viewer", () => {
+    if (!resources.data?.length) return;
+    setSelected(null);
+    setFormOpen(true);
   });
   const refresh = async () => {
     await Promise.all([

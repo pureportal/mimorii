@@ -20,6 +20,7 @@ import { Field, FieldLabel } from "../components/ui/field";
 import { Input, Textarea } from "../components/ui/input";
 import { api, jsonBody } from "../lib/api";
 import { appRoutes } from "../lib/app-navigation";
+import { useCreateIntent } from "../lib/create-intent";
 import { useAuth } from "../lib/auth";
 import { formatCount } from "../lib/format";
 import { slugify } from "../lib/slug";
@@ -42,6 +43,14 @@ export function StatusPagesPage() {
     queryKey: ["resources", teamId],
     queryFn: () => api<ResourceSummary[]>(`/teams/${teamId}/resources`),
   });
+  useCreateIntent(
+    resources.isSuccess && (activeTeam!.role === "owner" || activeTeam!.role === "admin"),
+    () => {
+      if (!resources.data?.length) return;
+      setSelected(null);
+      setDialogOpen(true);
+    }
+  );
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["status-pages", teamId] });
   const toggle = useMutation({
     mutationFn: (page: StatusPageSummary) =>
