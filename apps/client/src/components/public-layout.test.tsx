@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { LocaleProvider } from "../lib/locale";
 import { PublicLayout } from "./public-layout";
 
 const privacyMock = vi.hoisted(() => ({
@@ -62,6 +63,32 @@ describe("PublicLayout", () => {
     expect(window.localStorage.getItem("mimorii.public-theme")).toBe("dark");
   });
 
+  it("switches the public chrome language and remembers the choice", () => {
+    renderLayout();
+    const footer = screen.getByRole("contentinfo");
+    expect(within(footer).getByRole("link", { name: "Imprint" })).toHaveAttribute(
+      "href",
+      "/imprint"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Deutsch" }));
+
+    expect(within(footer).getByRole("link", { name: "Impressum" })).toHaveAttribute(
+      "href",
+      "/imprint"
+    );
+    expect(within(footer).getByRole("link", { name: "Datenschutz" })).toHaveAttribute(
+      "href",
+      "/privacy"
+    );
+    expect(within(footer).getByRole("link", { name: "Nutzungsbedingungen" })).toHaveAttribute(
+      "href",
+      "/terms"
+    );
+    expect(document.documentElement).toHaveAttribute("lang", "de");
+    expect(window.localStorage.getItem("mimorii.locale")).toBe("de");
+  });
+
   it("keeps the public chrome visible while route content loads", () => {
     renderLayout(<SuspendedContent />);
 
@@ -73,11 +100,13 @@ describe("PublicLayout", () => {
 function renderLayout(content: ReactNode = <h1>Public content</h1>) {
   return render(
     <MemoryRouter initialEntries={["/terms"]}>
-      <Routes>
-        <Route element={<PublicLayout />}>
-          <Route path="/terms" element={content} />
-        </Route>
-      </Routes>
+      <LocaleProvider>
+        <Routes>
+          <Route element={<PublicLayout />}>
+            <Route path="/terms" element={content} />
+          </Route>
+        </Routes>
+      </LocaleProvider>
     </MemoryRouter>
   );
 }

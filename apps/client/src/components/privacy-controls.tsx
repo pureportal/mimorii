@@ -199,11 +199,7 @@ export function PrivacyControls() {
 export function PrivacySettingsButton(props: ButtonProps) {
   const { analyticsConfigured, setSettingsOpen } = usePrivacy();
   if (!analyticsConfigured) return null;
-  return (
-    <Button type="button" {...props} onClick={() => setSettingsOpen(true)}>
-      Privacy settings
-    </Button>
-  );
+  return <Button type="button" {...props} onClick={() => setSettingsOpen(true)} />;
 }
 
 function PreferenceToggle({

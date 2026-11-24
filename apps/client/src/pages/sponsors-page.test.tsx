@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LandingPage } from "./landing-page";
+import { LocaleProvider } from "../lib/locale";
 import { PrivacyProvider } from "../lib/privacy";
 import { SponsorsPage } from "./sponsors-page";
 
@@ -66,7 +67,9 @@ function renderPage(children: ReactNode) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PrivacyProvider>{children}</PrivacyProvider>
+        <LocaleProvider>
+          <PrivacyProvider>{children}</PrivacyProvider>
+        </LocaleProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );

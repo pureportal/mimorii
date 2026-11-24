@@ -6,6 +6,7 @@ import { LogsRoute } from "./components/logs/logs-route";
 import { AndroidClientLayout } from "./components/android-client-layout";
 import { PublicLayout } from "./components/public-layout";
 import { appPaths } from "./lib/app-navigation";
+import { LocaleProvider } from "./lib/locale";
 import { applicationRuntime, startupPath, type ApplicationRuntime } from "./lib/runtime";
 
 const ProtectedLayout = lazy(() =>
@@ -126,7 +127,13 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
       <Routes>
         <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
         <Route path="/status/:id/:slug" element={<PublicStatusPageView />} />
-        <Route element={androidClient ? <AndroidClientLayout /> : <PublicLayout />}>
+        <Route
+          element={
+            <LocaleProvider>
+              {androidClient ? <AndroidClientLayout /> : <PublicLayout />}
+            </LocaleProvider>
+          }
+        >
           <Route
             path="/"
             element={androidClient ? <Navigate to="/login" replace /> : <LandingPage />}

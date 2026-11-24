@@ -8,7 +8,7 @@ const purePortalSwetrix = swetrixHostname(customSwetrixEndpoint) === "swetrix.pu
 
 export function PrivacyPage() {
   return (
-    <LegalPage title="Privacy policy">
+    <LegalPage title="Privacy policy" lang="en">
       <LegalSection title="1. Scope and responsibility">
         <p>
           This policy describes personal-data processing in the Mimorii service operated by Andreas
@@ -31,7 +31,7 @@ export function PrivacyPage() {
       </LegalSection>
 
       <LegalSection title="2. Controller">
-        <LegalAddress />
+        <LegalAddress lang="en" />
         <p>
           Email: <a href={`mailto:${legalProvider.email}`}>{legalProvider.email}</a>
           <br />
@@ -261,15 +261,16 @@ export function PrivacyPage() {
         <p>
           Mimorii does not set application cookies. It uses browser local storage for the access and
           refresh tokens, their expiry times, account and team summaries, active team, selected
-          server URL, a chosen landing-page theme, the analytics choice and decision time, and, if
-          push is enabled, a random device reference and server-specific endpoint reference. The
-          browser also stores the service worker and push subscription requested for Web Push.
-          Swetrix itself does not use browser storage in this integration. This storage provides
-          functions or choices requested by the user and is used under Section 25(2) No. 2 TDDDG.
-          The session and team selection are removed on sign-out and an expired session is removed
-          when the app is next opened. Push subscriptions and endpoint references are removed when
-          push is disabled; server URL, theme, privacy choice, device reference, and service-worker
-          registration remain until changed or browser site data is cleared.
+          server URL, a chosen landing-page theme and language, the analytics choice and decision
+          time, and, if push is enabled, a random device reference and server-specific endpoint
+          reference. The browser also stores the service worker and push subscription requested for
+          Web Push. Swetrix itself does not use browser storage in this integration. This storage
+          provides functions or choices requested by the user and is used under Section 25(2) No. 2
+          TDDDG. The session and team selection are removed on sign-out and an expired session is
+          removed when the app is next opened. Push subscriptions and endpoint references are
+          removed when push is disabled; server URL, theme, language, privacy choice, device
+          reference, and service-worker registration remain until changed or browser site data is
+          cleared.
         </p>
       </LegalSection>
 

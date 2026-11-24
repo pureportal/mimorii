@@ -206,7 +206,9 @@ export function SettingsPage() {
               <Link to="/terms">Terms</Link>
               <Link to="/imprint">Imprint</Link>
             </nav>
-            <PrivacySettingsButton variant="outline" className="justify-self-start" />
+            <PrivacySettingsButton variant="outline" className="justify-self-start">
+              Privacy settings
+            </PrivacySettingsButton>
           </div>
         </CardContent>
       </Card>

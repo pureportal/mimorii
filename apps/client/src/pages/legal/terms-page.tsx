@@ -4,12 +4,12 @@ import { Link } from "react-router-dom";
 
 export function TermsPage() {
   return (
-    <LegalPage title="Terms of Use">
+    <LegalPage title="Terms of Use" lang="en">
       <LegalSection title="1. Provider and scope">
         <p>
           These Terms govern use of Mimorii provided by Andreas Ehrhardt, trading as PurePortal:
         </p>
-        <LegalAddress />
+        <LegalAddress lang="en" />
         <p>
           Contact: <a href={`mailto:${legalProvider.email}`}>{legalProvider.email}</a>. They apply
           to the hosted service offered by PurePortal. If an independent operator hosts Mimorii,
