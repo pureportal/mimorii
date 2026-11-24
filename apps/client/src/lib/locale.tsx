@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
@@ -66,4 +67,19 @@ export function useLocale(): LocaleContextValue {
   const context = useContext(LocaleContext);
   if (!context) throw new Error("useLocale must be used inside LocaleProvider");
   return context;
+}
+
+export function useAlternateLanguageLinks(path: string) {
+  useEffect(() => {
+    const url = `${window.location.origin}${path}`;
+    const links = [...locales, "x-default" as const].map((language) => {
+      const link = document.createElement("link");
+      link.rel = "alternate";
+      link.hreflang = language;
+      link.href = language === "x-default" ? url : `${url}?lang=${language}`;
+      document.head.append(link);
+      return link;
+    });
+    return () => links.forEach((link) => link.remove());
+  }, [path]);
 }

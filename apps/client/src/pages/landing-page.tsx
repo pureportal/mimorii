@@ -8,7 +8,7 @@ import { SponsorCarousel } from "../components/sponsor-carousel";
 import { TierArtwork } from "../components/tier-artwork";
 import { Button } from "../components/ui/button";
 import { cn } from "../lib/cn";
-import { locales, useLocale } from "../lib/locale";
+import { useAlternateLanguageLinks, useLocale } from "../lib/locale";
 import { useSponsors } from "../lib/sponsors";
 import { getSponsorshipTierDetails } from "../lib/sponsorship";
 import { landingCopy, type LandingCopy } from "./landing-copy";
@@ -138,27 +138,16 @@ export function LandingPage() {
 }
 
 function useLandingMeta(meta: LandingCopy["meta"]) {
+  useAlternateLanguageLinks("/");
   useEffect(() => {
     const previousTitle = document.title;
     const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     const previousDescription = description?.content;
     document.title = meta.title;
     if (description) description.content = meta.description;
-    const alternates = [...locales, "x-default" as const].map((language) => {
-      const link = document.createElement("link");
-      link.rel = "alternate";
-      link.hreflang = language;
-      link.href =
-        language === "x-default"
-          ? `${window.location.origin}/`
-          : `${window.location.origin}/?lang=${language}`;
-      document.head.append(link);
-      return link;
-    });
     return () => {
       document.title = previousTitle;
       if (description && previousDescription) description.content = previousDescription;
-      alternates.forEach((link) => link.remove());
     };
   }, [meta]);
 }

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { legalEffectiveDate, legalProvider } from "../lib/legal";
 import { cn } from "../lib/cn";
-import { useLocale, type Locale } from "../lib/locale";
+import { useAlternateLanguageLinks, useLocale, type Locale } from "../lib/locale";
 
 const legalNavigation: Record<Locale, { to: string; label: string }[]> = {
   en: [
@@ -24,16 +24,15 @@ const addressCopy: Record<Locale, { tradingAs: string; country: string }> = {
 
 export function LegalPage({
   title,
-  lang,
   children,
   showEffectiveDate = true,
 }: {
   title: string;
-  lang: Locale;
   children: ReactNode;
   showEffectiveDate?: boolean;
 }) {
   const { locale } = useLocale();
+  useAlternateLanguageLinks(useLocation().pathname);
 
   return (
     <main className="mx-auto grid w-full max-w-6xl gap-10 px-5 pb-20 pt-10 lg:grid-cols-[14rem_minmax(0,1fr)] lg:px-8 lg:pb-28 lg:pt-16">
@@ -56,14 +55,13 @@ export function LegalPage({
           </NavLink>
         ))}
       </nav>
-      <article
-        lang={lang}
-        className="min-w-0 rounded-3xl border border-line bg-surface p-6 shadow-card sm:p-10"
-      >
+      <article className="min-w-0 rounded-3xl border border-line bg-surface p-6 shadow-card sm:p-10">
         <header className="border-b border-line pb-8">
-          <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">{title}</h1>
+          <h1 className="font-display text-4xl font-black tracking-tight break-words hyphens-auto sm:text-5xl">
+            {title}
+          </h1>
           {showEffectiveDate ? (
-            <p className="mt-3 text-sm text-muted">Effective {legalEffectiveDate}</p>
+            <p className="mt-3 text-sm text-muted">{legalEffectiveDate[locale]}</p>
           ) : null}
         </header>
         <div className="mt-8 grid gap-10">{children}</div>
@@ -75,7 +73,9 @@ export function LegalPage({
 export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="grid gap-4">
-      <h2 className="font-display text-2xl font-bold tracking-tight">{title}</h2>
+      <h2 className="font-display text-2xl font-bold tracking-tight break-words hyphens-auto">
+        {title}
+      </h2>
       <div className="grid gap-4 text-sm leading-7 text-muted [&_a]:font-semibold [&_a]:text-violet-strong [&_a]:underline [&_a]:underline-offset-4 [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-ink [&_ul]:grid [&_ul]:list-disc [&_ul]:gap-2 [&_ul]:pl-5">
         {children}
       </div>
@@ -83,8 +83,8 @@ export function LegalSection({ title, children }: { title: string; children: Rea
   );
 }
 
-export function LegalAddress({ lang }: { lang: Locale }) {
-  const copy = addressCopy[lang];
+export function LegalAddress() {
+  const copy = addressCopy[useLocale().locale];
 
   return (
     <address className="not-italic">

@@ -1,12 +1,16 @@
+import type { Locale } from "./locale";
+
 export const legalProvider = {
   name: "Andreas Ehrhardt",
   businessName: "PurePortal",
   street: "Hohenzollernstraße 17",
   locality: "72172 Sulz am Neckar",
-  country: "Germany",
   email: "support@pureportal.io",
   phone: "+49 174 7297964",
   website: "https://pureportal.io",
 } as const;
 
-export const legalEffectiveDate = "13 August 2026";
+export const legalEffectiveDate: Record<Locale, string> = {
+  en: "Effective 13 August 2026",
+  de: "Stand: 13. August 2026",
+};

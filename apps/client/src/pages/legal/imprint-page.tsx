@@ -9,10 +9,10 @@ export function ImprintPage() {
 
   if (locale === "de") {
     return (
-      <LegalPage title="Impressum" lang="de" showEffectiveDate={false}>
+      <LegalPage title="Impressum" showEffectiveDate={false}>
         <LegalSection title="Anbieter">
           <p>Angaben nach § 5 DDG:</p>
-          <LegalAddress lang="de" />
+          <LegalAddress />
         </LegalSection>
 
         <ContactSection emailLabel="E-Mail" phoneLabel="Telefon" title="Kontakt" />
@@ -41,10 +41,10 @@ export function ImprintPage() {
   }
 
   return (
-    <LegalPage title="Imprint" lang="en" showEffectiveDate={false}>
+    <LegalPage title="Imprint" showEffectiveDate={false}>
       <LegalSection title="Provider">
         <p>Information under Section 5 DDG:</p>
-        <LegalAddress lang="en" />
+        <LegalAddress />
       </LegalSection>
 
       <ContactSection emailLabel="Email" phoneLabel="Phone" title="Contact" />
