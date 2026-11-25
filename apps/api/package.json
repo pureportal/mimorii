@@ -1,6 +1,6 @@
 {
   "name": "@mimorii/api",
-  "version": "15.4.1",
+  "version": "15.4.2",
   "private": true,
   "files": [
     "dist"
