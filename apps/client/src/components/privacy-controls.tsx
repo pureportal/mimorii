@@ -2,7 +2,9 @@ import { ChartNoAxesCombined, LockKeyhole, MousePointer2, type LucideIcon } from
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/cn";
+import { useLocale } from "../lib/locale";
 import { usePrivacy } from "../lib/privacy";
+import { privacyControlsCopy } from "./privacy-controls-copy";
 import { Button, type ButtonProps } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 
@@ -17,9 +19,10 @@ export function PrivacyControls() {
   } = usePrivacy();
   const [analytics, setAnalytics] = useState(preferences?.analytics ?? false);
   const [sessionReplay, setSessionReplay] = useState(preferences?.sessionReplay ?? false);
+  const copy = privacyControlsCopy[useLocale().documentLocale];
   const consentDescription = sessionReplayConfigured
-    ? "Share optional feature-use, performance, and error data plus masked interaction replays so we can find friction, fix issues faster, and focus improvements where they matter. They stay off until you agree, and you can change your choice anytime."
-    : "Share optional feature-use, performance, and error data so we can find friction, fix issues faster, and focus improvements where they matter. It stays off until you agree, and you can change your choice anytime.";
+    ? copy.description.withReplay
+    : copy.description.withoutReplay;
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -49,7 +52,7 @@ export function PrivacyControls() {
             aria-hidden="true"
             className="pointer-events-none absolute -right-14 -top-20 -z-10 size-44 rounded-full bg-mint/12 blur-3xl"
           />
-          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_18rem] md:items-center md:gap-8">
+          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(18rem,auto)] md:items-center md:gap-8">
             <div className="flex items-start gap-3.5 sm:gap-4">
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-lavender/30 bg-gradient-to-br from-lavender-soft via-surface to-mint/25 text-violet-strong shadow-sm sm:size-12">
                 <ChartNoAxesCombined className="size-5" aria-hidden="true" />
@@ -59,7 +62,7 @@ export function PrivacyControls() {
                   id="privacy-consent-title"
                   className="font-display text-xl font-bold tracking-tight text-ink"
                 >
-                  Help make Mimorii better
+                  {copy.title}
                 </h2>
                 <p
                   id="privacy-consent-description"
@@ -72,30 +75,30 @@ export function PrivacyControls() {
             <div className="rounded-2xl border border-line/80 bg-canvas/65 p-2.5">
               <div
                 role="group"
-                aria-label="Privacy choices"
+                aria-label={copy.choices}
                 className="grid gap-2 min-[400px]:grid-cols-2"
               >
                 <Button
                   type="button"
                   aria-describedby="privacy-consent-description"
-                  className="w-full bg-surface/90"
+                  className="w-full whitespace-nowrap bg-surface/90"
                   variant="outline"
                   size="lg"
                   onClick={() => savePreferences({ analytics: false, sessionReplay: false })}
                 >
-                  Reject
+                  {copy.reject}
                 </Button>
                 <Button
                   type="button"
                   aria-describedby="privacy-consent-description"
-                  className="w-full bg-surface/90"
+                  className="w-full whitespace-nowrap bg-surface/90"
                   variant="outline"
                   size="lg"
                   onClick={() =>
                     savePreferences({ analytics: true, sessionReplay: sessionReplayConfigured })
                   }
                 >
-                  Accept all
+                  {copy.acceptAll}
                 </Button>
               </div>
               <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3">
@@ -106,13 +109,13 @@ export function PrivacyControls() {
                   size="sm"
                   onClick={() => setSettingsOpen(true)}
                 >
-                  Choose settings
+                  {copy.chooseSettings}
                 </Button>
                 <Link
                   className="inline-flex h-8 items-center px-2 text-xs font-semibold text-violet-strong underline decoration-violet-strong/35 underline-offset-4 hover:decoration-violet-strong"
                   to="/privacy"
                 >
-                  Privacy policy
+                  {copy.privacyPolicy}
                 </Link>
               </div>
             </div>
@@ -121,26 +124,26 @@ export function PrivacyControls() {
       ) : null}
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-lg p-5 sm:p-6">
+        <DialogContent className="max-w-lg p-5 sm:p-6" closeLabel={copy.close}>
           <div
             aria-hidden="true"
             className="absolute inset-x-8 top-0 h-0.5 bg-gradient-to-r from-coral via-lavender to-mint"
           />
-          <DialogHeader title="Privacy settings" />
+          <DialogHeader title={copy.settingsTitle} />
           <div className="grid gap-3">
             <PreferenceToggle
               id="required-storage"
               icon={LockKeyhole}
-              label="Required storage"
-              description="Saves your privacy choice and essential session data. Always active."
+              label={copy.requiredStorage.label}
+              description={copy.requiredStorage.description}
               checked
               disabled
             />
             <PreferenceToggle
               id="usage-analytics"
               icon={ChartNoAxesCombined}
-              label="Usage analytics"
-              description="Page views, feature use, performance, errors, device details, and an internal account ID help us prioritize improvements."
+              label={copy.usageAnalytics.label}
+              description={copy.usageAnalytics.description}
               checked={analytics}
               onChange={(checked) => {
                 setAnalytics(checked);
@@ -151,8 +154,12 @@ export function PrivacyControls() {
               <PreferenceToggle
                 id="session-replay"
                 icon={MousePointer2}
-                label="Session replay"
-                description={`Sampled, masked interaction recordings reveal where workflows become difficult and may still contain personal data.${analytics ? "" : " Requires usage analytics."}`}
+                label={copy.sessionReplay.label}
+                description={
+                  analytics
+                    ? copy.sessionReplay.description
+                    : `${copy.sessionReplay.description} ${copy.sessionReplay.requiresAnalytics}`
+                }
                 checked={sessionReplay}
                 disabled={!analytics}
                 onChange={setSessionReplay}
@@ -169,7 +176,7 @@ export function PrivacyControls() {
                 setSettingsOpen(false);
               }}
             >
-              Reject optional
+              {copy.rejectOptional}
             </Button>
             <Button
               type="button"
@@ -180,7 +187,7 @@ export function PrivacyControls() {
                 setSettingsOpen(false);
               }}
             >
-              Save choices
+              {copy.saveChoices}
             </Button>
           </div>
           <Link
@@ -188,7 +195,7 @@ export function PrivacyControls() {
             to="/privacy"
             onClick={() => setSettingsOpen(false)}
           >
-            Privacy policy
+            {copy.privacyPolicy}
           </Link>
         </DialogContent>
       </Dialog>

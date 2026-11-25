@@ -30,7 +30,6 @@ describe("legal pages", () => {
     renderAt(path, page);
 
     expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute("lang", "en");
   });
 
   it.each([
@@ -44,7 +43,6 @@ describe("legal pages", () => {
     expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: section })).toBeInTheDocument();
     expect(screen.getAllByText(/handelnd unter PurePortal/).length).toBeGreaterThan(0);
-    expect(document.documentElement).toHaveAttribute("lang", "de");
     expect(document.head.querySelector('link[hreflang="de"]')).toHaveAttribute(
       "href",
       `${window.location.origin}${path}?lang=de`

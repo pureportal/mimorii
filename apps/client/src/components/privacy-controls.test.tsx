@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider, useLocalizedDocument } from "../lib/locale";
 import { usePrivacy } from "../lib/privacy";
 import { PrivacyControls } from "./privacy-controls";
 
@@ -9,7 +10,10 @@ vi.mock("../lib/privacy", () => ({ usePrivacy: vi.fn() }));
 const usePrivacyMock = vi.mocked(usePrivacy);
 
 describe("privacy controls", () => {
-  beforeEach(() => usePrivacyMock.mockReset());
+  beforeEach(() => {
+    usePrivacyMock.mockReset();
+    window.localStorage.clear();
+  });
   afterEach(cleanup);
 
   it("offers equally direct accept-all and reject actions", () => {
@@ -130,6 +134,41 @@ describe("privacy controls", () => {
     expect(setSettingsOpen).toHaveBeenCalledWith(false);
   });
 
+  it("follows the German language of a localized page", () => {
+    window.localStorage.setItem("mimorii.locale", "de");
+    const savePreferences = vi.fn();
+    renderControls({ savePreferences }, { localizedPage: true });
+
+    expect(
+      screen.getByRole("heading", { name: "Helfen Sie, Mimorii zu verbessern" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Alle akzeptieren" }));
+    expect(savePreferences).toHaveBeenCalledWith({ analytics: true, sessionReplay: true });
+    expect(screen.getByRole("button", { name: "Ablehnen" })).toBeEnabled();
+    expect(screen.getByRole("link", { name: "Datenschutzerklärung" })).toHaveAttribute(
+      "href",
+      "/privacy"
+    );
+  });
+
+  it("shows German settings on a localized page", () => {
+    window.localStorage.setItem("mimorii.locale", "de");
+    renderControls({ settingsOpen: true }, { localizedPage: true });
+
+    expect(screen.getByRole("dialog", { name: "Datenschutzeinstellungen" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Nutzungsanalyse" })).not.toBeChecked();
+    expect(screen.getByText(/Erfordert die Nutzungsanalyse/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Auswahl speichern" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Schließen" })).toBeInTheDocument();
+  });
+
+  it("stays English outside localized pages", () => {
+    window.localStorage.setItem("mimorii.locale", "de");
+    renderControls();
+
+    expect(screen.getByRole("heading", { name: "Help make Mimorii better" })).toBeInTheDocument();
+  });
+
   it("renders no controls when analytics is not configured", () => {
     const { container } = renderControls({ analyticsConfigured: false });
 
@@ -137,7 +176,15 @@ describe("privacy controls", () => {
   });
 });
 
-function renderControls(overrides: Partial<ReturnType<typeof usePrivacy>> = {}) {
+function LocalizedPage() {
+  useLocalizedDocument();
+  return null;
+}
+
+function renderControls(
+  overrides: Partial<ReturnType<typeof usePrivacy>> = {},
+  { localizedPage = false } = {}
+) {
   usePrivacyMock.mockReturnValue({
     preferences: null,
     analyticsConfigured: true,
@@ -150,7 +197,10 @@ function renderControls(overrides: Partial<ReturnType<typeof usePrivacy>> = {}) 
 
   return render(
     <MemoryRouter>
-      <PrivacyControls />
+      <LocaleProvider>
+        {localizedPage ? <LocalizedPage /> : null}
+        <PrivacyControls />
+      </LocaleProvider>
     </MemoryRouter>
   );
 }

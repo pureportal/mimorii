@@ -268,19 +268,20 @@ export function GermanPrivacyPolicy() {
             {sessionReplayConfigured ? (
               <p>
                 Die Sitzungsaufzeichnung ist eine separate optionale Einstellung und wird nur
-                einbezogen, wenn Sie „Accept all“ wählen oder sie in den Datenschutzeinstellungen
-                aktivieren. Ist sie aktiviert, erhält Swetrix stichprobenartige Aufzeichnungen von
-                Interaktionen. Der Recorder wird mit der Anwendung ausgeliefert; alle Texte und
-                Eingaben werden maskiert, Bilder und andere visuelle Medien werden blockiert, und
-                die Aufzeichnung von iframes ist deaktiviert. Die Aufzeichnung ist auf feste Routen
-                beschränkt und auf Anmelde-, Registrierungs-, Einladungs-, öffentlichen Status- und
-                dynamischen Routen deaktiviert. Diese Maßnahmen verringern die Möglichkeit, dass
-                personenbezogene Daten erfasst werden, können sie aber nicht ausschließen.
+                einbezogen, wenn Sie „Alle akzeptieren“ wählen oder sie unter
+                „Datenschutzeinstellungen“ aktivieren. Ist sie aktiviert, erhält Swetrix
+                stichprobenartige Aufzeichnungen von Interaktionen. Der Recorder wird mit der
+                Anwendung ausgeliefert; alle Texte und Eingaben werden maskiert, Bilder und andere
+                visuelle Medien werden blockiert, und die Aufzeichnung von iframes ist deaktiviert.
+                Die Aufzeichnung ist auf feste Routen beschränkt und auf Anmelde-, Registrierungs-,
+                Einladungs-, öffentlichen Status- und dynamischen Routen deaktiviert. Diese
+                Maßnahmen verringern die Möglichkeit, dass personenbezogene Daten erfasst werden,
+                können sie aber nicht ausschließen.
               </p>
             ) : null}
             <p>
               Analyse und Sitzungsaufzeichnung starten erst nach der jeweiligen Auswahl. Die
-              Einwilligung kann jederzeit über die Datenschutzeinstellungen geändert werden. Ein
+              Einwilligung kann jederzeit unter „Datenschutzeinstellungen“ geändert werden. Ein
               Widerruf beendet die weitere Erhebung; die Rechtmäßigkeit der bis zum Widerruf
               erfolgten Verarbeitung bleibt unberührt. Das Browsersignal „Do Not Track“ wird
               ebenfalls beachtet.

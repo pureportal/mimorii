@@ -12,10 +12,12 @@ export function DialogContent({
   className,
   children,
   closeDisabled = false,
+  closeLabel = "Close",
   presentation = "modal",
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   closeDisabled?: boolean;
+  closeLabel?: string;
   presentation?: "modal" | "drawer";
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -53,7 +55,7 @@ export function DialogContent({
           )}
         >
           <X className="size-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

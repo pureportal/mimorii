@@ -8,6 +8,7 @@ import { AndroidRouteBackHandler } from "./components/android-route-back-handler
 import { PrivacyControls } from "./components/privacy-controls";
 import { PushEndpointSync } from "./components/push-endpoint-sync";
 import { AuthProvider } from "./lib/auth";
+import { LocaleProvider } from "./lib/locale";
 import { PrivacyProvider } from "./lib/privacy";
 import { applicationRuntime } from "./lib/runtime";
 import "./styles.css";
@@ -27,26 +28,28 @@ root.render(
       <BrowserRouter>
         <AndroidRouteBackHandler enabled={applicationRuntime === "android-client"} />
         <PrivacyProvider>
-          <AuthProvider>
-            <App />
-            <PushEndpointSync />
-            <Toaster
-              position="top-right"
-              theme="dark"
-              richColors
-              closeButton
-              offset={{
-                top: "calc(1rem + var(--safe-area-top))",
-                right: "calc(1rem + var(--safe-area-right))",
-              }}
-              mobileOffset={{
-                top: "calc(0.75rem + var(--safe-area-top))",
-                right: "calc(0.75rem + var(--safe-area-right))",
-                left: "calc(0.75rem + var(--safe-area-left))",
-              }}
-            />
-            <PrivacyControls />
-          </AuthProvider>
+          <LocaleProvider>
+            <AuthProvider>
+              <App />
+              <PushEndpointSync />
+              <Toaster
+                position="top-right"
+                theme="dark"
+                richColors
+                closeButton
+                offset={{
+                  top: "calc(1rem + var(--safe-area-top))",
+                  right: "calc(1rem + var(--safe-area-right))",
+                }}
+                mobileOffset={{
+                  top: "calc(0.75rem + var(--safe-area-top))",
+                  right: "calc(0.75rem + var(--safe-area-right))",
+                  left: "calc(0.75rem + var(--safe-area-left))",
+                }}
+              />
+              <PrivacyControls />
+            </AuthProvider>
+          </LocaleProvider>
         </PrivacyProvider>
       </BrowserRouter>
     </QueryClientProvider>

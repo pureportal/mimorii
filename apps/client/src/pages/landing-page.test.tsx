@@ -58,7 +58,7 @@ describe("landing page", () => {
     expect(document.title).toBe("Mimorii · Uptime, server health and status pages");
   });
 
-  it("renders the saved German language with matching document language", () => {
+  it("renders the saved German language with language alternates", () => {
     window.localStorage.setItem("mimorii.locale", "de");
     renderLanding();
 
@@ -66,7 +66,6 @@ describe("landing page", () => {
       screen.getByRole("heading", { level: 1, name: "Sehen Sie, wie es Ihren Diensten geht." })
     ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Mimorii-Übersicht/ })).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute("lang", "de");
     expect(document.head.querySelector('link[hreflang="de"]')).toHaveAttribute(
       "href",
       `${window.location.origin}/?lang=de`

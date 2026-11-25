@@ -33,31 +33,33 @@ export function detectLocale(): Locale {
 
 interface LocaleContextValue {
   locale: Locale;
+  documentLocale: Locale;
   setLocale: (locale: Locale) => void;
+  setDocumentLocalized: (localized: boolean) => void;
 }
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ children }: PropsWithChildren) {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
+  const [documentLocalized, setDocumentLocalized] = useState(false);
+  const documentLocale = documentLocalized ? locale : "en";
 
   useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.lang = locale;
-    return () => {
-      root.lang = "en";
-    };
-  }, [locale]);
+    document.documentElement.lang = documentLocale;
+  }, [documentLocale]);
 
   const value = useMemo<LocaleContextValue>(
     () => ({
       locale,
+      documentLocale,
       setLocale: (next) => {
         window.localStorage.setItem(LOCALE_KEY, next);
         setLocaleState(next);
       },
+      setDocumentLocalized,
     }),
-    [locale]
+    [locale, documentLocale]
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
@@ -67,6 +69,14 @@ export function useLocale(): LocaleContextValue {
   const context = useContext(LocaleContext);
   if (!context) throw new Error("useLocale must be used inside LocaleProvider");
   return context;
+}
+
+export function useLocalizedDocument() {
+  const { setDocumentLocalized } = useLocale();
+  useLayoutEffect(() => {
+    setDocumentLocalized(true);
+    return () => setDocumentLocalized(false);
+  }, [setDocumentLocalized]);
 }
 
 export function useAlternateLanguageLinks(path: string) {

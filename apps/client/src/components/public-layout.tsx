@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { useAndroidBackHandler } from "../lib/android-back";
 import { cn } from "../lib/cn";
-import { locales, useLocale, type Locale } from "../lib/locale";
+import { locales, useLocale, useLocalizedDocument, type Locale } from "../lib/locale";
 import { usePublicTheme, type PublicTheme } from "../lib/public-theme";
 import { Brand } from "./brand";
 import { LoadingState } from "./page-state";
@@ -56,6 +56,7 @@ export function PublicLayout() {
   const { theme, toggleTheme } = usePublicTheme();
   const { locale } = useLocale();
   const copy = layoutCopy[locale];
+  useLocalizedDocument();
 
   return (
     <MotionConfig reducedMotion="user">
