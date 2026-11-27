@@ -36,7 +36,9 @@ export class ResourceTelemetryService {
     }));
   }
 
-  values(telemetry: Telemetry): Partial<Record<ResourceAlertMetric, number | boolean>> {
+  values(
+    telemetry: Telemetry
+  ): Partial<Record<ResourceMetricName | ResourceAlertMetric, number | boolean>> {
     if ("schemaVersion" in telemetry) {
       return {
         batteryPercent: telemetry.battery.percent ?? undefined,

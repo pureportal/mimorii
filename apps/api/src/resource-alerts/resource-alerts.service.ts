@@ -63,7 +63,7 @@ export class ResourceAlertsService {
     input: CreateResourceAlertDto
   ): Promise<ResourceAlertRuleSummary> {
     const resource = await this.requireResource(userId, teamId, resourceId, "admin");
-    this.validateResourceMetric(input.metric, resource.agent_kind);
+    this.requireMobileResource(resource.agent_kind);
     this.validate(input.metric, input.operator, input.threshold, input.recoveryThreshold ?? null);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -115,7 +115,7 @@ export class ResourceAlertsService {
       input.recoveryThreshold === undefined
         ? parseNullableValue(row.recovery_threshold_json)
         : input.recoveryThreshold;
-    this.validateResourceMetric(metric, resource.agent_kind);
+    this.requireMobileResource(resource.agent_kind);
     this.validate(metric, operator, threshold, recoveryThreshold);
     const enabled = input.enabled ?? Boolean(row.enabled);
     await this.database.run(
@@ -296,27 +296,10 @@ export class ResourceAlertsService {
     }
   }
 
-  private validateResourceMetric(metric: ResourceAlertMetric, kind: AgentKind | null): void {
-    const desktop = new Set<ResourceAlertMetric>([
-      "cpuPercent",
-      "memoryPercent",
-      "storagePercent",
-      "loadAverage",
-      "containerCount",
-      "unhealthyContainerCount",
-    ]);
-    const mobile = new Set<ResourceAlertMetric>([
-      "batteryPercent",
-      "batteryTemperatureCelsius",
-      "memoryPercent",
-      "storagePercent",
-      "internetAvailable",
-      "lowMemory",
-      "backgroundRestricted",
-    ]);
-    const supported = kind === "desktop" ? desktop : kind === "mobile" ? mobile : null;
-    if (supported?.has(metric)) return;
-    throw new BadRequestException("Alert metric is unavailable for this resource");
+  private requireMobileResource(kind: AgentKind | null): void {
+    if (kind !== "mobile") {
+      throw new BadRequestException("Alert rules are available for Android devices");
+    }
   }
 
   private map(row: AlertRow): ResourceAlertRuleSummary {

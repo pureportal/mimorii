@@ -3,6 +3,7 @@ import type {
   IncidentSummary,
   OverviewAnalytics,
   ResourceSummary,
+  TrafficSiteSummary,
 } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,6 +12,7 @@ import {
   CalendarClock,
   Clock3,
   Gauge,
+  MousePointerClick,
   Plus,
   ShieldCheck,
   TriangleAlert,
@@ -31,7 +33,7 @@ import { useAuth } from "../lib/auth";
 import { expiringChecks } from "../lib/expiring-checks";
 import { monitorStatusPriority } from "../lib/monitor-status";
 import { formatDuration, formatLatency, formatPercent } from "../lib/format";
-import { resourceKindLabels, resourceOptionLabels } from "../lib/resource-option-labels";
+import { resourceOptionLabels, resourceTypeLabel } from "../lib/resource-option-labels";
 
 export function OverviewPage() {
   const { activeTeam } = useAuth();
@@ -56,6 +58,11 @@ export function OverviewPage() {
     queryFn: () => api<CheckSummary[]>(`/teams/${teamId}/checks`),
     refetchInterval: 30_000,
   });
+  const trafficSites = useQuery({
+    queryKey: ["traffic-sites", teamId],
+    queryFn: () => api<TrafficSiteSummary[]>(`/teams/${teamId}/traffic/sites`),
+    refetchInterval: 30_000,
+  });
 
   if (overview.isLoading || resources.isLoading) return <LoadingState />;
   if (overview.isError || resources.isError || !overview.data)
@@ -78,6 +85,7 @@ export function OverviewPage() {
   const monitors = data.checks + data.heartbeats;
   const expiring = expiringChecks(checks.data ?? []).slice(0, 6);
   const incidents = activeIncidents.data ?? [];
+  const sites = trafficSites.data ?? [];
   const uptimeTrend = timeline.map((point) => {
     const total = point.up + point.degraded + point.down;
     return total ? ((point.up + point.degraded) / total) * 100 : null;
@@ -246,9 +254,7 @@ export function OverviewPage() {
                   {resourceReason(resource) ? (
                     <StatusReason reason={resourceReason(resource)} status={resource.status} />
                   ) : (
-                    <p className="truncate text-xs text-muted">
-                      {resourceKindLabels[resource.kind]}
-                    </p>
+                    <p className="truncate text-xs text-muted">{resourceTypeLabel(resource)}</p>
                   )}
                 </div>
                 <StatusBadge status={resource.status} />
@@ -264,7 +270,7 @@ export function OverviewPage() {
         </Card>
       </section>
 
-      {incidents.length || expiring.length ? (
+      {incidents.length || expiring.length || sites.length ? (
         <section className="grid gap-4 xl:grid-cols-2">
           {incidents.length ? (
             <Card className="min-w-0">
@@ -340,6 +346,40 @@ export function OverviewPage() {
                     </Link>
                   );
                 })}
+              </CardContent>
+            </Card>
+          ) : null}
+          {sites.length ? (
+            <Card className="min-w-0">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
+                <h3 className="font-display font-bold">Traffic today</h3>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to={appRoutes.traffic}>
+                    View all <ArrowRight />
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-1 px-3 pb-3 pt-0 sm:p-5 sm:pt-2">
+                {sites.slice(0, 6).map((site) => (
+                  <Link
+                    key={site.id}
+                    to={appRoutes.trafficSite(site.id)}
+                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-ink/4"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-lavender-soft text-lavender">
+                      <MousePointerClick className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{site.resourceName}</p>
+                      <p className="truncate text-xs text-muted">
+                        {site.liveVisitors ? `${site.liveVisitors} live` : site.domains[0]}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold">
+                      {site.visitorsToday.toLocaleString()}
+                    </span>
+                  </Link>
+                ))}
               </CardContent>
             </Card>
           ) : null}

@@ -9,8 +9,6 @@ import type { AuthenticatedAgent } from "./agent-auth.js";
 import type { AgentHeartbeatDto, HostSnapshotDto } from "./agents.dto.js";
 import { AgentsService } from "./agents.service.js";
 import type { MobileDeviceStatusService } from "./mobile-device-status.service.js";
-import type { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
-import type { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 import type { ResourceImagesService } from "../resources/resource-images.service.js";
 
 const agent: AuthenticatedAgent = {
@@ -27,14 +25,6 @@ const mobileDeviceStatuses = {
   latestByAgentIds: vi.fn(async () => new Map()),
   latest: vi.fn(async () => null),
 } as unknown as MobileDeviceStatusService;
-
-const telemetry = {
-  values: vi.fn(() => ({})),
-} as unknown as ResourceTelemetryService;
-
-const alerts = {
-  evaluate: vi.fn(async () => undefined),
-} as unknown as ResourceAlertsService;
 
 const images = {
   acceptAgentFavicon: vi.fn(async () => true),
@@ -105,8 +95,6 @@ describe("AgentsService", () => {
         {} as ResultsService,
         {} as TechnologiesService,
         mobileDeviceStatuses,
-        telemetry,
-        alerts,
         images
       );
 
@@ -130,25 +118,29 @@ describe("AgentsService", () => {
     }
   );
 
-  it("does not create a Host health check for a mobile agent", async () => {
+  it("creates default device alerts instead of Host health checks for a mobile agent", async () => {
     const run = vi.fn(async (_sql: string, ..._parameters: unknown[]) => ({ changes: 1 }));
     const service = new AgentsService(
       {
         run,
-        get: vi.fn(async () => ({
-          id: "mobile-1",
-          team_id: "team-1",
-          resource_id: "mobile-1",
-          resource_name: "Phone",
-          kind: "mobile",
-          collection_interval_seconds: 900,
-          platform: null,
-          version: null,
-          capabilities_json: '["device-status"]',
-          last_seen_at: null,
-          revoked_at: null,
-          created_at: new Date().toISOString(),
-        })),
+        get: vi.fn(async (sql: string) =>
+          sql.includes("resource_alert_rules")
+            ? undefined
+            : {
+                id: "mobile-1",
+                team_id: "team-1",
+                resource_id: "mobile-1",
+                resource_name: "Phone",
+                kind: "mobile",
+                collection_interval_seconds: 900,
+                platform: null,
+                version: null,
+                capabilities_json: '["device-status"]',
+                last_seen_at: null,
+                revoked_at: null,
+                created_at: new Date().toISOString(),
+              }
+        ),
         transaction: async <T>(action: () => Promise<T>) => action(),
       } as unknown as DatabaseService,
       { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
@@ -156,14 +148,16 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
     await service.create("user-1", "team-1", { name: "Phone", kind: "mobile" });
 
     expect(run.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO checks"))).toBe(false);
+    const alertMetrics = run.mock.calls
+      .filter(([sql]) => String(sql).includes("INSERT INTO resource_alert_rules"))
+      .map((call) => call[5]);
+    expect(alertMetrics).toEqual(["batteryPercent", "batteryTemperatureCelsius", "storagePercent"]);
   });
   it("renames an agent without changing its collection interval", async () => {
     const currentAgent = {
@@ -198,8 +192,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -236,8 +228,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -254,8 +244,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -299,8 +287,6 @@ describe("AgentsService", () => {
         {} as ResultsService,
         {} as TechnologiesService,
         mobileDeviceStatuses,
-        telemetry,
-        alerts,
         images
       );
 
@@ -340,8 +326,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -386,8 +370,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -427,8 +409,6 @@ describe("AgentsService", () => {
       { record } as unknown as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -484,8 +464,6 @@ describe("AgentsService", () => {
       { record: vi.fn(async () => ({})) } as unknown as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       { acceptAgentFavicon } as unknown as ResourceImagesService
     );
     const favicon = Buffer.from("agent favicon");
@@ -529,8 +507,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       { observeAgent } as unknown as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
     const input: AgentHeartbeatDto = {
@@ -566,8 +542,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -603,8 +577,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       { observeAgent } as unknown as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -641,8 +613,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 
@@ -680,8 +650,6 @@ describe("AgentsService", () => {
       {} as ResultsService,
       {} as TechnologiesService,
       mobileDeviceStatuses,
-      telemetry,
-      alerts,
       images
     );
 

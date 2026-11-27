@@ -97,7 +97,7 @@ describe("ResourceAlertsService", () => {
   it("rejects numeric operators for boolean device conditions", async () => {
     const service = new ResourceAlertsService(
       {
-        get: vi.fn(async () => ({ id: "resource-1" })),
+        get: vi.fn(async () => ({ id: "resource-1", agent_kind: "mobile" })),
       } as unknown as DatabaseService,
       { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
       {} as AuditService,
@@ -117,7 +117,7 @@ describe("ResourceAlertsService", () => {
   it("rejects recovery thresholds on the triggering side of a numeric condition", async () => {
     const service = new ResourceAlertsService(
       {
-        get: vi.fn(async () => ({ id: "resource-1", agent_kind: "desktop" })),
+        get: vi.fn(async () => ({ id: "resource-1", agent_kind: "mobile" })),
       } as unknown as DatabaseService,
       { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
       {} as AuditService,
@@ -126,8 +126,8 @@ describe("ResourceAlertsService", () => {
 
     await expect(
       service.create("user-1", "team-1", "resource-1", {
-        name: "CPU",
-        metric: "cpuPercent",
+        name: "Memory",
+        metric: "memoryPercent",
         operator: "greaterThanOrEqual",
         threshold: 90,
         recoveryThreshold: 95,
@@ -142,5 +142,25 @@ describe("ResourceAlertsService", () => {
         recoveryThreshold: 10,
       })
     ).rejects.toThrow("Recovery threshold must return the metric past the trigger");
+  });
+
+  it("keeps desktop thresholds on host checks", async () => {
+    const service = new ResourceAlertsService(
+      {
+        get: vi.fn(async () => ({ id: "resource-1", agent_kind: "desktop" })),
+      } as unknown as DatabaseService,
+      { require: vi.fn(async () => ({})) } as unknown as TeamAccessService,
+      {} as AuditService,
+      {} as NotificationsService
+    );
+
+    await expect(
+      service.create("user-1", "team-1", "resource-1", {
+        name: "Memory",
+        metric: "memoryPercent",
+        operator: "greaterThan",
+        threshold: 90,
+      })
+    ).rejects.toThrow("Alert rules are available for Android devices");
   });
 });

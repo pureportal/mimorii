@@ -21,6 +21,8 @@ import {
   type HostCheckConfig,
   type HostSnapshot,
   type MobileDeviceStatus,
+  type ResourceAlertMetric,
+  type ResourceAlertOperator,
 } from "@mimorii/contracts";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -41,8 +43,6 @@ import type {
 import { ResultsService } from "../checks/results.service.js";
 import { TechnologiesService } from "../technologies/technologies.service.js";
 import { MobileDeviceStatusService } from "./mobile-device-status.service.js";
-import { ResourceTelemetryService } from "../common/resource-telemetry.service.js";
-import { ResourceAlertsService } from "../resource-alerts/resource-alerts.service.js";
 import { ResourceImagesService } from "../resources/resource-images.service.js";
 
 interface AgentRow {
@@ -76,6 +76,36 @@ interface AgentResourceRow {
   kind: "host" | "device" | "service";
 }
 
+const defaultDeviceAlerts = [
+  {
+    name: "Low battery",
+    metric: "batteryPercent",
+    operator: "lessThan",
+    threshold: 15,
+    recoveryThreshold: 25,
+  },
+  {
+    name: "Battery overheating",
+    metric: "batteryTemperatureCelsius",
+    operator: "greaterThanOrEqual",
+    threshold: 45,
+    recoveryThreshold: 40,
+  },
+  {
+    name: "Storage almost full",
+    metric: "storagePercent",
+    operator: "greaterThan",
+    threshold: 90,
+    recoveryThreshold: 85,
+  },
+] satisfies Array<{
+  name: string;
+  metric: ResourceAlertMetric;
+  operator: ResourceAlertOperator;
+  threshold: number;
+  recoveryThreshold: number;
+}>;
+
 @Injectable()
 export class AgentsService {
   constructor(
@@ -85,8 +115,6 @@ export class AgentsService {
     private readonly results: ResultsService,
     private readonly technologies: TechnologiesService,
     private readonly mobileDeviceStatuses: MobileDeviceStatusService,
-    private readonly telemetry: ResourceTelemetryService,
-    private readonly alerts: ResourceAlertsService,
     private readonly images: ResourceImagesService
   ) {}
 
@@ -172,6 +200,9 @@ export class AgentsService {
         now
       );
       await reconcileAgentRelationships(this.database, resourceId);
+      if (input.kind === "mobile") {
+        await this.insertDefaultDeviceAlerts(teamId, resourceId, userId, now);
+      }
       if (hostCheckId && diskCheckId && input.platform) {
         const existingTypes = input.resourceId
           ? new Set(
@@ -449,7 +480,6 @@ export class AgentsService {
       this.normalizeSnapshot(snapshot, receivedAt)
     );
     const latestSnapshot = snapshots.at(-1);
-    let latestInsertedSnapshot: HostSnapshot | undefined;
     let acceptedResults = 0;
 
     await this.database.transaction(async () => {
@@ -487,7 +517,6 @@ export class AgentsService {
           }
           continue;
         }
-        latestInsertedSnapshot = snapshot;
         await this.technologies.observeAgent(agent.id, snapshot.technologies, snapshot.observedAt);
       }
       for (const result of input.results) {
@@ -496,15 +525,6 @@ export class AgentsService {
         }
       }
     });
-
-    if (latestInsertedSnapshot) {
-      await this.alerts.evaluate(
-        agent.teamId,
-        agent.resourceId,
-        this.telemetry.values(latestInsertedSnapshot),
-        latestInsertedSnapshot.observedAt
-      );
-    }
 
     return { acceptedAt: receivedAt, acceptedSnapshots: snapshots.length, acceptedResults };
   }
@@ -694,6 +714,38 @@ export class AgentsService {
       );
     }
     return interval;
+  }
+
+  private async insertDefaultDeviceAlerts(
+    teamId: string,
+    resourceId: string,
+    userId: string,
+    now: string
+  ): Promise<void> {
+    const existing = await this.database.get<{ id: string }>(
+      "SELECT id FROM resource_alert_rules WHERE resource_id = ? LIMIT 1",
+      resourceId
+    );
+    if (existing) return;
+    for (const rule of defaultDeviceAlerts) {
+      await this.database.run(
+        `INSERT INTO resource_alert_rules
+         (id, team_id, resource_id, name, metric, operator, threshold_json,
+          recovery_threshold_json, required_samples, enabled, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, 2, TRUE, ?, ?, ?)`,
+        randomUUID(),
+        teamId,
+        resourceId,
+        rule.name,
+        rule.metric,
+        rule.operator,
+        JSON.stringify(rule.threshold),
+        JSON.stringify(rule.recoveryThreshold),
+        userId,
+        now,
+        now
+      );
+    }
   }
 
   private defaultHostCheckConfig(platform: DesktopAgentPlatform): HostCheckConfig {

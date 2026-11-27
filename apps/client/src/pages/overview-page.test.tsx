@@ -1,4 +1,4 @@
-import type { OverviewAnalytics, ResourceSummary } from "@mimorii/contracts";
+import type { OverviewAnalytics, ResourceSummary, TrafficSiteSummary } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ const resource: ResourceSummary = {
   teamId: "team-1",
   name: "Disk host",
   kind: "host",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,
@@ -52,6 +53,19 @@ const analytics: OverviewAnalytics = {
   latencyTimeline: [],
 };
 
+const site: TrafficSiteSummary = {
+  id: "site-1",
+  resourceId: "resource-2",
+  resourceName: "Marketing site",
+  publicKey: "mim_site_key",
+  domains: ["example.com"],
+  heatmapsEnabled: true,
+  lastEventAt: "2026-11-27T09:59:00.000Z",
+  visitorsToday: 1284,
+  liveVisitors: 3,
+  createdAt: "2026-11-01T00:00:00.000Z",
+};
+
 describe("OverviewPage", () => {
   beforeEach(() => {
     apiMock.mockReset();
@@ -59,6 +73,7 @@ describe("OverviewPage", () => {
     apiMock.mockImplementation((path: string) => {
       if (path === "/teams/team-1/analytics/overview") return Promise.resolve(analytics);
       if (path === "/teams/team-1/resources") return Promise.resolve([resource]);
+      if (path === "/teams/team-1/traffic/sites") return Promise.resolve([site]);
       return Promise.reject(new Error(`Unexpected API request: ${path}`));
     });
   });
@@ -74,6 +89,15 @@ describe("OverviewPage", () => {
     expect(screen.getByText("Passing monitors")).toBeInTheDocument();
     expect(screen.getByText("0 / 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "1 monitor needs attention" })).toBeInTheDocument();
+  });
+
+  it("summarizes today's website traffic", async () => {
+    renderPage();
+
+    const row = (await screen.findByText("Marketing site")).closest("a");
+    expect(row).toHaveAttribute("href", "/app/insights/traffic/site-1");
+    expect(row).toHaveTextContent("3 live");
+    expect(row).toHaveTextContent("1,284");
   });
 });
 

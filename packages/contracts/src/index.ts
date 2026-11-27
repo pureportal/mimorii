@@ -1232,7 +1232,10 @@ export interface ResourceMetricSeries {
 }
 
 export const resourceAlertMetrics = [
-  ...resourceMetricNames,
+  "batteryPercent",
+  "batteryTemperatureCelsius",
+  "memoryPercent",
+  "storagePercent",
   "internetAvailable",
   "lowMemory",
   "backgroundRestricted",
