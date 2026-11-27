@@ -58,13 +58,14 @@ describe("retention", () => {
     );
   });
 
-  it("does not read settings or delete data when retention is disabled", async () => {
+  it("only removes expired visitor salts when retention is disabled", async () => {
     process.env.MIMORII_RETENTION_ENABLED = "false";
     const service = new RetentionService(database, databaseInit, platformSettings);
 
     await service.prune();
 
     expect(sponsorshipApplicationRetentionDays).not.toHaveBeenCalled();
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM traffic_salts"));
   });
 });

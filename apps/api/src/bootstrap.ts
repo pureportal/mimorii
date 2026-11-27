@@ -43,6 +43,7 @@ export async function createApplication(): Promise<INestApplication> {
   app.use("/api/teams/:teamId/logs", compression({ threshold: 2_048 }));
   app.use("/api/agent/heartbeat", json({ limit: "32mb" }));
   configureLogIngestionParsers(app);
+  app.use("/api/traffic/collect", text({ type: () => true, limit: "64kb" }));
   app.use(json({ limit: "256kb" }));
   app.use(urlencoded({ extended: false, limit: "32kb" }));
   app.useGlobalPipes(
@@ -54,6 +55,7 @@ export async function createApplication(): Promise<INestApplication> {
     })
   );
   configureSponsorshipCors(app);
+  configureTrafficCors(app);
   app.enableCors({
     origin: configuredCorsOrigins(),
     methods: allowedCorsMethods,
@@ -98,6 +100,27 @@ function configureLogIngestionParsers(app: INestApplication): void {
 
 function configureSponsorshipCors(app: INestApplication): void {
   app.use("/api/sponsors", (request: Request, response: Response, next: NextFunction) => {
+    response.set({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    });
+    if (request.method === "OPTIONS") {
+      response.status(204).end();
+      return;
+    }
+    next();
+  });
+}
+
+function configureTrafficCors(app: INestApplication): void {
+  app.use("/api/traffic", (request: Request, response: Response, next: NextFunction) => {
+    if (!["/script.js", "/collect", "/heatmap"].includes(request.path)) {
+      next();
+      return;
+    }
     response.set({
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",

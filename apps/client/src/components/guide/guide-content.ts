@@ -634,6 +634,49 @@ export const guideTopics: readonly GuideTopic[] = [
     ],
   },
   {
+    id: "traffic",
+    title: "Traffic",
+    group: "insights",
+    summary:
+      "Cookieless website analytics with visitors, sources, Core Web Vitals, errors, and click heatmaps.",
+    to: appRoutes.traffic,
+    exactPaths: [appRoutes.traffic],
+    pathPrefix: `${appRoutes.traffic}/`,
+    keywords: ["analytics", "visitors", "pageviews", "heatmap", "web vitals", "referrer", "utm"],
+    navigationId: "traffic",
+    sections: [
+      {
+        title: "Start tracking",
+        items: [
+          "Choose Track website, pick the website resource, and paste the snippet from Setup into every page.",
+          "Events are accepted only from the domains listed in Setup.",
+        ],
+      },
+      {
+        title: "Views",
+        items: [
+          "Overview compares visitors, visits, pageviews, bounce rate, and time on page with the previous period.",
+          "Heatmaps show clicks, rage clicks, and scroll depth per page and device; Open heatmap shows them on the live page.",
+          "Performance lists Core Web Vitals at the 75th percentile and JavaScript errors.",
+        ],
+      },
+      {
+        title: "Privacy",
+        items: [
+          "The script sets no cookies, stores nothing in the browser, and never stores IP addresses.",
+          "Visitors who send Do Not Track or Global Privacy Control are not measured.",
+        ],
+      },
+    ],
+    tour: [
+      {
+        target: '[data-guide-page="traffic-sites"]',
+        title: "Tracked websites",
+        content: "Open a website for its traffic, heatmaps, performance, and setup.",
+      },
+    ],
+  },
+  {
     id: "reports",
     title: "Reports",
     group: "insights",

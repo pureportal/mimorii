@@ -1,4 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
+import { trafficRetention } from "@mimorii/contracts";
 import { Interval } from "@nestjs/schedule";
 import { DatabaseInitService } from "../database/database-init.service.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -19,6 +20,9 @@ export class RetentionService implements OnModuleInit {
   @Interval(6 * 60 * 60 * 1_000)
   async prune(): Promise<void> {
     await this.databaseInit.waitUntilReady();
+    await this.database.run(
+      "DELETE FROM traffic_salts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date"
+    );
     if (process.env.MIMORII_RETENTION_ENABLED === "false") return;
     const cutoffs = {
       results: this.cutoff("MIMORII_RESULT_RETENTION_DAYS", 365),
@@ -28,6 +32,8 @@ export class RetentionService implements OnModuleInit {
       audit: this.cutoff("MIMORII_AUDIT_RETENTION_DAYS", 730),
       tasks: this.cutoff("MIMORII_AGENT_TASK_RETENTION_DAYS", 7),
       heartbeats: this.cutoff("MIMORII_HEARTBEAT_RETENTION_DAYS", 365),
+      trafficEvents: this.cutoff("MIMORII_TRAFFIC_RETENTION_DAYS", trafficRetention.eventDays),
+      trafficClicks: this.cutoff("MIMORII_HEATMAP_RETENTION_DAYS", trafficRetention.clickDays),
       sponsorshipApplications: this.cutoffDays(
         await this.settings.sponsorshipApplicationRetentionDays()
       ),
@@ -77,6 +83,14 @@ export class RetentionService implements OnModuleInit {
       await this.database.run(
         "DELETE FROM heartbeat_events WHERE received_at < ?",
         cutoffs.heartbeats
+      );
+      await this.database.run(
+        "DELETE FROM traffic_events WHERE occurred_at < ?",
+        cutoffs.trafficEvents
+      );
+      await this.database.run(
+        "DELETE FROM traffic_clicks WHERE occurred_at < ?",
+        cutoffs.trafficClicks
       );
       await this.database.run(
         `DELETE FROM agent_tasks WHERE status IN ('completed', 'expired') AND issued_at < ?`,

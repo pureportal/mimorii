@@ -1,6 +1,7 @@
 export * from "./log-query.js";
 export * from "./logs.js";
 export * from "./password-reset.js";
+export * from "./traffic.js";
 export * from "./two-factor.js";
 
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;
@@ -33,6 +34,8 @@ export const appRoutes = {
   alertChannels: "/app/operations/alerting/channels",
   alertRules: "/app/operations/alerting/rules",
   alertHistory: "/app/operations/alerting/history",
+  traffic: "/app/insights/traffic",
+  trafficSite: (id: string) => `/app/insights/traffic/${encodeURIComponent(id)}`,
   reports: "/app/insights/reports",
   serviceGoals: "/app/insights/service-goals",
   dashboards: "/app/publishing/dashboards",

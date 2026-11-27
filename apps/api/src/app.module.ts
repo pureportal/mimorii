@@ -30,6 +30,7 @@ import { SponsorsModule } from "./sponsors/sponsors.module.js";
 import { StatusPagesModule } from "./status-pages/status-pages.module.js";
 import { TechnologiesModule } from "./technologies/technologies.module.js";
 import { TeamsModule } from "./teams/teams.module.js";
+import { TrafficModule } from "./traffic/traffic.module.js";
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { TeamsModule } from "./teams/teams.module.js";
     StatusPagesModule,
     SponsorsModule,
     TechnologiesModule,
+    TrafficModule,
     AnalyticsModule,
     AuditModule,
     HealthModule,

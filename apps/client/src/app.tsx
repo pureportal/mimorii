@@ -58,6 +58,12 @@ const OperationsPage = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import("./pages/analytics-page").then((module) => ({ default: module.AnalyticsPage }))
 );
+const TrafficPage = lazy(() =>
+  import("./pages/traffic-page").then((module) => ({ default: module.TrafficPage }))
+);
+const TrafficSitePage = lazy(() =>
+  import("./pages/traffic-site-page").then((module) => ({ default: module.TrafficSitePage }))
+);
 const ObjectivesPage = lazy(() =>
   import("./pages/objectives-page").then((module) => ({ default: module.ObjectivesPage }))
 );
@@ -160,6 +166,8 @@ export function App({ runtime = applicationRuntime }: { runtime?: ApplicationRun
           <Route path={appPaths.alertChannels} element={<NotificationsPage section="channels" />} />
           <Route path={appPaths.alertRules} element={<NotificationsPage section="rules" />} />
           <Route path={appPaths.alertHistory} element={<NotificationsPage section="history" />} />
+          <Route path={appPaths.traffic} element={<TrafficPage />} />
+          <Route path={appPaths.trafficSite} element={<TrafficSitePage />} />
           <Route path={appPaths.reports} element={<AnalyticsPage />} />
           <Route path={appPaths.serviceGoals} element={<ObjectivesPage />} />
           <Route path={appPaths.dashboards} element={<DashboardsPage />} />

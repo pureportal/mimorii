@@ -19,6 +19,8 @@ export const appPaths = {
   alertChannels: relativeAppPath(appRoutes.alertChannels),
   alertRules: relativeAppPath(appRoutes.alertRules),
   alertHistory: relativeAppPath(appRoutes.alertHistory),
+  traffic: relativeAppPath(appRoutes.traffic),
+  trafficSite: `${relativeAppPath(appRoutes.traffic)}/:id`,
   reports: relativeAppPath(appRoutes.reports),
   serviceGoals: relativeAppPath(appRoutes.serviceGoals),
   dashboards: relativeAppPath(appRoutes.dashboards),
@@ -46,6 +48,7 @@ export type NavigationItemId =
   | "incidents"
   | "maintenance"
   | "alerting"
+  | "traffic"
   | "reports"
   | "service-goals"
   | "dashboards"
@@ -127,6 +130,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "Insights",
     items: [
+      { id: "traffic", label: "Traffic", to: appRoutes.traffic },
       { id: "reports", label: "Reports", to: appRoutes.reports, exact: true },
       {
         id: "service-goals",
@@ -211,7 +215,15 @@ export function navigationBadges(
 }
 
 export interface CreateDestination {
-  id: "resource" | "check" | "heartbeat" | "agent" | "incident" | "status-page" | "dashboard";
+  id:
+    | "resource"
+    | "check"
+    | "heartbeat"
+    | "agent"
+    | "incident"
+    | "website"
+    | "status-page"
+    | "dashboard";
   label: string;
   to: string;
   teamAdmin?: boolean;
@@ -223,6 +235,12 @@ export const createDestinations: readonly CreateDestination[] = [
   { id: "heartbeat", label: "Heartbeat", to: createIntentPath(appRoutes.heartbeats) },
   { id: "agent", label: "Agent", to: createIntentPath(appRoutes.agents) },
   { id: "incident", label: "Incident", to: createIntentPath(appRoutes.incidents) },
+  {
+    id: "website",
+    label: "Website traffic",
+    to: createIntentPath(appRoutes.traffic),
+    teamAdmin: true,
+  },
   {
     id: "status-page",
     label: "Status page",
@@ -307,6 +325,7 @@ export function navigationContext(pathname: string): NavigationContext {
 
 function nestedRouteLabel(pathname: string, itemId: NavigationItemId): string | undefined {
   if (itemId === "resources" && pathname !== appRoutes.resources) return "Resource details";
+  if (itemId === "traffic" && pathname !== appRoutes.traffic) return "Website";
   if (itemId === "dashboards") {
     if (pathname === appRoutes.dashboardNew) return "New dashboard";
     if (pathname !== appRoutes.dashboards) return "Edit dashboard";

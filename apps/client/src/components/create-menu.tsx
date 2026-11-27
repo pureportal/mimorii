@@ -4,6 +4,7 @@ import {
   Bot,
   Globe2,
   LayoutDashboard,
+  MousePointerClick,
   Network,
   Plus,
   RadioTower,
@@ -20,6 +21,7 @@ const destinationIcons: Record<CreateDestination["id"], LucideIcon> = {
   heartbeat: RadioTower,
   agent: Bot,
   incident: Siren,
+  website: MousePointerClick,
   "status-page": Globe2,
   dashboard: LayoutDashboard,
 };

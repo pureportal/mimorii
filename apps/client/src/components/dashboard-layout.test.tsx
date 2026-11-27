@@ -162,7 +162,11 @@ describe("ProtectedLayout navigation", () => {
       "href",
       `${appRoutes.checks}?new=1`
     );
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(7);
+    expect(within(menu).getByRole("menuitem", { name: "Website traffic" })).toHaveAttribute(
+      "href",
+      `${appRoutes.traffic}?new=1`
+    );
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(8);
   });
 
   it("shows one Guide entry and opens contextual help from the sidebar", () => {
