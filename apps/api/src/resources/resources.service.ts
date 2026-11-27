@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   AgentKind,
+  AppKind,
   AgentStatus,
   MonitorStatus,
   ResourceKind,
@@ -32,6 +33,7 @@ interface ResourceRow {
   team_id: string;
   name: string;
   kind: ResourceKind;
+  app: AppKind | null;
   description: string | null;
   tags_json: string;
   log_query: string | null;
@@ -92,7 +94,11 @@ export class ResourcesService {
     return this.map(row, statuses.get(row.id) ?? "pending", problems.get(row.id) ?? []);
   }
 
-  async create(userId: string, teamId: string, input: CreateResourceDto): Promise<ResourceSummary> {
+  async create(
+    userId: string,
+    teamId: string,
+    input: CreateResourceDto & { app?: AppKind }
+  ): Promise<ResourceSummary> {
     await this.access.require(userId, teamId, "member");
     const count = (await this.database.get<{ count: number }>(
       "SELECT COUNT(*) AS count FROM resources WHERE team_id = ?",
@@ -105,12 +111,13 @@ export class ResourcesService {
     const logQuery = await this.logQuery(input.logQuery);
     await this.database.run(
       `INSERT INTO resources
-       (id, team_id, name, kind, description, tags_json, log_query, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, team_id, name, kind, app, description, tags_json, log_query, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       teamId,
       input.name.trim(),
       input.kind,
+      input.app ?? null,
       input.description?.trim() || null,
       JSON.stringify(tags),
       logQuery ?? null,
@@ -281,6 +288,7 @@ export class ResourcesService {
       teamId: row.team_id,
       name: row.name,
       kind: row.kind,
+      app: row.app,
       description: row.description,
       tags: JSON.parse(row.tags_json) as string[],
       logQuery: row.log_query,

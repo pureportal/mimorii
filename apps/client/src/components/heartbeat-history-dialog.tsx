@@ -1,22 +1,22 @@
-import type { HeartbeatEventSummary, HeartbeatMonitorSummary } from "@mimorii/contracts";
+import type { AppKind, HeartbeatEventSummary, HeartbeatMonitorSummary } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState, LoadingState } from "./page-state";
 import { StatusBadge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 import { api } from "../lib/api";
-import { FoxytailReportDetails } from "./foxytail-report";
+import { AppReportDetails } from "./app-report";
 import { formatMilliseconds, formatRelative } from "../lib/format";
 
 export function HeartbeatHistoryDialog({
   heartbeat,
   teamId,
   onClose,
-  foxytail = false,
+  app = null,
 }: {
   heartbeat: HeartbeatMonitorSummary | null;
   teamId: string;
   onClose: () => void;
-  foxytail?: boolean;
+  app?: AppKind | null;
 }) {
   const history = useQuery({
     queryKey: ["heartbeat-history", teamId, heartbeat?.id],
@@ -44,8 +44,8 @@ export function HeartbeatHistoryDialog({
                 <StatusBadge status={eventStatus(event.type)}>{event.type}</StatusBadge>
                 <div className="min-w-0">
                   {event.message ? <p className="text-sm">{event.message}</p> : null}
-                  {foxytail && Object.keys(event.metadata).length > 0 ? (
-                    <FoxytailReportDetails metadata={event.metadata} latest={index === 0} />
+                  {app && Object.keys(event.metadata).length > 0 ? (
+                    <AppReportDetails app={app} metadata={event.metadata} latest={index === 0} />
                   ) : Object.keys(event.metadata).length ? (
                     <p className="mt-1 break-all font-mono text-xs text-muted">
                       {JSON.stringify(event.metadata)}

@@ -1,10 +1,19 @@
-import type { ResourceSummary } from "@mimorii/contracts";
+import { appDefinitions, type ResourceSummary } from "@mimorii/contracts";
 
 export const resourceKindLabels: Record<ResourceSummary["kind"], string> = {
   host: "Host",
   device: "Device",
   service: "Service",
 };
+
+export function resourceTypeLabel(
+  resource: Pick<ResourceSummary, "kind" | "app" | "agent">
+): string {
+  return (
+    resource.agent?.platform?.trim() ||
+    (resource.app ? appDefinitions[resource.app].name : resourceKindLabels[resource.kind])
+  );
+}
 
 export function resourceOptionLabels(resources: ResourceSummary[]): ReadonlyMap<string, string> {
   const resourcesByName = new Map<string, ResourceSummary[]>();
@@ -24,7 +33,7 @@ export function resourceOptionLabels(resources: ResourceSummary[]): ReadonlyMap<
 
     const resourcesByDetail = new Map<string, ResourceSummary[]>();
     for (const resource of group) {
-      const detail = resource.agent?.platform?.trim() || resourceKindLabels[resource.kind];
+      const detail = resourceTypeLabel(resource);
       const matches = resourcesByDetail.get(detail) ?? [];
       matches.push(resource);
       resourcesByDetail.set(detail, matches);

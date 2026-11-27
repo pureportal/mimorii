@@ -22,6 +22,7 @@ const resource: ResourceSummary = {
   teamId: "team-1",
   name: "Public API",
   kind: "service",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,

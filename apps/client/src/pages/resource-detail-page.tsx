@@ -1,6 +1,5 @@
 import type {
   AgentSummary,
-  AgentKind,
   CheckResult,
   CheckSummary,
   HeartbeatMonitorSummary,
@@ -8,8 +7,9 @@ import type {
   ResourceAlertOperator,
   ResourceAlertRuleSummary,
   ResourceSummary,
+  TrafficSiteSummary,
 } from "@mimorii/contracts";
-import { resourceAlertOperators } from "@mimorii/contracts";
+import { resourceAlertMetrics, resourceAlertOperators } from "@mimorii/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
   ImageIcon,
   Logs,
   MemoryStick,
+  MousePointerClick,
   Network,
   Pencil,
   Radio,
@@ -33,7 +34,7 @@ import { CheckHealthSummary } from "../components/check-health-summary";
 import { CheckHistoryChart } from "../components/check-history-chart";
 import { CheckTypeIcon } from "../components/check-type-icon";
 import {
-  FoxytailHighlights,
+  AppHighlights,
   HeartbeatFacts,
   HeartbeatProblems,
   HeartbeatStateLine,
@@ -59,7 +60,7 @@ import {
   isValidityCheckType,
 } from "../lib/check-health";
 import { formatInterval, formatPercent, formatRelative } from "../lib/format";
-import { resourceKindLabels } from "../lib/resource-option-labels";
+import { resourceTypeLabel } from "../lib/resource-option-labels";
 
 export function ResourceDetailPage() {
   const { id = "" } = useParams();
@@ -107,8 +108,13 @@ export function ResourceDetailPage() {
   const alerts = useQuery({
     queryKey: ["resource-alerts", teamId, id],
     queryFn: () => api<ResourceAlertRuleSummary[]>(`/teams/${teamId}/resources/${id}/alerts`),
-    enabled: Boolean(resource.data?.agent),
+    enabled: resource.data?.agent?.kind === "mobile",
     refetchInterval: 30_000,
+  });
+  const trafficSite = useQuery({
+    queryKey: ["traffic-sites", teamId],
+    queryFn: () => api<TrafficSiteSummary[]>(`/teams/${teamId}/traffic/sites`),
+    select: (sites) => sites.find((site) => site.resourceId === id) ?? null,
   });
   const refresh = async () => {
     await Promise.all([
@@ -182,9 +188,7 @@ export function ResourceDetailPage() {
                 <StatusBadge status={resource.data.status} />
                 {resource.data.inMaintenance ? <StatusBadge status="maintenance" /> : null}
               </div>
-              <p className="mt-2 text-sm text-muted">
-                {resource.data.agent?.platform ?? resourceKindLabels[resource.data.kind]}
-              </p>
+              <p className="mt-2 text-sm text-muted">{resourceTypeLabel(resource.data)}</p>
               {resource.data.description ? (
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
                   {resource.data.description}
@@ -212,6 +216,13 @@ export function ResourceDetailPage() {
                 to={`${appRoutes.logs}?${new URLSearchParams({ query: resource.data.logQuery })}`}
               >
                 <Logs /> Logs
+              </Link>
+            </Button>
+          ) : null}
+          {trafficSite.data ? (
+            <Button asChild variant="outline">
+              <Link to={appRoutes.trafficSite(trafficSite.data.id)}>
+                <MousePointerClick /> Traffic
               </Link>
             </Button>
           ) : null}
@@ -287,8 +298,8 @@ export function ResourceDetailPage() {
             <CardContent className="space-y-5">
               <HeartbeatTimeline timeline={historyHeartbeat.timeline} />
               <HeartbeatFacts heartbeat={historyHeartbeat} />
-              {resource.data.tags.includes("foxytail") ? (
-                <FoxytailHighlights heartbeat={historyHeartbeat} />
+              {resource.data.app ? (
+                <AppHighlights app={resource.data.app} heartbeat={historyHeartbeat} />
               ) : null}
             </CardContent>
           ) : (
@@ -389,7 +400,7 @@ export function ResourceDetailPage() {
               ) : null}
             </CardContent>
           </Card>
-          {resource.data.agent ? (
+          {resource.data.agent?.kind === "mobile" ? (
             <Card>
               <CardHeader>
                 <h3 className="font-display font-bold">Alerts</h3>
@@ -471,7 +482,6 @@ export function ResourceDetailPage() {
         teamId={teamId}
         resourceId={id}
         rule={selectedAlert}
-        metrics={availableAlertMetrics(resource.data.agent?.kind)}
         onSaved={async () => {
           await alerts.refetch();
         }}
@@ -541,7 +551,6 @@ function AlertRuleDialog({
   teamId,
   resourceId,
   rule,
-  metrics,
   onSaved,
 }: {
   open: boolean;
@@ -549,11 +558,10 @@ function AlertRuleDialog({
   teamId: string;
   resourceId: string;
   rule: ResourceAlertRuleSummary | null;
-  metrics: ResourceAlertMetric[];
   onSaved: () => Promise<void>;
 }) {
   const [name, setName] = useState("Resource threshold");
-  const [metric, setMetric] = useState<ResourceAlertMetric>("cpuPercent");
+  const [metric, setMetric] = useState<ResourceAlertMetric>("storagePercent");
   const [operator, setOperator] = useState<ResourceAlertOperator>("greaterThanOrEqual");
   const [threshold, setThreshold] = useState("90");
   const [recoveryThreshold, setRecoveryThreshold] = useState("80");
@@ -566,7 +574,7 @@ function AlertRuleDialog({
   useEffect(() => {
     if (!open) return;
     setName(rule?.name ?? "Resource threshold");
-    setMetric(rule?.metric ?? metrics[0] ?? "cpuPercent");
+    setMetric(rule?.metric ?? "storagePercent");
     setOperator(rule?.operator ?? "greaterThanOrEqual");
     setThreshold(String(rule?.threshold ?? 90));
     setRecoveryThreshold(
@@ -577,7 +585,7 @@ function AlertRuleDialog({
     setRequiredSamples(String(rule?.requiredSamples ?? 2));
     setEnabled(rule?.enabled ?? true);
     setError("");
-  }, [open, rule, metrics]);
+  }, [open, rule]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -631,7 +639,7 @@ function AlertRuleDialog({
                 id="alert-metric"
                 value={metric}
                 onChange={(event) => {
-                  const value = metrics.find((item) => item === event.target.value);
+                  const value = resourceAlertMetrics.find((item) => item === event.target.value);
                   if (value) {
                     setMetric(value);
                     setThreshold(isBooleanAlertMetric(value) ? "true" : "90");
@@ -639,7 +647,7 @@ function AlertRuleDialog({
                   }
                 }}
               >
-                {metrics.map((value) => (
+                {resourceAlertMetrics.map((value) => (
                   <option key={value} value={value}>
                     {metricLabel(value)}
                   </option>
@@ -751,14 +759,10 @@ function AlertRuleDialog({
 
 function metricLabel(metric: ResourceAlertMetric): string {
   const labels: Record<ResourceAlertMetric, string> = {
-    cpuPercent: "CPU",
-    memoryPercent: "Memory",
-    storagePercent: "Storage",
-    loadAverage: "Load average",
     batteryPercent: "Battery",
     batteryTemperatureCelsius: "Battery temperature",
-    containerCount: "Containers",
-    unhealthyContainerCount: "Unhealthy containers",
+    memoryPercent: "Memory",
+    storagePercent: "Storage",
     internetAvailable: "Internet available",
     lowMemory: "Low memory",
     backgroundRestricted: "Background restricted",
@@ -782,29 +786,6 @@ function isBooleanAlertMetric(metric: ResourceAlertMetric): boolean {
   return (
     metric === "internetAvailable" || metric === "lowMemory" || metric === "backgroundRestricted"
   );
-}
-
-function availableAlertMetrics(kind: AgentKind | undefined): ResourceAlertMetric[] {
-  return kind === "mobile"
-    ? [
-        "batteryPercent",
-        "batteryTemperatureCelsius",
-        "memoryPercent",
-        "storagePercent",
-        "internetAvailable",
-        "lowMemory",
-        "backgroundRestricted",
-      ]
-    : kind === "desktop"
-      ? [
-          "cpuPercent",
-          "memoryPercent",
-          "storagePercent",
-          "loadAverage",
-          "containerCount",
-          "unhealthyContainerCount",
-        ]
-      : [];
 }
 
 function EditResourceDialog({

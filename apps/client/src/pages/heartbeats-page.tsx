@@ -10,7 +10,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { HeartbeatCard } from "../components/heartbeat-card";
 import { HeartbeatDialog } from "../components/heartbeat-dialog";
-import { FoxytailDialog } from "../components/foxytail-dialog";
 import { HeartbeatHistoryDialog } from "../components/heartbeat-history-dialog";
 import { HeartbeatSecretDialog } from "../components/heartbeat-secret-dialog";
 import { EmptyState, ErrorState, LoadingState } from "../components/page-state";
@@ -35,7 +34,6 @@ export function HeartbeatsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [formOpen, setFormOpen] = useState(false);
-  const [foxytailOpen, setFoxytailOpen] = useState(searchParams.get("connect") === "foxytail");
   const [selected, setSelected] = useState<HeartbeatMonitorSummary | null>(null);
   const [historyHeartbeat, setHistoryHeartbeat] = useState<HeartbeatMonitorSummary | null>(null);
   const [created, setCreated] = useState<CreatedHeartbeatMonitor | null>(null);
@@ -99,11 +97,11 @@ export function HeartbeatsPage() {
     heartbeats.data?.filter((heartbeat) => !resourceId || heartbeat.resourceId === resourceId) ??
     [];
   const resourceNames = resourceOptionLabels(resources.data ?? []);
-  const foxytailResourceIds = new Set(
-    (resources.data ?? [])
-      .filter((resource) => resource.tags.includes("foxytail"))
-      .map((resource) => resource.id)
+  const resourceApps = new Map(
+    (resources.data ?? []).map((resource) => [resource.id, resource.app] as const)
   );
+  const appFor = (resourceId: string | undefined) =>
+    (resourceId ? resourceApps.get(resourceId) : null) ?? null;
 
   return (
     <div className="space-y-6">
@@ -133,11 +131,6 @@ export function HeartbeatsPage() {
           </Select>
         </div>
         <div className="flex flex-wrap gap-2">
-          {activeTeam!.role !== "viewer" && (
-            <Button variant="outline" onClick={() => setFoxytailOpen(true)}>
-              Connect Foxytail
-            </Button>
-          )}
           {resources.data?.length ? (
             <Button
               variant="coral"
@@ -158,19 +151,6 @@ export function HeartbeatsPage() {
         </div>
       </div>
 
-      {foxytailOpen && activeTeam!.role !== "viewer" && (
-        <FoxytailDialog
-          key={teamId}
-          teamId={teamId}
-          onSaved={refresh}
-          onClose={() => {
-            setFoxytailOpen(false);
-            const next = new URLSearchParams(searchParams);
-            next.delete("connect");
-            setSearchParams(next, { replace: true });
-          }}
-        />
-      )}
       {filtered.length ? (
         <div data-guide-page="heartbeats-list" className="grid gap-4">
           {filtered.map((heartbeat) => (
@@ -178,7 +158,7 @@ export function HeartbeatsPage() {
               key={heartbeat.id}
               heartbeat={heartbeat}
               resourceName={resourceNames.get(heartbeat.resourceId) ?? heartbeat.resourceName}
-              foxytail={foxytailResourceIds.has(heartbeat.resourceId)}
+              app={appFor(heartbeat.resourceId)}
               actions={
                 <HeartbeatActions
                   heartbeat={heartbeat}
@@ -234,14 +214,11 @@ export function HeartbeatsPage() {
       />
       <HeartbeatSecretDialog
         created={created}
-        foxytail={resources.data?.some(
-          (resource) =>
-            resource.id === created?.heartbeat.resourceId && resource.tags.includes("foxytail")
-        )}
+        app={appFor(created?.heartbeat.resourceId)}
         onClose={() => setCreated(null)}
       />
       <HeartbeatHistoryDialog
-        foxytail={Boolean(historyHeartbeat && foxytailResourceIds.has(historyHeartbeat.resourceId))}
+        app={appFor(historyHeartbeat?.resourceId)}
         heartbeat={historyHeartbeat}
         teamId={teamId}
         onClose={() => setHistoryHeartbeat(null)}

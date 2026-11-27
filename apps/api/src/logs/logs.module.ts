@@ -47,6 +47,7 @@ import { LogsQueryService } from "./logs-query.service.js";
   ],
   exports: [
     LogSettingsService,
+    LogSourcesService,
     LogAlertsService,
     LogRetentionService,
     LogsQueryService,

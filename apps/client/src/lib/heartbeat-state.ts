@@ -1,5 +1,5 @@
 import type { HeartbeatMonitorSummary, HeartbeatTimelineBucket } from "@mimorii/contracts";
-import { formatBytes, formatDuration } from "./format";
+import { formatDuration } from "./format";
 
 export type HeartbeatTone = "success" | "warning" | "danger" | "neutral";
 
@@ -13,12 +13,6 @@ export interface HeartbeatState {
 export interface HeartbeatProblem {
   label: string;
   value: string | null;
-}
-
-export interface HeartbeatHighlight {
-  label: string;
-  value: string;
-  tone?: HeartbeatTone;
 }
 
 export function heartbeatState(
@@ -101,54 +95,6 @@ export function timelineTotals(timeline: HeartbeatTimelineBucket[]) {
     }),
     { succeeded: 0, failed: 0, missed: 0 }
   );
-}
-
-export function foxytailHighlights(
-  metadata: HeartbeatMonitorSummary["latestMetadata"]
-): HeartbeatHighlight[] {
-  const number = (key: string) => {
-    const value = metadata[key];
-    return typeof value === "number" ? value : null;
-  };
-  const highlights: HeartbeatHighlight[] = [];
-  const services = (["database", "redis"] as const).filter(
-    (key) => typeof metadata[key] === "boolean"
-  );
-  if (services.length) {
-    const unavailable = services.filter((key) => metadata[key] === false);
-    highlights.push({
-      label: "Services",
-      value: unavailable.length
-        ? `${unavailable.map((key) => (key === "database" ? "Database" : "Redis")).join(", ")} down`
-        : "Database and Redis up",
-      tone: unavailable.length ? "danger" : "success",
-    });
-  }
-  const active = number("downloadsActive");
-  const queued = number("downloadsQueued");
-  if (active !== null || queued !== null) {
-    highlights.push({
-      label: "Downloads",
-      value: `${active ?? 0} active · ${queued ?? 0} queued`,
-    });
-  }
-  const completed = number("downloadCompletions24h");
-  const failed = number("downloadFailures24h");
-  if (completed !== null || failed !== null) {
-    highlights.push({
-      label: "Last 24 hours",
-      value: `${completed ?? 0} completed · ${failed ?? 0} failed`,
-      tone: failed ? "warning" : undefined,
-    });
-  }
-  const requests = number("requestsPending");
-  if (requests !== null) highlights.push({ label: "Requests", value: `${requests} pending` });
-  const bytes = number("mediaBytes");
-  if (bytes !== null) highlights.push({ label: "Library size", value: formatBytes(bytes) });
-  if (typeof metadata.version === "string") {
-    highlights.push({ label: "Foxytail", value: metadata.version });
-  }
-  return highlights;
 }
 
 function sinceLabel(value: string, now: number): string {

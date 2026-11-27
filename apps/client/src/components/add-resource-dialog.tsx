@@ -6,19 +6,20 @@ import type {
   WebsiteDiscovery,
 } from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, Globe2, LoaderCircle, Waypoints } from "lucide-react";
+import { AppWindow, Boxes, Globe2, LoaderCircle, Waypoints } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { api, jsonBody } from "../lib/api";
 import { cn } from "../lib/cn";
 import { formatInterval } from "../lib/format";
+import { AppSetupForm } from "./app-setup-form";
 import { CheckTypeIcon } from "./check-type-icon";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./ui/dialog";
 import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input, Select } from "./ui/input";
 
-type SetupMode = "website" | "port" | "service";
+type SetupMode = "website" | "port" | "service" | "app";
 
 interface PlannedCheck {
   name: string;
@@ -169,8 +170,8 @@ export function AddResourceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader title="Add resource" />
-        <form className="grid grid-cols-1 gap-5" onSubmit={submit}>
-          <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <ModeButton
               active={mode === "website"}
               icon={Globe2}
@@ -189,168 +190,192 @@ export function AddResourceDialog({
               label="Service"
               onClick={() => changeMode("service")}
             />
+            <ModeButton
+              active={mode === "app"}
+              icon={AppWindow}
+              label="App"
+              onClick={() => changeMode("app")}
+            />
           </div>
-          {mode !== "service" ? (
-            <div className={mode === "port" ? "grid gap-4 sm:grid-cols-[1fr_120px]" : "grid gap-4"}>
+          {mode === "app" ? (
+            <AppSetupForm
+              teamId={teamId}
+              onCancel={() => onOpenChange(false)}
+              onCreated={onCreated}
+              onDone={() => {
+                onOpenChange(false);
+                changeMode("website");
+              }}
+            />
+          ) : (
+            <form className="grid grid-cols-1 gap-5" onSubmit={submit}>
+              {mode !== "service" ? (
+                <div
+                  className={mode === "port" ? "grid gap-4 sm:grid-cols-[1fr_120px]" : "grid gap-4"}
+                >
+                  <Field>
+                    <FieldLabel htmlFor="resource-target">
+                      {mode === "website" ? "URL" : "Host"}
+                    </FieldLabel>
+                    <Input
+                      id="resource-target"
+                      inputMode="url"
+                      autoComplete="off"
+                      autoFocus
+                      placeholder={mode === "website" ? "example.com" : "db.example.com"}
+                      value={target}
+                      onChange={(event) => setTarget(event.target.value)}
+                      aria-invalid={mode === "website" && Boolean(target.trim()) && !websiteUrl}
+                      required
+                    />
+                  </Field>
+                  {mode === "port" ? (
+                    <Field>
+                      <FieldLabel htmlFor="resource-port">Port</FieldLabel>
+                      <Input
+                        id="resource-port"
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={port}
+                        onChange={(event) => setPort(event.target.value)}
+                        required
+                      />
+                    </Field>
+                  ) : null}
+                </div>
+              ) : null}
+              {mode === "website" && websiteUrl ? (
+                <WebsitePreview
+                  url={websiteUrl}
+                  discovery={discovered}
+                  loading={discovery.isFetching || discoveryUrl !== websiteUrl}
+                  direct={!agentId}
+                />
+              ) : null}
               <Field>
-                <FieldLabel htmlFor="resource-target">
-                  {mode === "website" ? "URL" : "Host"}
-                </FieldLabel>
+                <FieldLabel htmlFor="resource-name">Name</FieldLabel>
                 <Input
-                  id="resource-target"
-                  inputMode="url"
-                  autoComplete="off"
-                  autoFocus
-                  placeholder={mode === "website" ? "example.com" : "db.example.com"}
-                  value={target}
-                  onChange={(event) => setTarget(event.target.value)}
-                  aria-invalid={mode === "website" && Boolean(target.trim()) && !websiteUrl}
-                  required
+                  id="resource-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={
+                    (mode === "port" && target.trim()
+                      ? `${target.trim()}:${port}`
+                      : suggestedName) ||
+                    (mode === "website" ? "Main website" : "Production service")
+                  }
+                  maxLength={100}
+                  required={mode === "service"}
                 />
               </Field>
-              {mode === "port" ? (
+              {suggestedChecks.length ? (
+                <fieldset className="grid gap-2">
+                  <legend className="mb-2 text-sm font-semibold">Checks</legend>
+                  {suggestedChecks.map((check) => (
+                    <SuggestedCheck
+                      key={check.type}
+                      check={check}
+                      selected={!skippedChecks.has(check.type)}
+                      onSelectedChange={(selected) =>
+                        setSkippedChecks((current) => {
+                          const next = new Set(current);
+                          if (selected) next.delete(check.type);
+                          else next.add(check.type);
+                          return next;
+                        })
+                      }
+                    />
+                  ))}
+                </fieldset>
+              ) : null}
+              {mode === "website" || mode === "port" ? (
                 <Field>
-                  <FieldLabel htmlFor="resource-port">Port</FieldLabel>
-                  <Input
-                    id="resource-port"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={port}
-                    onChange={(event) => setPort(event.target.value)}
-                    required
-                  />
+                  <FieldLabel htmlFor="resource-agent">Run from</FieldLabel>
+                  <Select
+                    id="resource-agent"
+                    value={agentId}
+                    onChange={(event) => setAgentId(event.target.value)}
+                  >
+                    <option value="">Mimorii</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.resourceName}
+                      </option>
+                    ))}
+                  </Select>
                 </Field>
               ) : null}
-            </div>
-          ) : null}
-          {mode === "website" && websiteUrl ? (
-            <WebsitePreview
-              url={websiteUrl}
-              discovery={discovered}
-              loading={discovery.isFetching || discoveryUrl !== websiteUrl}
-              direct={!agentId}
-            />
-          ) : null}
-          <Field>
-            <FieldLabel htmlFor="resource-name">Name</FieldLabel>
-            <Input
-              id="resource-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={
-                (mode === "port" && target.trim() ? `${target.trim()}:${port}` : suggestedName) ||
-                (mode === "website" ? "Main website" : "Production service")
-              }
-              maxLength={100}
-              required={mode === "service"}
-            />
-          </Field>
-          {suggestedChecks.length ? (
-            <fieldset className="grid gap-2">
-              <legend className="mb-2 text-sm font-semibold">Checks</legend>
-              {suggestedChecks.map((check) => (
-                <SuggestedCheck
-                  key={check.type}
-                  check={check}
-                  selected={!skippedChecks.has(check.type)}
-                  onSelectedChange={(selected) =>
-                    setSkippedChecks((current) => {
-                      const next = new Set(current);
-                      if (selected) next.delete(check.type);
-                      else next.add(check.type);
-                      return next;
-                    })
-                  }
-                />
-              ))}
-            </fieldset>
-          ) : null}
-          {mode === "website" || mode === "port" ? (
-            <Field>
-              <FieldLabel htmlFor="resource-agent">Run from</FieldLabel>
-              <Select
-                id="resource-agent"
-                value={agentId}
-                onChange={(event) => setAgentId(event.target.value)}
-              >
-                <option value="">Mimorii</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.resourceName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
 
-          {mode !== "service" ? (
-            <details className="rounded-2xl border border-line px-4 py-3">
-              <summary className="text-sm font-semibold">Advanced</summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                {mode === "website" ? (
-                  <>
+              {mode !== "service" ? (
+                <details className="rounded-2xl border border-line px-4 py-3">
+                  <summary className="text-sm font-semibold">Advanced</summary>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    {mode === "website" ? (
+                      <>
+                        <Field>
+                          <FieldLabel htmlFor="quick-status">Expected status</FieldLabel>
+                          <Input
+                            id="quick-status"
+                            type="number"
+                            min={100}
+                            max={599}
+                            value={statusCode}
+                            onChange={(event) => setStatusCode(event.target.value)}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="quick-content">Response contains</FieldLabel>
+                          <Input
+                            id="quick-content"
+                            value={content}
+                            onChange={(event) => setContent(event.target.value)}
+                            maxLength={512}
+                          />
+                        </Field>
+                      </>
+                    ) : null}
                     <Field>
-                      <FieldLabel htmlFor="quick-status">Expected status</FieldLabel>
+                      <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
                       <Input
-                        id="quick-status"
+                        id="quick-interval"
                         type="number"
-                        min={100}
-                        max={599}
-                        value={statusCode}
-                        onChange={(event) => setStatusCode(event.target.value)}
+                        min={30}
+                        max={86400}
+                        value={interval}
+                        onChange={(event) => setInterval(event.target.value)}
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="quick-content">Response contains</FieldLabel>
+                      <FieldLabel htmlFor="quick-timeout">Timeout · ms</FieldLabel>
                       <Input
-                        id="quick-content"
-                        value={content}
-                        onChange={(event) => setContent(event.target.value)}
-                        maxLength={512}
+                        id="quick-timeout"
+                        type="number"
+                        min={250}
+                        max={30000}
+                        value={timeout}
+                        onChange={(event) => setTimeoutValue(event.target.value)}
                       />
                     </Field>
-                  </>
-                ) : null}
-                <Field>
-                  <FieldLabel htmlFor="quick-interval">Interval · seconds</FieldLabel>
-                  <Input
-                    id="quick-interval"
-                    type="number"
-                    min={30}
-                    max={86400}
-                    value={interval}
-                    onChange={(event) => setInterval(event.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="quick-timeout">Timeout · ms</FieldLabel>
-                  <Input
-                    id="quick-timeout"
-                    type="number"
-                    min={250}
-                    max={30000}
-                    value={timeout}
-                    onChange={(event) => setTimeoutValue(event.target.value)}
-                  />
-                </Field>
-              </div>
-            </details>
-          ) : null}
-          <FieldError>{error}</FieldError>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="coral"
-              disabled={busy || (mode === "website" && !websiteUrl)}
-            >
-              {busy ? "Adding…" : "Add resource"}
-            </Button>
-          </DialogFooter>
-        </form>
+                  </div>
+                </details>
+              ) : null}
+              <FieldError>{error}</FieldError>
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="coral"
+                  disabled={busy || (mode === "website" && !websiteUrl)}
+                >
+                  {busy ? "Adding…" : "Add resource"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

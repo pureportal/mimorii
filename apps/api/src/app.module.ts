@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AgentsModule } from "./agents/agents.module.js";
 import { AdminModule } from "./admin/admin.module.js";
 import { AnalyticsModule } from "./analytics/analytics.module.js";
+import { AppIntegrationsModule } from "./app-integrations/app-integrations.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { ChecksModule } from "./checks/checks.module.js";
@@ -53,6 +54,7 @@ import { TrafficModule } from "./traffic/traffic.module.js";
     TeamsModule,
     DashboardsModule,
     ResourcesModule,
+    AppIntegrationsModule,
     ResourceAlertsModule,
     RetentionModule,
     ChecksModule,

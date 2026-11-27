@@ -21,6 +21,7 @@ const resource: ResourceSummary = {
   teamId: "team-1",
   name: "Disk host",
   kind: "host",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,
@@ -44,6 +45,7 @@ describe("ResourceDetailPage", () => {
       if (path === "/teams/team-1/checks?resourceId=resource-1") return Promise.resolve([]);
       if (path === "/teams/team-1/heartbeats?resourceId=resource-1") return Promise.resolve([]);
       if (path === "/teams/team-1/agents") return Promise.resolve([]);
+      if (path === "/teams/team-1/traffic/sites") return Promise.resolve([]);
       return Promise.reject(new Error(`Unexpected API request: ${path}`));
     });
   });

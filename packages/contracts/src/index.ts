@@ -1,3 +1,6 @@
+import type { AppKind } from "./apps.js";
+
+export * from "./apps.js";
 export * from "./log-query.js";
 export * from "./logs.js";
 export * from "./password-reset.js";
@@ -372,6 +375,7 @@ export interface ResourceSummary {
   teamId: string;
   name: string;
   kind: ResourceKind;
+  app: AppKind | null;
   description: string | null;
   tags: string[];
   logQuery: string | null;

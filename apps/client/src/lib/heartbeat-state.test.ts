@@ -1,12 +1,6 @@
 import type { HeartbeatMonitorSummary } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
-import {
-  foxytailHighlights,
-  heartbeatProblems,
-  heartbeatState,
-  timelineTone,
-  timelineTotals,
-} from "./heartbeat-state";
+import { heartbeatProblems, heartbeatState, timelineTone, timelineTotals } from "./heartbeat-state";
 
 const now = Date.parse("2026-11-12T12:00:00.000Z");
 
@@ -99,29 +93,5 @@ describe("heartbeat state", () => {
         { ...bucket, succeeded: 3, missed: 1 },
       ])
     ).toEqual({ succeeded: 3, failed: 48, missed: 1 });
-  });
-
-  it("summarises the latest Foxytail report", () => {
-    expect(
-      foxytailHighlights({
-        database: true,
-        redis: false,
-        downloadsActive: 2,
-        downloadsQueued: 5,
-        downloadCompletions24h: 13,
-        downloadFailures24h: 0,
-        requestsPending: 6,
-        mediaBytes: 29_654_907_926_686,
-        version: "0.18.0",
-      })
-    ).toEqual([
-      { label: "Services", value: "Redis down", tone: "danger" },
-      { label: "Downloads", value: "2 active · 5 queued" },
-      { label: "Last 24 hours", value: "13 completed · 0 failed", tone: undefined },
-      { label: "Requests", value: "6 pending" },
-      { label: "Library size", value: "27.0 TB" },
-      { label: "Foxytail", value: "0.18.0" },
-    ]);
-    expect(foxytailHighlights({})).toEqual([]);
   });
 });

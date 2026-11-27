@@ -19,7 +19,7 @@ import { useAuth } from "../lib/auth";
 import { cn } from "../lib/cn";
 import { formatRelative } from "../lib/format";
 import { monitorStatusAccents, monitorStatusPriority } from "../lib/monitor-status";
-import { resourceKindLabels } from "../lib/resource-option-labels";
+import { resourceTypeLabel } from "../lib/resource-option-labels";
 
 export function ResourcesPage() {
   const { activeTeam } = useAuth();
@@ -295,9 +295,7 @@ function ResourceCard({ resource }: { resource: ResourceSummary }) {
           <ResourceImage resource={resource} className="size-11" />
           <div className="min-w-0 flex-1">
             <h2 className="line-clamp-2 break-words font-display font-bold">{resource.name}</h2>
-            <p className="mt-1 truncate text-sm text-muted">
-              {resource.agent?.platform ?? resourceKindLabels[resource.kind]}
-            </p>
+            <p className="mt-1 truncate text-sm text-muted">{resourceTypeLabel(resource)}</p>
             <StatusReason
               reason={resourceReason(resource)}
               status={resource.status}

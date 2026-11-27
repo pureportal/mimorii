@@ -1,6 +1,15 @@
 import type { ResourceSummary } from "@mimorii/contracts";
 import { describe, expect, it } from "vitest";
-import { resourceOptionLabels } from "./resource-option-labels";
+import { resourceOptionLabels, resourceTypeLabel } from "./resource-option-labels";
+
+describe("resourceTypeLabel", () => {
+  it("names connected apps by their app type", () => {
+    const lifie = { ...createResource({ id: "app-1", name: "Family" }), app: "lifie" as const };
+
+    expect(resourceTypeLabel(lifie)).toBe("Lifie");
+    expect(resourceTypeLabel(createResource({ id: "host-1", name: "Database" }))).toBe("Host");
+  });
+});
 
 describe("resourceOptionLabels", () => {
   it("keeps unique resource names concise", () => {
@@ -57,6 +66,7 @@ function createResource(
     teamId: "team-1",
     name: overrides.name,
     kind: "host",
+    app: null,
     description: null,
     tags: [],
     logQuery: null,

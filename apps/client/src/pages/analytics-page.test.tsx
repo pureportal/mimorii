@@ -112,6 +112,7 @@ function resource(id: string, name: string): ResourceSummary {
     teamId: "team-1",
     name,
     kind: "service",
+    app: null,
     description: null,
     tags: [],
     logQuery: null,

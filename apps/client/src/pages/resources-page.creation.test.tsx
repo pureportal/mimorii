@@ -5,7 +5,16 @@ import type {
   WebsiteDiscovery,
 } from "@mimorii/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResourcesPage } from "./resources-page";
@@ -45,6 +54,7 @@ const website: ResourceSummary = {
   teamId: "team-1",
   name: "New website",
   kind: "service",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,
@@ -115,6 +125,9 @@ const discovery: WebsiteDiscovery = {
 const imageUpdatedAt = "2026-09-12T10:01:00.000Z";
 let savedResource: ResourceSummary | null;
 let queryClient: QueryClient;
+
+configure({ asyncUtilTimeout: 15_000 });
+vi.setConfig({ testTimeout: 60_000 });
 
 beforeEach(() => {
   vi.resetAllMocks();

@@ -1,4 +1,4 @@
-import type { CreatedHeartbeatMonitor } from "@mimorii/contracts";
+import { appDefinitions, type AppKind, type CreatedHeartbeatMonitor } from "@mimorii/contracts";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,15 +9,16 @@ import { Input } from "./ui/input";
 export function HeartbeatSecretDialog({
   created,
   onClose,
-  foxytail = false,
+  app = null,
 }: {
   created: CreatedHeartbeatMonitor | null;
   onClose: () => void;
-  foxytail?: boolean;
+  app?: AppKind | null;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const appDefinition = app ? appDefinitions[app] : null;
   const endpoints = created
-    ? foxytail
+    ? appDefinition
       ? [{ label: "Enrollment code", value: created.pingToken }]
       : [
           { label: "Success", value: created.pingUrl },
@@ -38,9 +39,11 @@ export function HeartbeatSecretDialog({
   return (
     <Dialog open={Boolean(created)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
-        <DialogHeader title={foxytail ? "Foxytail enrollment code" : "Heartbeat endpoints"}>
-          {foxytail
-            ? "Paste this code in Foxytail → Settings → Monitoring."
+        <DialogHeader
+          title={appDefinition ? `${appDefinition.name} enrollment code` : "Heartbeat endpoints"}
+        >
+          {appDefinition
+            ? `Paste this code in ${appDefinition.connectIn}.`
             : "Store these endpoints now. Rotating the token invalidates them."}
         </DialogHeader>
         <div className="grid gap-4">

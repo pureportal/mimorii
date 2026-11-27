@@ -8,6 +8,7 @@ const resource: ResourceSummary = {
   teamId: "9c62089f-f515-4efe-bb21-dd146b960436",
   name: "Nextcloud",
   kind: "host",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,

@@ -1,8 +1,8 @@
-import type { HeartbeatMonitorSummary, HeartbeatTimelineBucket } from "@mimorii/contracts";
+import type { AppKind, HeartbeatMonitorSummary, HeartbeatTimelineBucket } from "@mimorii/contracts";
+import { appHighlights } from "../lib/app-metrics";
 import { cn } from "../lib/cn";
 import { formatCount, formatMilliseconds, formatPercent, formatRelative } from "../lib/format";
 import {
-  foxytailHighlights,
   heartbeatProblems,
   heartbeatState,
   timelineTone,
@@ -121,13 +121,19 @@ export function HeartbeatFacts({ heartbeat }: { heartbeat: HeartbeatMonitorSumma
   return <FactGrid facts={facts} />;
 }
 
-export function FoxytailHighlights({ heartbeat }: { heartbeat: HeartbeatMonitorSummary }) {
-  const highlights = foxytailHighlights(heartbeat.latestMetadata);
+export function AppHighlights({
+  app,
+  heartbeat,
+}: {
+  app: AppKind;
+  heartbeat: HeartbeatMonitorSummary;
+}) {
+  const highlights = appHighlights(app, heartbeat.latestMetadata);
   if (!highlights.length) return null;
   return <FactGrid facts={highlights} />;
 }
 
-function FactGrid({
+export function FactGrid({
   facts,
 }: {
   facts: Array<{ label: string; value: string; tone?: HeartbeatTone }>;

@@ -1,11 +1,11 @@
-import type { HeartbeatMonitorSummary } from "@mimorii/contracts";
+import type { AppKind, HeartbeatMonitorSummary } from "@mimorii/contracts";
 import { Radio } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../lib/app-navigation";
 import { formatInterval } from "../lib/format";
 import {
-  FoxytailHighlights,
+  AppHighlights,
   HeartbeatFacts,
   HeartbeatProblems,
   HeartbeatStateLine,
@@ -17,12 +17,12 @@ import { Card } from "./ui/card";
 export function HeartbeatCard({
   heartbeat,
   resourceName,
-  foxytail,
+  app,
   actions,
 }: {
   heartbeat: HeartbeatMonitorSummary;
   resourceName: string;
-  foxytail: boolean;
+  app: AppKind | null;
   actions: ReactNode;
 }) {
   return (
@@ -50,7 +50,7 @@ export function HeartbeatCard({
         <HeartbeatProblems heartbeat={heartbeat} />
         <HeartbeatTimeline timeline={heartbeat.timeline} />
         <HeartbeatFacts heartbeat={heartbeat} />
-        {foxytail ? <FoxytailHighlights heartbeat={heartbeat} /> : null}
+        {app ? <AppHighlights app={app} heartbeat={heartbeat} /> : null}
       </div>
     </Card>
   );

@@ -12,6 +12,7 @@ const resource: ResourceSummary = {
   teamId: "team-1",
   name: "Website",
   kind: "service",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,
