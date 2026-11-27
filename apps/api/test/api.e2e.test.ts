@@ -1445,11 +1445,23 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         })
       );
 
+    await request(app.getHttpServer())
+      .get(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/alerts`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.map((rule: { metric: string }) => rule.metric).toSorted()).toEqual([
+          "batteryPercent",
+          "batteryTemperatureCelsius",
+          "storagePercent",
+        ])
+      );
+
     const alert = await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/resources/${createdAgent.body.resourceId}/alerts`)
       .set("authorization", authorization)
       .send({
-        name: "Low battery",
+        name: "Battery below 70%",
         metric: "batteryPercent",
         operator: "lessThan",
         threshold: 70,
@@ -1476,9 +1488,10 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(200)
       .expect(({ body }) => {
-        expect(body).toEqual([expect.objectContaining({ id: alert.body.id, active: true })]);
-        expect(new Date(body[0].lastEvaluatedAt).toISOString()).toBe(lowBatteryStatus.observedAt);
-        expect(new Date(body[0].triggeredAt).toISOString()).toBe(lowBatteryStatus.observedAt);
+        const active = body.filter((rule: { active: boolean }) => rule.active);
+        expect(active).toEqual([expect.objectContaining({ id: alert.body.id })]);
+        expect(new Date(active[0].lastEvaluatedAt).toISOString()).toBe(lowBatteryStatus.observedAt);
+        expect(new Date(active[0].triggeredAt).toISOString()).toBe(lowBatteryStatus.observedAt);
       });
 
     await request(app.getHttpServer())
@@ -1519,12 +1532,9 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
       .set("authorization", authorization)
       .expect(200)
       .expect(({ body }) => {
-        expect(body[0]).toMatchObject({
-          id: alert.body.id,
-          active: false,
-          triggeredAt: null,
-        });
-        expect(new Date(body[0].lastEvaluatedAt).toISOString()).toBe(recoveredStatus.observedAt);
+        const rule = body.find((candidate: { id: string }) => candidate.id === alert.body.id);
+        expect(rule).toMatchObject({ active: false, triggeredAt: null });
+        expect(new Date(rule.lastEvaluatedAt).toISOString()).toBe(recoveredStatus.observedAt);
       });
 
     const mobileTarget = await request(app.getHttpServer())
@@ -1598,6 +1608,20 @@ describe.skipIf(!databaseConfigured)("Mimorii API", () => {
         message: "The team is investigating.",
       })
       .expect(201);
+    expect(incident.body).toMatchObject({ acknowledgedAt: null, acknowledgedByName: null });
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/incidents/${incident.body.id}/acknowledge`)
+      .set("authorization", authorization)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.status).toBe("investigating");
+        expect(body.acknowledgedAt).toEqual(expect.any(String));
+        expect(body.acknowledgedByName).toEqual(expect.any(String));
+      });
+    await request(app.getHttpServer())
+      .post(`/api/teams/${teamId}/incidents/${incident.body.id}/acknowledge`)
+      .set("authorization", authorization)
+      .expect(400);
     await request(app.getHttpServer())
       .post(`/api/teams/${teamId}/incidents/${incident.body.id}/updates`)
       .set("authorization", authorization)

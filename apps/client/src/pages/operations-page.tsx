@@ -87,6 +87,15 @@ export function OperationsPage({ view }: { view: OperationsView }) {
     },
     onError: (error) => toast.error(error.message),
   });
+  const acknowledgeIncident = useMutation({
+    mutationFn: (id: string) =>
+      api(`/teams/${teamId}/incidents/${id}/acknowledge`, { method: "POST" }),
+    onSuccess: async () => {
+      await refresh();
+      toast.success("Incident acknowledged");
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const removeMaintenance = useMutation({
     mutationFn: (id: string) => api(`/teams/${teamId}/maintenance/${id}`, { method: "DELETE" }),
     onSuccess: async () => {
@@ -192,6 +201,8 @@ export function OperationsPage({ view }: { view: OperationsView }) {
               setIncidentOpen(true);
             }}
             onUpdate={setSelectedIncident}
+            onAcknowledge={(incident) => acknowledgeIncident.mutate(incident.id)}
+            acknowledgingId={acknowledgeIncident.isPending ? acknowledgeIncident.variables : null}
           />
         ) : (
           <MaintenanceList

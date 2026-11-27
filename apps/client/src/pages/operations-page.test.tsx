@@ -22,6 +22,7 @@ const resource: ResourceSummary = {
   teamId: "team-1",
   name: "Public API",
   kind: "service",
+  app: null,
   description: null,
   tags: [],
   logQuery: null,
@@ -50,6 +51,7 @@ const incident: IncidentSummary = {
   status: "investigating",
   startedAt: "2026-08-24T08:00:00.000Z",
   acknowledgedAt: null,
+  acknowledgedByName: null,
   resolvedAt: null,
   durationSeconds: 300,
   resources: [{ id: resource.id, name: resource.name }],
@@ -138,6 +140,32 @@ describe("OperationsPage incident updates", () => {
     );
     await waitFor(() => expect(screen.getByText(status)).toBeInTheDocument());
     if (message) expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("acknowledges an open incident and shows the responder", async () => {
+    const acknowledged = {
+      ...incident,
+      acknowledgedAt: "2026-08-24T08:02:00.000Z",
+      acknowledgedByName: "Operator",
+    };
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/teams/team-1/incidents?limit=500") return Promise.resolve([currentIncident]);
+      if (path === "/teams/team-1/maintenance") return Promise.resolve([]);
+      if (path === "/teams/team-1/resources") return Promise.resolve([resource]);
+      if (path === "/teams/team-1/incidents/incident-1/acknowledge" && options?.method === "POST") {
+        currentIncident = acknowledged;
+        return Promise.resolve(acknowledged);
+      }
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
+
+    renderPage();
+
+    expect(await screen.findByText(/Not acknowledged/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Acknowledge" }));
+
+    expect(await screen.findByText(/Acknowledged by Operator/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acknowledge" })).not.toBeInTheDocument();
   });
 
   it("links an automatic incident to its associated check", async () => {

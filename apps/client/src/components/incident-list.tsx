@@ -1,5 +1,5 @@
 import type { IncidentSummary } from "@mimorii/contracts";
-import { Activity, ArrowUpRight, Logs, Pencil, ScrollText, Send } from "lucide-react";
+import { Activity, ArrowUpRight, Hand, Logs, Pencil, ScrollText, Send } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../lib/app-navigation";
@@ -10,20 +10,23 @@ import { StatusBadge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
+interface IncidentActions {
+  canManage: boolean;
+  acknowledgingId: string | null;
+  onEdit: (incident: IncidentSummary) => void;
+  onUpdate: (incident: IncidentSummary) => void;
+  onAcknowledge: (incident: IncidentSummary) => void;
+}
+
 export function IncidentList({
   incidents,
   resourceNames,
   loggedResourceIds,
-  canManage,
-  onEdit,
-  onUpdate,
-}: {
+  ...actions
+}: IncidentActions & {
   incidents: IncidentSummary[];
   resourceNames: ReadonlyMap<string, string>;
   loggedResourceIds: ReadonlySet<string> | null;
-  canManage: boolean;
-  onEdit: (incident: IncidentSummary) => void;
-  onUpdate: (incident: IncidentSummary) => void;
 }) {
   const [visibleCount, setVisibleCount] = useState(20);
 
@@ -49,9 +52,7 @@ export function IncidentList({
             (incident.logAlertRuleId !== null ||
               incident.resources.some((resource) => loggedResourceIds.has(resource.id)))
           }
-          canManage={canManage}
-          onEdit={onEdit}
-          onUpdate={onUpdate}
+          {...actions}
         />
       ))}
       {visibleIncidents.length < incidents.length ? (
@@ -72,18 +73,18 @@ function IncidentCard({
   resourceNames,
   hasLogs,
   canManage,
+  acknowledgingId,
   onEdit,
   onUpdate,
-}: {
+  onAcknowledge,
+}: IncidentActions & {
   incident: IncidentSummary;
   resourceNames: ReadonlyMap<string, string>;
   hasLogs: boolean;
-  canManage: boolean;
-  onEdit: (incident: IncidentSummary) => void;
-  onUpdate: (incident: IncidentSummary) => void;
 }) {
   const latest = incident.updates[0];
   const [logsOpen, setLogsOpen] = useState(false);
+  const open = incident.status !== "resolved";
 
   return (
     <article>
@@ -104,6 +105,11 @@ function IncidentCard({
                 incident.resolvedAt
                   ? `Lasted ${formatDuration(incident.durationSeconds)}`
                   : `Open for ${formatDuration(incident.durationSeconds)}`,
+                incident.acknowledgedByName
+                  ? `Acknowledged by ${incident.acknowledgedByName}`
+                  : open
+                    ? "Not acknowledged"
+                    : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -143,7 +149,7 @@ function IncidentCard({
                 size="sm"
                 className={logsOpen ? "border-lavender bg-lavender-soft" : undefined}
                 aria-expanded={logsOpen}
-                onClick={() => setLogsOpen((open) => !open)}
+                onClick={() => setLogsOpen((expanded) => !expanded)}
               >
                 <Logs /> Logs
               </Button>
@@ -153,7 +159,17 @@ function IncidentCard({
                 <Button variant="ghost" size="sm" onClick={() => onEdit(incident)}>
                   <Pencil /> Edit
                 </Button>
-                {incident.status !== "resolved" ? (
+                {open && !incident.acknowledgedAt ? (
+                  <Button
+                    variant="coral"
+                    size="sm"
+                    disabled={acknowledgingId === incident.id}
+                    onClick={() => onAcknowledge(incident)}
+                  >
+                    <Hand /> Acknowledge
+                  </Button>
+                ) : null}
+                {open ? (
                   <Button variant="outline" size="sm" onClick={() => onUpdate(incident)}>
                     <Send /> Update
                   </Button>

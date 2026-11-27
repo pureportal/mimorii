@@ -16,6 +16,8 @@ const incident = {
   status: "investigating" as const,
   started_at: "2026-08-13T12:00:00.000Z",
   acknowledged_at: null,
+  acknowledged_by: null,
+  acknowledged_by_name: null,
   resolved_at: null,
   created_at: "2026-08-13T12:00:00.000Z",
   notifications_suppressed: 1,
@@ -161,6 +163,8 @@ describe("incident updates", () => {
       ...incident,
       status,
       acknowledged_at: "2026-08-13T12:05:00.000Z",
+      acknowledged_by: "user-1",
+      acknowledged_by_name: "Operator",
       resolved_at: status === "resolved" ? "2026-08-13T12:05:00.000Z" : null,
     };
     database.get.mockResolvedValueOnce(incident).mockResolvedValueOnce(updatedIncident);
@@ -191,6 +195,7 @@ describe("incident updates", () => {
       expect.stringContaining("UPDATE incidents SET status = ?"),
       status,
       expect.any(String),
+      "user-1",
       status === "resolved" ? expect.any(String) : null,
       expect.any(String),
       incident.id,
@@ -207,8 +212,66 @@ describe("incident updates", () => {
     );
     expect(result).toMatchObject({
       status,
+      acknowledgedByName: "Operator",
       updates: [expect.objectContaining({ status, message })],
     });
+  });
+
+  it("records the responder when an incident is acknowledged", async () => {
+    database.get
+      .mockResolvedValueOnce(incident)
+      .mockResolvedValueOnce({ name: "Operator" })
+      .mockResolvedValueOnce({
+        ...incident,
+        acknowledged_at: "2026-08-13T12:02:00.000Z",
+        acknowledged_by: "user-1",
+        acknowledged_by_name: "Operator",
+      });
+    database.all.mockResolvedValue([]);
+    const service = new IncidentsService(
+      database as never,
+      access as never,
+      {} as never,
+      notifications as never,
+      audit as never
+    );
+
+    const result = await service.acknowledge("user-1", "team-1", incident.id);
+
+    expect(database.run).toHaveBeenCalledWith(
+      expect.stringContaining("acknowledged_by = ?"),
+      expect.any(String),
+      "user-1",
+      expect.any(String),
+      incident.id,
+      "team-1"
+    );
+    expect(notifications.enqueue).toHaveBeenCalledWith(
+      "team-1",
+      "incident.updated",
+      expect.objectContaining({ message: "Acknowledged by Operator", incidentId: incident.id })
+    );
+    expect(result).toMatchObject({ acknowledgedByName: "Operator", status: "investigating" });
+  });
+
+  it("rejects acknowledging an incident twice", async () => {
+    database.get.mockResolvedValueOnce({
+      ...incident,
+      acknowledged_at: "2026-08-13T12:02:00.000Z",
+      acknowledged_by: "user-2",
+    });
+    const service = new IncidentsService(
+      database as never,
+      access as never,
+      {} as never,
+      notifications as never,
+      audit as never
+    );
+
+    await expect(service.acknowledge("user-1", "team-1", incident.id)).rejects.toThrow(
+      "Incident is already acknowledged"
+    );
+    expect(database.run).not.toHaveBeenCalled();
   });
 });
 

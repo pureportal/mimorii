@@ -32,6 +32,7 @@ interface IncidentRow {
   status: IncidentStatus;
   started_at: string;
   acknowledged_at: string | null;
+  acknowledged_by: string | null;
   resolved_at: string | null;
   created_at: string;
   notifications_suppressed: number;
@@ -40,6 +41,7 @@ interface IncidentRow {
 interface IncidentSummaryRow extends IncidentRow {
   check_name: string | null;
   log_alert_rule_name: string | null;
+  acknowledged_by_name: string | null;
 }
 
 interface IncidentUpdateRow {
@@ -88,9 +90,11 @@ interface LogAlertContext {
   resource_name: string | null;
 }
 
-const incidentSummaryColumns = "i.*, c.name AS check_name, lar.name AS log_alert_rule_name";
+const incidentSummaryColumns =
+  "i.*, c.name AS check_name, lar.name AS log_alert_rule_name, au.name AS acknowledged_by_name";
 const incidentSummaryJoins = `LEFT JOIN checks c ON c.id = i.check_id
-  LEFT JOIN log_alert_rules lar ON lar.id = i.log_alert_rule_id`;
+  LEFT JOIN log_alert_rules lar ON lar.id = i.log_alert_rule_id
+  LEFT JOIN users au ON au.id = i.acknowledged_by`;
 
 @Injectable()
 export class IncidentsService {
@@ -164,8 +168,8 @@ export class IncidentsService {
       await this.database.run(
         `INSERT INTO incidents
          (id, team_id, source, title, impact, status, started_at, acknowledged_at,
-          created_by, created_at, updated_at)
-         VALUES (?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          acknowledged_by, created_by, created_at, updated_at)
+         VALUES (?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         teamId,
         input.title.trim(),
@@ -173,6 +177,7 @@ export class IncidentsService {
         status,
         startedAt,
         status === "investigating" ? null : now,
+        status === "investigating" ? null : userId,
         userId,
         now,
         now
@@ -251,12 +256,14 @@ export class IncidentsService {
     if (current.status === "resolved")
       throw new BadRequestException("Incident is already resolved");
     const now = new Date().toISOString();
+    const acknowledges = !current.acknowledged_at && input.status !== "investigating";
     await this.database.transaction(async () => {
       await this.database.run(
-        `UPDATE incidents SET status = ?, acknowledged_at = ?, resolved_at = ?, updated_at = ?
-         WHERE id = ? AND team_id = ?`,
+        `UPDATE incidents SET status = ?, acknowledged_at = ?, acknowledged_by = ?,
+         resolved_at = ?, updated_at = ? WHERE id = ? AND team_id = ?`,
         input.status,
-        current.acknowledged_at ?? (input.status === "investigating" ? null : now),
+        acknowledges ? now : current.acknowledged_at,
+        acknowledges ? userId : current.acknowledged_by,
         input.status === "resolved" ? now : null,
         now,
         id,
@@ -284,6 +291,54 @@ export class IncidentsService {
       teamId,
       userId,
       action: event,
+      subjectType: "incident",
+      subjectId: id,
+    });
+    return this.get(userId, teamId, id);
+  }
+
+  async acknowledge(userId: string, teamId: string, id: string): Promise<IncidentSummary> {
+    await this.access.require(userId, teamId, "member");
+    const current = await this.requireRow(teamId, id);
+    if (current.status === "resolved") {
+      throw new BadRequestException("Incident is already resolved");
+    }
+    if (current.acknowledged_at) {
+      throw new BadRequestException("Incident is already acknowledged");
+    }
+    const now = new Date().toISOString();
+    await this.database.transaction(async () => {
+      await this.database.run(
+        `UPDATE incidents SET acknowledged_at = ?, acknowledged_by = ?, updated_at = ?
+         WHERE id = ? AND team_id = ?`,
+        now,
+        userId,
+        now,
+        id,
+        teamId
+      );
+      const responder = await this.database.get<{ name: string }>(
+        "SELECT name FROM users WHERE id = ?",
+        userId
+      );
+      await this.notifications.enqueue(teamId, "incident.updated", {
+        source: current.source,
+        severity: "info",
+        incidentId: id,
+        title: current.title,
+        message: `Acknowledged by ${responder?.name ?? "a team member"}`,
+        impact: current.impact,
+        status: current.status,
+        resourceIds: (await this.resources(id)).map((resource) => resource.id),
+        dedupeKey: `incident:${id}`,
+        path: appRoutes.incidents,
+        occurredAt: now,
+      });
+    });
+    await this.audit.record({
+      teamId,
+      userId,
+      action: "incident.acknowledged",
       subjectType: "incident",
       subjectId: id,
     });
@@ -845,6 +900,7 @@ export class IncidentsService {
       status: row.status,
       startedAt: row.started_at,
       acknowledgedAt: row.acknowledged_at,
+      acknowledgedByName: row.acknowledged_by_name,
       resolvedAt: row.resolved_at,
       durationSeconds: Math.max(0, Math.floor((end - new Date(row.started_at).getTime()) / 1_000)),
       resources,

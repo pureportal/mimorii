@@ -71,4 +71,14 @@ export class IncidentsController {
   ) {
     return this.incidents.addUpdate(user.id, teamId, id, input);
   }
+
+  @Post(":id/acknowledge")
+  @HttpCode(200)
+  acknowledge(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId") teamId: string,
+    @Param("id") id: string
+  ) {
+    return this.incidents.acknowledge(user.id, teamId, id);
+  }
 }

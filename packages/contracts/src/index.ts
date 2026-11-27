@@ -702,6 +702,7 @@ export interface IncidentSummary {
   status: IncidentStatus;
   startedAt: string;
   acknowledgedAt: string | null;
+  acknowledgedByName: string | null;
   resolvedAt: string | null;
   durationSeconds: number;
   resources: IncidentResource[];
