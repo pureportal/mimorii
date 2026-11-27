@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ApiTokensCard } from "../components/api-tokens-card";
 import { ConnectedAppsCard } from "../components/connected-apps-card";
 import { NotificationDeviceCard } from "../components/notification-device-card";
+import { PersonalDataCard } from "../components/personal-data-card";
 import { PrivacySettingsButton } from "../components/privacy-controls";
 import { TwoFactorCard } from "../components/two-factor/two-factor-card";
 import { Button } from "../components/ui/button";
@@ -151,6 +152,8 @@ export function SettingsPage() {
       </Card>
 
       <TwoFactorCard />
+
+      <PersonalDataCard />
 
       <Card>
         <CardHeader>

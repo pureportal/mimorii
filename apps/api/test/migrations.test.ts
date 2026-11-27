@@ -59,6 +59,10 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
           "user_recovery_codes",
           "two_factor_challenges",
           "oauth_grants",
+          "traffic_sites",
+          "traffic_salts",
+          "traffic_events",
+          "traffic_clicks",
         ])
       );
 
@@ -262,7 +266,7 @@ describe.skipIf(!databaseConfigured)("PostgreSQL migrations", () => {
       const migration = await database.get<{ name: string }>(
         "SELECT name FROM mikro_orm_migrations ORDER BY id DESC LIMIT 1"
       );
-      expect(migration?.name).toBe("Migration20261114000000");
+      expect(migration?.name).toBe("Migration20261127040000");
 
       const releaseColumns = await database.all<{ table_name: string; column_name: string }>(
         `SELECT table_name, column_name FROM information_schema.columns

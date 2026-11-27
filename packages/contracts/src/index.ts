@@ -1,5 +1,6 @@
 import type { AppKind } from "./apps.js";
 
+export * from "./account.js";
 export * from "./apps.js";
 export * from "./log-query.js";
 export * from "./logs.js";

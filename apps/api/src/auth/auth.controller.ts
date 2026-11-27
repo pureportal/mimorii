@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Header,
   HttpCode,
@@ -16,9 +17,11 @@ import { Throttle } from "@nestjs/throttler";
 import type { AuthenticatedUser } from "../common/rows.js";
 import { AuthGuard } from "./auth.guard.js";
 import { ApiTokensService } from "./api-tokens.service.js";
+import { AccountService } from "./account.service.js";
 import {
   ChangePasswordDto,
   CreateApiTokenDto,
+  DeleteAccountDto,
   LoginDto,
   PasswordResetCompleteDto,
   PasswordResetRequestDto,
@@ -29,17 +32,49 @@ import {
   UpdateProfileDto,
 } from "./auth.dto.js";
 import { AuthService } from "./auth.service.js";
-import { CurrentUser } from "./current-user.decorator.js";
+import { CurrentCredential, CurrentUser, type AuthCredential } from "./current-user.decorator.js";
 import { PasswordResetService } from "./password-reset.service.js";
+
+function requireSession(credential: AuthCredential | undefined): void {
+  if (credential?.type !== "session")
+    throw new ForbiddenException("Sign in to Mimorii to continue");
+}
 
 @ApiTags("Authentication")
 @Controller("auth")
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly account: AccountService,
     private readonly apiTokens: ApiTokensService,
     private readonly passwordResets: PasswordResetService
   ) {}
+
+  @Get("account/export")
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @Header("Cache-Control", "no-store")
+  @Header("Content-Disposition", 'attachment; filename="mimorii-personal-data.json"')
+  exportAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @CurrentCredential() credential: AuthCredential | undefined
+  ) {
+    requireSession(credential);
+    return this.account.export(user);
+  }
+
+  @Delete("account")
+  @HttpCode(204)
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  async deleteAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @CurrentCredential() credential: AuthCredential | undefined,
+    @Body() input: DeleteAccountDto
+  ) {
+    requireSession(credential);
+    await this.account.delete(user, input.password);
+  }
 
   @Post("register")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })

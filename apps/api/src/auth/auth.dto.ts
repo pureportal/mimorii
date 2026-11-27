@@ -81,6 +81,13 @@ export class ChangePasswordDto {
   newPassword!: string;
 }
 
+export class DeleteAccountDto {
+  @ApiProperty()
+  @IsString()
+  @Length(1, 128)
+  password!: string;
+}
+
 export class ApiTokenTeamDto {
   @ApiProperty({ format: "uuid" })
   @IsUUID()

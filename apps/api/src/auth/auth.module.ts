@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { PlatformSettingsModule } from "../platform-settings/platform-settings.module.js";
+import { AccountService } from "./account.service.js";
 import { ApiTokenScopeInterceptor } from "./api-token-scope.interceptor.js";
 import { ApiTokensService } from "./api-tokens.service.js";
 import { AuthController } from "./auth.controller.js";
@@ -38,6 +39,7 @@ function jwtSecret(): string {
   ],
   controllers: [AuthController, OAuthController, TwoFactorController],
   providers: [
+    AccountService,
     AuthService,
     AuthGuard,
     OptionalAuthGuard,
