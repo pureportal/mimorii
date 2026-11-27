@@ -1,7 +1,7 @@
 import { LegalAddress, LegalPage, LegalSection } from "../../components/legal-layout";
 import { legalProvider } from "../../lib/legal";
-import { analyticsConfigured, sessionReplayConfigured } from "../../lib/privacy-preferences";
-import { ProcessingEntry, purePortalSwetrix } from "./privacy-processing";
+import { analyticsConfigured } from "../../lib/analytics";
+import { ProcessingEntry } from "./privacy-processing";
 
 export function GermanPrivacyPolicy() {
   return (
@@ -202,96 +202,37 @@ export function GermanPrivacyPolicy() {
         {analyticsConfigured ? (
           <>
             <p>
-              Mit Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO und § 25 Abs. 1 TDDDG nutzt Mimorii
-              Swetrix, um Seitenaufrufe, Sprache und Zeitzone, Browser- und Geräteeigenschaften,
-              Leistungswerte, Aktivitätssignale, Fehler, ausgewählte Produktaktionen sowie nach der
-              Anmeldung eine interne Kontokennung mit Teamrolle zu messen. Das SDK setzt keine
-              Cookies und nutzt weder lokalen Speicher noch Sitzungsspeicher. Es liest jedoch über
-              Browser-Schnittstellen Informationen aus Browser und Endgerät aus; wegen dieses
-              optionalen Zugriffs bleibt die Analyse trotz Selbsthosting einwilligungsbasiert.
+              Mit Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO und § 25 Abs. 1 TDDDG misst Mimorii
+              seine eigene Nutzung mit der in Mimorii integrierten Website-Analyse. Ein externer
+              Analysedienst ist nicht beteiligt. Das Skript läuft erst nach der Einwilligung und
+              liest über Browser-Schnittstellen die Seitenadresse, die vorherige Seite, die Breite
+              des Browserfensters, die Zeitzone und die Sprache aus. Es erfasst Seitenaufrufe,
+              Verweildauer, Scrolltiefe, Core Web Vitals, JavaScript-Fehler, wenige Produktaktionen
+              wie Anmeldung und Registrierung, ausgehende Links sowie Klickpositionen auf
+              Bedienelementen. Es setzt keine Cookies, nutzt keinen Browserspeicher, erfasst keine
+              eingegebenen Texte und verknüpft Messungen nicht mit einem Konto.
             </p>
             <p>
-              Seitenpfade werden auf feste Routen abgebildet; Suchparameter, Referrer-URLs und
-              Kampagnenparameter werden vor der Übermittlung entfernt. Ereignisse zu Produktaktionen
-              enthalten eine feste Route und begrenzte betriebliche Metadaten. Auf
-              Authentifizierungs- und dynamischen Routen werden keine Fehler erfasst, und erkennbare
-              Geheimnisse in Fehlertexten werden unkenntlich gemacht. Der Analyse-Endpunkt erhält
-              bei der Zustellung einer Anfrage zwangsläufig die IP-Adresse und die Anfrage-Header
-              des Browsers. Aus dem Repository geht nicht hervor, ob das eingesetzte Backend rohe
-              IP-Adressen speichert oder wie genau es Analysekennungen bildet; der
-              Produktivbetreiber muss beide Punkte bestätigen.
+              Der Server erhält bei der Zustellung einer Messung die IP-Adresse und die
+              Anfrage-Header des Browsers. Er leitet Browser, Betriebssystem und Gerätetyp aus dem
+              User-Agent ab und zählt Besucher mit einem schlüsselbasierten Hash aus IP-Adresse und
+              User-Agent unter einem zufälligen Schlüssel, der täglich wechselt und nach Ablauf des
+              Tages gelöscht wird. IP-Adresse und User-Agent werden nicht gespeichert, und ein
+              Besucher kann nicht tagesübergreifend wiedererkannt werden. Suchparameter außer
+              Kampagnenparametern werden entfernt, kennungsartige Teile von Seitenadressen ersetzt
+              und E-Mail-Adressen sowie lange Zahlen in Ereignis- und Fehlertexten vor der
+              Speicherung unkenntlich gemacht. Das Land wird aus der Zeitzone abgeleitet, nicht aus
+              der IP-Adresse.
             </p>
-            {purePortalSwetrix ? (
-              <>
-                <p>
-                  Analysedaten werden an die selbst gehostete Swetrix-Instanz von PurePortal unter{" "}
-                  <a href="https://swetrix.pureportal.io/">swetrix.pureportal.io</a> gesendet.
-                  PurePortal bleibt für diese Verarbeitung Verantwortlicher. Die aktuelle
-                  Integration übermittelt keine Analysedaten an Swetrix Ltd.; der Analysecode wird
-                  mit der Anwendung ausgeliefert. Ereignisse bleiben gespeichert, bis die für die
-                  Instanz konfigurierte Aufbewahrungsdauer abläuft. Diese Dauer wird außerhalb
-                  dieser Codebasis verwaltet und muss vor dem Produktivbetrieb bestätigt werden.
-                </p>
-                <p>
-                  <a
-                    href="https://www.cloudflare.com/privacypolicy/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Cloudflare, Inc.
-                  </a>
-                  , 101 Townsend Street, San Francisco, CA 94107, USA, erbringt für diesen Endpunkt
-                  Reverse-Proxy-, Transportverschlüsselungs-, Routing- und
-                  Netzwerksicherheitsdienste und verarbeitet dabei Verbindungsdaten und die
-                  übermittelte Analyseanfrage. Nach eigenen Angaben kann Cloudflare Daten außerhalb
-                  des EWR verarbeiten. Der{" "}
-                  <a
-                    href="https://www.cloudflare.com/cloudflare-customer-dpa/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Auftragsverarbeitungszusatz
-                  </a>{" "}
-                  von Cloudflare sieht für erfasste Übermittlungen in die USA das EU-US Data Privacy
-                  Framework und für eingeschränkte Übermittlungen Standardvertragsklauseln vor.
-                  PurePortal muss sicherstellen, dass dieser Zusatz für das Produktivkonto gilt.
-                </p>
-              </>
-            ) : (
-              <p>
-                Dieser Build sendet Analysedaten an einen vom Betreiber der Installation
-                konfigurierten, selbst gehosteten Swetrix-Endpunkt. Dieser Betreiber muss in seinen
-                installationsspezifischen Hinweisen den Betreiber des Endpunkts, den Standort, die
-                Empfänger und die Aufbewahrungsdauer angeben.
-              </p>
-            )}
-            {sessionReplayConfigured ? (
-              <p>
-                Die Sitzungsaufzeichnung ist eine separate optionale Einstellung und wird nur
-                einbezogen, wenn Sie „Alle akzeptieren“ wählen oder sie unter
-                „Datenschutzeinstellungen“ aktivieren. Ist sie aktiviert, erhält Swetrix
-                stichprobenartige Aufzeichnungen von Interaktionen. Der Recorder wird mit der
-                Anwendung ausgeliefert; alle Texte und Eingaben werden maskiert, Bilder und andere
-                visuelle Medien werden blockiert, und die Aufzeichnung von iframes ist deaktiviert.
-                Die Aufzeichnung ist auf feste Routen beschränkt und auf Anmelde-, Registrierungs-,
-                Einladungs-, öffentlichen Status- und dynamischen Routen deaktiviert. Diese
-                Maßnahmen verringern die Möglichkeit, dass personenbezogene Daten erfasst werden,
-                können sie aber nicht ausschließen.
-              </p>
-            ) : null}
             <p>
-              Analyse und Sitzungsaufzeichnung starten erst nach der jeweiligen Auswahl. Die
-              Einwilligung kann jederzeit unter „Datenschutzeinstellungen“ geändert werden. Ein
+              Die Einwilligung kann jederzeit unter „Datenschutzeinstellungen“ geändert werden. Ein
               Widerruf beendet die weitere Erhebung; die Rechtmäßigkeit der bis zum Widerruf
-              erfolgten Verarbeitung bleibt unberührt. Das Browsersignal „Do Not Track“ wird
-              ebenfalls beachtet.
+              erfolgten Verarbeitung bleibt unberührt. Browser, die „Do Not Track“ oder „Global
+              Privacy Control“ senden, werden nicht gemessen.
             </p>
           </>
         ) : (
-          <p>
-            In diesem Build sind weder eine optionale Analyse noch eine Sitzungsaufzeichnung
-            konfiguriert.
-          </p>
+          <p>In diesem Build ist keine optionale Analyse konfiguriert.</p>
         )}
       </LegalSection>
 
@@ -303,12 +244,12 @@ export function GermanPrivacyPolicy() {
           Startseite, die Analyseauswahl und der Zeitpunkt dieser Entscheidung sowie bei aktiviertem
           Push eine zufällige Gerätereferenz und eine serverspezifische Endpunktreferenz
           gespeichert. Der Browser speichert außerdem den Service Worker und das für Web Push
-          angeforderte Push-Abonnement. Swetrix selbst nutzt in dieser Integration keinen
-          Browserspeicher. Dieser Speicher stellt vom Nutzer angeforderte Funktionen oder
-          Einstellungen bereit und wird nach § 25 Abs. 2 Nr. 2 TDDDG genutzt. Sitzung und
-          Teamauswahl werden bei der Abmeldung entfernt; eine abgelaufene Sitzung wird beim nächsten
-          Öffnen der App entfernt. Push-Abonnements und Endpunktreferenzen werden entfernt, wenn
-          Push deaktiviert wird; Server-URL, Design, Sprache, Datenschutzauswahl, Gerätereferenz und
+          angeforderte Push-Abonnement. Das Analyseskript nutzt keinen Browserspeicher. Dieser
+          Speicher stellt vom Nutzer angeforderte Funktionen oder Einstellungen bereit und wird nach
+          § 25 Abs. 2 Nr. 2 TDDDG genutzt. Sitzung und Teamauswahl werden bei der Abmeldung
+          entfernt; eine abgelaufene Sitzung wird beim nächsten Öffnen der App entfernt.
+          Push-Abonnements und Endpunktreferenzen werden entfernt, wenn Push deaktiviert wird;
+          Server-URL, Design, Sprache, Datenschutzauswahl, Gerätereferenz und
           Service-Worker-Registrierung bleiben bestehen, bis sie geändert oder die Websitedaten im
           Browser gelöscht werden.
         </p>
@@ -335,13 +276,6 @@ export function GermanPrivacyPolicy() {
             Administratoren erhalten die für ihre Aufgaben erforderlichen Plattformkonto- und
             Sponsoringdaten.
           </li>
-          {analyticsConfigured ? (
-            <li>
-              {purePortalSwetrix
-                ? "Die Analyseinstanz von PurePortal und Cloudflare erhalten Analysedaten nur nach Einwilligung. Swetrix Ltd. ist in dieser Konfiguration kein Empfänger."
-                : "Der konfigurierte Analyse-Endpunkt und seine Netzwerkanbieter erhalten Analysedaten nur nach Einwilligung."}
-            </li>
-          ) : null}
           <li>
             Besucher öffentlicher Statusseiten und Dashboards erhalten Inhalte, die ein Team bewusst
             veröffentlicht oder geteilt hat.
@@ -394,8 +328,8 @@ export function GermanPrivacyPolicy() {
           </li>
           {analyticsConfigured ? (
             <li>
-              Analysedaten bleiben bis zum Ablauf der konfigurierten Swetrix-Aufbewahrungsdauer
-              gespeichert; diese Dauer ist nicht in diesem Repository festgelegt.
+              Analysemessungen werden standardmäßig 395 Tage und Klickpositionen 90 Tage
+              gespeichert; der tägliche Besucherschlüssel wird nach Ablauf seines Tages gelöscht.
             </li>
           ) : null}
           <li>
@@ -445,7 +379,8 @@ export function GermanPrivacyPolicy() {
           Datenübertragbarkeit (Art. 20). Beruht die Verarbeitung auf Art. 6 Abs. 1 lit. f DSGVO,
           können Sie aus Gründen, die sich aus Ihrer besonderen Situation ergeben, widersprechen
           (Art. 21). Eine Einwilligung können Sie jederzeit mit Wirkung für die Zukunft widerrufen.
-          Anfragen richten Sie an{" "}
+          Angemeldet können Sie Ihre Kontodaten unter Account → Your data herunterladen und Ihr
+          Konto dort löschen. Weitere Anfragen richten Sie an{" "}
           <a href={`mailto:${legalProvider.email}`}>{legalProvider.email}</a>. Vor der Erfüllung
           einer Anfrage kann eine Überprüfung Ihrer Identität erforderlich sein.
         </p>

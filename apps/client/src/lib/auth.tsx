@@ -16,9 +16,8 @@ import {
   storeAuthSession,
   subscribeAuthSession,
 } from "./auth-session";
-import { usePrivacy } from "./privacy";
 import { revokePushOnLogout } from "./push-notifications";
-import { identifySwetrixUser, resetSwetrixUser, trackSwetrixEvent } from "./swetrix";
+import { trackEvent } from "./analytics";
 
 const TEAM_KEY = "mimorii.team";
 
@@ -43,7 +42,6 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { preferences } = usePrivacy();
   const [session, setSession] = useState<AuthSession | null>(loadAuthSession);
   const sessionRef = useRef(session);
   const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -73,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(TEAM_KEY, teamId);
         setActiveTeamIdState(teamId);
       }
-      trackSwetrixEvent({ ev: "ACCOUNT_SIGNED_IN" });
+      trackEvent("Signed in");
     },
     [storeSession]
   );
@@ -82,8 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = sessionRef.current?.refreshToken;
     revokePushOnLogout();
     if (refreshToken) void revokeAuthSession(refreshToken).catch(() => undefined);
-    trackSwetrixEvent({ ev: "ACCOUNT_SIGNED_OUT" });
-    resetSwetrixUser();
     storeSession(null);
     setProfileStatus("ready");
     localStorage.removeItem(TEAM_KEY);
@@ -143,14 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeTeam =
     session?.teams.find((team) => team.id === activeTeamId) ?? session?.teams[0] ?? null;
 
-  useEffect(() => {
-    if (!session) {
-      resetSwetrixUser();
-      return;
-    }
-    identifySwetrixUser(session.user.id, activeTeam ? { team_role: activeTeam.role } : undefined);
-  }, [activeTeam, preferences?.analytics, session]);
-
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -167,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: "POST",
           ...jsonBody({ name, email, password, acceptedTerms }),
         });
-        trackSwetrixEvent({ ev: "ACCOUNT_REGISTERED", unique: true });
+        trackEvent("Registered");
         return challenge;
       },
       completeSignIn,

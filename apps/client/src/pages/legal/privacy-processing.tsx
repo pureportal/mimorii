@@ -1,8 +1,5 @@
 import type { ReactNode } from "react";
 
-const customSwetrixEndpoint = import.meta.env.VITE_SWETRIX_API_URL?.trim();
-export const purePortalSwetrix = swetrixHostname(customSwetrixEndpoint) === "swetrix.pureportal.io";
-
 export function ProcessingEntry({
   title,
   legalBasis,
@@ -19,13 +16,4 @@ export function ProcessingEntry({
       <div className="mt-3 grid gap-3">{children}</div>
     </section>
   );
-}
-
-function swetrixHostname(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    return new URL(value).hostname;
-  } catch {
-    return null;
-  }
 }

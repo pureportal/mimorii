@@ -1,62 +1,66 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("privacy preferences", () => {
+describe("privacy preferences and analytics", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
     localStorage.clear();
+    document.head.querySelectorAll("script[data-site]").forEach((script) => script.remove());
   });
 
-  it("stores analytics consent without enabling replay", async () => {
-    vi.stubEnv("VITE_SWETRIX_PROJECT_ID", "project-id");
-    vi.stubEnv("VITE_SWETRIX_API_URL", "https://analytics.example.com/backend/v1/log");
-    vi.stubEnv("VITE_SWETRIX_SESSION_REPLAY_ENABLED", "true");
+  afterEach(() => {
+    delete window.mimorii;
+  });
+
+  it("stores the analytics choice", async () => {
+    vi.stubEnv("VITE_MIMORII_TRAFFIC_SITE", "mim_site_key");
     const { readPrivacyPreferences, storePrivacyPreferences } =
       await import("./privacy-preferences");
 
-    const stored = storePrivacyPreferences({ analytics: true, sessionReplay: false });
+    const stored = storePrivacyPreferences(true);
 
-    expect(stored).toEqual(
-      expect.objectContaining({ version: 1, analytics: true, sessionReplay: false })
-    );
+    expect(stored).toEqual(expect.objectContaining({ version: 2, analytics: true }));
     expect(readPrivacyPreferences()).toEqual(stored);
   });
 
-  it("does not enable replay without its separate choice", async () => {
-    vi.stubEnv("VITE_SWETRIX_PROJECT_ID", "project-id");
-    vi.stubEnv("VITE_SWETRIX_API_URL", "https://analytics.example.com/backend/v1/log");
-    vi.stubEnv("VITE_SWETRIX_SESSION_REPLAY_ENABLED", "true");
-    const { storePrivacyPreferences } = await import("./privacy-preferences");
-
-    expect(storePrivacyPreferences({ analytics: false, sessionReplay: true }).sessionReplay).toBe(
-      false
-    );
-  });
-
-  it("ignores invalid or obsolete stored choices", async () => {
+  it("ignores choices made for earlier analytics", async () => {
     localStorage.setItem(
       "mimorii.privacy",
-      JSON.stringify({ version: 0, analytics: true, sessionReplay: true, decidedAt: "now" })
+      JSON.stringify({ version: 1, analytics: true, sessionReplay: true, decidedAt: "now" })
     );
     const { readPrivacyPreferences } = await import("./privacy-preferences");
 
     expect(readPrivacyPreferences()).toBeNull();
   });
 
-  it("requires an explicit analytics endpoint", async () => {
-    vi.stubEnv("VITE_SWETRIX_PROJECT_ID", "project-id");
-    vi.stubEnv("VITE_SWETRIX_API_URL", "");
-    const { analyticsConfigured } = await import("./privacy-preferences");
+  it("is unavailable without a site key", async () => {
+    vi.stubEnv("VITE_MIMORII_TRAFFIC_SITE", "");
+    const { analyticsConfigured, setAnalyticsConsent } = await import("./analytics");
+
+    setAnalyticsConsent(true);
 
     expect(analyticsConfigured).toBe(false);
+    expect(document.head.querySelector("script[data-site]")).toBeNull();
   });
 
-  it("requires an explicit project ID", async () => {
-    vi.stubEnv("VITE_SWETRIX_PROJECT_ID", "");
-    vi.stubEnv("VITE_SWETRIX_PROJECT_URL", "https://analytics.example.com/projects/project-id");
-    vi.stubEnv("VITE_SWETRIX_API_URL", "https://analytics.example.com/backend/v1/log");
-    const { analyticsConfigured } = await import("./privacy-preferences");
+  it("loads the built-in tracker only after consent", async () => {
+    vi.stubEnv("VITE_MIMORII_TRAFFIC_SITE", "mim_site_key");
+    const { setAnalyticsConsent } = await import("./analytics");
 
-    expect(analyticsConfigured).toBe(false);
+    setAnalyticsConsent(false);
+    expect(document.head.querySelector("script[data-site]")).toBeNull();
+
+    setAnalyticsConsent(true);
+    const script = document.head.querySelector<HTMLScriptElement>("script[data-site]");
+    expect(script?.src).toBe(`${window.location.origin}/api/traffic/script.js`);
+    expect(script?.dataset).toMatchObject({ site: "mim_site_key", consent: "" });
+
+    const consent = vi.fn();
+    window.mimorii = { track: vi.fn(), consent };
+    script?.dispatchEvent(new Event("load"));
+    expect(consent).toHaveBeenLastCalledWith(true);
+
+    setAnalyticsConsent(false);
+    expect(consent).toHaveBeenLastCalledWith(false);
   });
 });

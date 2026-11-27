@@ -40,7 +40,6 @@
     "react-router-dom": "^7.9.6",
     "recharts": "^3.4.1",
     "sonner": "^2.0.7",
-    "swetrix": "4.5.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

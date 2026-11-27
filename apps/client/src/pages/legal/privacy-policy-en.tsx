@@ -1,7 +1,7 @@
 import { LegalAddress, LegalPage, LegalSection } from "../../components/legal-layout";
 import { legalProvider } from "../../lib/legal";
-import { analyticsConfigured, sessionReplayConfigured } from "../../lib/privacy-preferences";
-import { ProcessingEntry, purePortalSwetrix } from "./privacy-processing";
+import { analyticsConfigured } from "../../lib/analytics";
+import { ProcessingEntry } from "./privacy-processing";
 
 export function EnglishPrivacyPolicy() {
   return (
@@ -172,85 +172,33 @@ export function EnglishPrivacyPolicy() {
         {analyticsConfigured ? (
           <>
             <p>
-              With consent under Article 6(1)(a) GDPR and Section 25(1) TDDDG, Mimorii uses Swetrix
-              to measure page views, locale and time zone, browser and device characteristics,
-              performance, activity heartbeats, errors, selected product actions, and, after
-              sign-in, an internal account identifier with team role. The SDK does not set cookies
-              or use local or session storage. It does read information from the browser and device
-              through browser APIs; this optional access is why analytics remains consent-based
-              despite self-hosting.
+              With consent under Article 6(1)(a) GDPR and Section 25(1) TDDDG, Mimorii measures its
+              own use with the website analytics built into Mimorii. No third-party analytics
+              service is involved. The script runs only after consent and reads the page address,
+              the previous page, the browser window width, time zone, and language through browser
+              APIs. It records page views, time on page, scroll depth, Core Web Vitals, JavaScript
+              errors, a few product actions such as sign-in and registration, outbound links, and
+              click positions on interface elements. It does not set cookies, use browser storage,
+              record typed text, or link measurements to an account.
             </p>
             <p>
-              Page-view paths are mapped to fixed routes, and query strings, referral URLs, and
-              campaign parameters are removed before transmission. Product-action events contain a
-              fixed route and limited operational metadata. Errors are not collected on
-              authentication or dynamic routes, and recognizable secrets in error text are redacted.
-              The analytics endpoint necessarily receives the IP address and browser request headers
-              when a request is delivered. The repository does not establish whether the deployed
-              backend stores raw IP addresses or exactly how it creates analytics identifiers; the
-              production operator must confirm both points.
+              The server receives the IP address and browser request headers when a measurement is
+              delivered. It derives browser, operating system, and device type from the user agent
+              and counts visitors with a keyed hash of the IP address and user agent under a random
+              key that changes every day and is deleted after that day. The IP address and user
+              agent are not stored, and a visitor cannot be recognized across days. Query strings
+              except campaign parameters are removed, identifier-like parts of page addresses are
+              replaced, and email addresses and long numbers in event and error texts are masked
+              before storage. The country is derived from the time zone, not from the IP address.
             </p>
-            {purePortalSwetrix ? (
-              <>
-                <p>
-                  Analytics is sent to PurePortal&apos;s self-hosted Swetrix instance at{" "}
-                  <a href="https://swetrix.pureportal.io/">swetrix.pureportal.io</a>. PurePortal
-                  remains the controller for this processing. The current integration does not send
-                  analytics to Swetrix Ltd.; the analytics code is delivered with the application.
-                  Events remain until the instance&apos;s configured retention period expires. That
-                  period is managed outside this codebase and must be confirmed before production.
-                </p>
-                <p>
-                  <a
-                    href="https://www.cloudflare.com/privacypolicy/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Cloudflare, Inc.
-                  </a>
-                  , 101 Townsend Street, San Francisco, CA 94107, USA provides reverse-proxy,
-                  transport-security, routing, and network-security services for this endpoint and
-                  processes connection data and the transmitted analytics request. Cloudflare states
-                  that it may process data outside the EEA. Its{" "}
-                  <a
-                    href="https://www.cloudflare.com/cloudflare-customer-dpa/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Data Processing Addendum
-                  </a>{" "}
-                  provides for the EU-U.S. Data Privacy Framework for covered U.S. transfers and
-                  Standard Contractual Clauses for restricted transfers. PurePortal must ensure that
-                  the addendum applies to the production account.
-                </p>
-              </>
-            ) : (
-              <p>
-                This build sends analytics to a self-hosted Swetrix endpoint configured by the
-                deployment operator. That operator must identify the endpoint operator, location,
-                recipients, and retention period in its deployment-specific notice.
-              </p>
-            )}
-            {sessionReplayConfigured ? (
-              <p>
-                Session replay is a separate optional setting and is included only when you select
-                Accept all or enable it in Privacy settings. When enabled, Swetrix receives sampled
-                interaction recordings. The recorder is delivered with the application; all text and
-                inputs are masked, images and other visual media are blocked, and iframe recording
-                is disabled. Replay is limited to fixed routes and is disabled on login,
-                registration, invitation, public status, and dynamic routes. These controls reduce,
-                but cannot eliminate, the possibility that personal data is captured.
-              </p>
-            ) : null}
             <p>
-              Analytics and session replay do not start before the relevant choice. Consent can be
-              changed at any time through Privacy settings. Withdrawal stops future collection and
-              does not affect processing already carried out lawfully. Browser Do Not Track is also
-              respected.
+              Consent can be changed at any time through Privacy settings. Withdrawal stops future
+              collection and does not affect processing already carried out lawfully. Browsers that
+              send Do Not Track or Global Privacy Control are not measured.
             </p>
           </>
         ) : (
-          <p>This build does not have optional analytics or session replay configured.</p>
+          <p>This build does not have optional analytics configured.</p>
         )}
       </LegalSection>
 
@@ -261,13 +209,12 @@ export function EnglishPrivacyPolicy() {
           server URL, a chosen landing-page theme and language, the analytics choice and decision
           time, and, if push is enabled, a random device reference and server-specific endpoint
           reference. The browser also stores the service worker and push subscription requested for
-          Web Push. Swetrix itself does not use browser storage in this integration. This storage
-          provides functions or choices requested by the user and is used under Section 25(2) No. 2
-          TDDDG. The session and team selection are removed on sign-out and an expired session is
-          removed when the app is next opened. Push subscriptions and endpoint references are
-          removed when push is disabled; server URL, theme, language, privacy choice, device
-          reference, and service-worker registration remain until changed or browser site data is
-          cleared.
+          Web Push. The analytics script does not use browser storage. This storage provides
+          functions or choices requested by the user and is used under Section 25(2) No. 2 TDDDG.
+          The session and team selection are removed on sign-out and an expired session is removed
+          when the app is next opened. Push subscriptions and endpoint references are removed when
+          push is disabled; server URL, theme, language, privacy choice, device reference, and
+          service-worker registration remain until changed or browser site data is cleared.
         </p>
       </LegalSection>
 
@@ -290,13 +237,6 @@ export function EnglishPrivacyPolicy() {
             administrators receive the platform account and sponsorship data needed for their
             duties.
           </li>
-          {analyticsConfigured ? (
-            <li>
-              {purePortalSwetrix
-                ? "PurePortal's analytics instance and Cloudflare receive analytics only after consent. Swetrix Ltd. is not a recipient in this configuration."
-                : "The configured analytics endpoint and its network providers receive analytics only after consent."}
-            </li>
-          ) : null}
           <li>
             Visitors to public status pages and dashboards receive content deliberately published or
             shared by a team.
@@ -342,8 +282,8 @@ export function EnglishPrivacyPolicy() {
           </li>
           {analyticsConfigured ? (
             <li>
-              Analytics remains until the configured Swetrix retention period expires; that period
-              is not set in this repository.
+              Analytics measurements are kept for 395 days and click positions for 90 days by
+              default; the daily visitor key is deleted after its day.
             </li>
           ) : null}
           <li>
@@ -386,7 +326,8 @@ export function EnglishPrivacyPolicy() {
           Subject to the statutory conditions, data subjects may request access, rectification,
           erasure, restriction, and portability of their data. They may object to processing based
           on Article 6(1)(f) GDPR for reasons arising from their situation and may withdraw consent
-          at any time for future processing. Requests can be sent to{" "}
+          at any time for future processing. Signed-in users can download their account data and
+          delete their account under Account → Your data. Other requests can be sent to{" "}
           <a href={`mailto:${legalProvider.email}`}>{legalProvider.email}</a>. Identity may need to
           be verified before a request is fulfilled.
         </p>

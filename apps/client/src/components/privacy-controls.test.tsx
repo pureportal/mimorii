@@ -16,48 +16,27 @@ describe("privacy controls", () => {
   });
   afterEach(cleanup);
 
-  it("offers equally direct accept-all and reject actions", () => {
+  it("offers equally direct accept and reject actions", () => {
     const savePreferences = vi.fn();
     renderControls({ savePreferences });
 
     expect(screen.getByRole("heading", { name: "Help make Mimorii better" })).toBeInTheDocument();
-    expect(screen.getByText(/find friction, fix issues faster/i)).toBeVisible();
-    expect(screen.getByText(/masked interaction replays/i)).toBeVisible();
+    expect(screen.getByText(/find friction and fix issues faster/i)).toBeVisible();
 
     const reject = screen.getByRole("button", { name: "Reject" });
-    const accept = screen.getByRole("button", { name: "Accept all" });
+    const accept = screen.getByRole("button", { name: "Accept" });
     expect(reject).toBeEnabled();
     expect(accept).toBeEnabled();
     expect(reject.className).toBe(accept.className);
 
     fireEvent.click(reject);
-    expect(savePreferences).toHaveBeenLastCalledWith({
-      analytics: false,
-      sessionReplay: false,
-    });
+    expect(savePreferences).toHaveBeenLastCalledWith(false);
 
     fireEvent.click(accept);
-    expect(savePreferences).toHaveBeenLastCalledWith({
-      analytics: true,
-      sessionReplay: true,
-    });
+    expect(savePreferences).toHaveBeenLastCalledWith(true);
   });
 
-  it("accepts only configured optional categories", () => {
-    const savePreferences = vi.fn();
-    renderControls({ savePreferences, sessionReplayConfigured: false });
-
-    expect(screen.queryByText(/masked interaction replays/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Accept all" }));
-
-    expect(savePreferences).toHaveBeenCalledWith({
-      analytics: true,
-      sessionReplay: false,
-    });
-  });
-
-  it("opens granular settings from the undecided state", () => {
+  it("opens settings from the undecided state", () => {
     const setSettingsOpen = vi.fn();
     renderControls({ setSettingsOpen });
 
@@ -66,71 +45,37 @@ describe("privacy controls", () => {
     expect(setSettingsOpen).toHaveBeenCalledWith(true);
   });
 
-  it("keeps session replay separate and dependent on analytics", () => {
+  it("saves the analytics choice from settings", () => {
     const savePreferences = vi.fn();
     const setSettingsOpen = vi.fn();
     renderControls({ savePreferences, setSettingsOpen, settingsOpen: true });
 
     const requiredStorage = screen.getByRole("switch", { name: "Required storage" });
     const analytics = screen.getByRole("switch", { name: "Usage analytics" });
-    const sessionReplay = screen.getByRole("switch", { name: "Session replay" });
-
     expect(requiredStorage).toBeChecked();
     expect(requiredStorage).toBeDisabled();
     expect(analytics).not.toBeChecked();
-    expect(sessionReplay).not.toBeChecked();
-    expect(sessionReplay).toBeDisabled();
-    expect(screen.getByText(/requires usage analytics/i)).toBeVisible();
 
     fireEvent.click(analytics);
-    expect(sessionReplay).toBeEnabled();
-    fireEvent.click(sessionReplay);
-    expect(sessionReplay).toBeChecked();
-
     fireEvent.click(screen.getByRole("button", { name: "Save choices" }));
-    expect(savePreferences).toHaveBeenCalledWith({ analytics: true, sessionReplay: true });
+    expect(savePreferences).toHaveBeenCalledWith(true);
     expect(setSettingsOpen).toHaveBeenCalledWith(false);
   });
 
-  it("clears replay when analytics is withdrawn", () => {
-    const savePreferences = vi.fn();
-    renderControls({
-      preferences: storedPreferences(true, true),
-      savePreferences,
-      settingsOpen: true,
-    });
-
-    const analytics = screen.getByRole("switch", { name: "Usage analytics" });
-    const sessionReplay = screen.getByRole("switch", { name: "Session replay" });
-    expect(sessionReplay).toBeChecked();
-
-    fireEvent.click(analytics);
-    expect(sessionReplay).not.toBeChecked();
-    expect(sessionReplay).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Save choices" }));
-    expect(savePreferences).toHaveBeenCalledWith({
-      analytics: false,
-      sessionReplay: false,
-    });
-  });
-
-  it("withdraws every optional choice in one action", () => {
+  it("withdraws analytics in one action", () => {
     const savePreferences = vi.fn();
     const setSettingsOpen = vi.fn();
     renderControls({
-      preferences: storedPreferences(true, true),
+      preferences: storedPreferences(true),
       savePreferences,
       setSettingsOpen,
       settingsOpen: true,
     });
 
+    expect(screen.getByRole("switch", { name: "Usage analytics" })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Reject optional" }));
 
-    expect(savePreferences).toHaveBeenCalledWith({
-      analytics: false,
-      sessionReplay: false,
-    });
+    expect(savePreferences).toHaveBeenCalledWith(false);
     expect(setSettingsOpen).toHaveBeenCalledWith(false);
   });
 
@@ -142,8 +87,8 @@ describe("privacy controls", () => {
     expect(
       screen.getByRole("heading", { name: "Helfen Sie, Mimorii zu verbessern" })
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Alle akzeptieren" }));
-    expect(savePreferences).toHaveBeenCalledWith({ analytics: true, sessionReplay: true });
+    fireEvent.click(screen.getByRole("button", { name: "Akzeptieren" }));
+    expect(savePreferences).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: "Ablehnen" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "Datenschutzerklärung" })).toHaveAttribute(
       "href",
@@ -157,7 +102,6 @@ describe("privacy controls", () => {
 
     expect(screen.getByRole("dialog", { name: "Datenschutzeinstellungen" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Nutzungsanalyse" })).not.toBeChecked();
-    expect(screen.getByText(/Erfordert die Nutzungsanalyse/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Auswahl speichern" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Schließen" })).toBeInTheDocument();
   });
@@ -188,7 +132,6 @@ function renderControls(
   usePrivacyMock.mockReturnValue({
     preferences: null,
     analyticsConfigured: true,
-    sessionReplayConfigured: true,
     settingsOpen: false,
     setSettingsOpen: vi.fn(),
     savePreferences: vi.fn(),
@@ -205,11 +148,10 @@ function renderControls(
   );
 }
 
-function storedPreferences(analytics: boolean, sessionReplay: boolean) {
+function storedPreferences(analytics: boolean) {
   return {
-    version: 1 as const,
+    version: 2 as const,
     analytics,
-    sessionReplay,
     decidedAt: "2026-08-13T00:00:00.000Z",
   };
 }

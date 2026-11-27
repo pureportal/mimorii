@@ -1,6 +1,5 @@
 import type { AuthSession } from "@mimorii/contracts";
 import { getAuthSession, isAuthSession, storeAuthSession } from "./auth-session";
-import { trackSwetrixEvent } from "./swetrix";
 import { applicationRuntime, type ApplicationRuntime } from "./runtime";
 
 const DEFAULT_API_URL =
@@ -57,43 +56,17 @@ export function normalizeServerUrl(value: string, runtime: ApplicationRuntime): 
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const method = (options.method ?? "GET").toUpperCase();
-  const scope = apiScope(path);
   const response = await authenticatedFetch(path, options);
-  if (!response.ok) {
-    if (method !== "GET") {
-      trackSwetrixEvent({
-        ev: "API_MUTATION_FAILED",
-        meta: { method, scope, status: response.status },
-      });
-    }
-    throw await apiError(response);
-  }
-  if (response.status === 204) {
-    if (method !== "GET") {
-      trackSwetrixEvent({ ev: "API_MUTATION_SUCCEEDED", meta: { method, scope } });
-    }
-    return undefined as T;
-  }
-  let result: T;
+  if (!response.ok) throw await apiError(response);
+  if (response.status === 204) return undefined as T;
   try {
-    result = (await response.json()) as T;
+    return (await response.json()) as T;
   } catch {
-    if (method !== "GET") {
-      trackSwetrixEvent({
-        ev: "API_MUTATION_FAILED",
-        meta: { method, scope, status: response.status },
-      });
-    }
     throw new ApiError(
       response.status,
       "Server returned an invalid response. Check the server URL."
     );
   }
-  if (method !== "GET") {
-    trackSwetrixEvent({ ev: "API_MUTATION_SUCCEEDED", meta: { method, scope } });
-  }
-  return result;
 }
 
 export async function apiBlob(path: string, options: RequestInit = {}): Promise<Blob> {
@@ -117,13 +90,6 @@ export function jsonBody(value: unknown): Pick<RequestInit, "body"> {
 
 export function apiAssetUrl(path: string): string {
   return `${getServerUrl()}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function apiScope(path: string): string {
-  const pathname = path.split("?")[0] ?? "";
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments[0] === "teams") return segments[2] ?? "teams";
-  return segments[0] ?? "unknown";
 }
 
 function isInternalTauriUrl(value: string): boolean {

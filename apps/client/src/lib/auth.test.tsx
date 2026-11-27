@@ -15,13 +15,7 @@ vi.mock("./api", () => ({
   revokeAuthSession: revokeAuthSessionMock,
 }));
 
-vi.mock("./privacy", () => ({ usePrivacy: () => ({ preferences: null }) }));
 vi.mock("./push-notifications", () => ({ revokePushOnLogout: revokePushOnLogoutMock }));
-vi.mock("./swetrix", () => ({
-  identifySwetrixUser: vi.fn(),
-  resetSwetrixUser: vi.fn(),
-  trackSwetrixEvent: vi.fn(),
-}));
 
 const team = {
   id: "team-1",

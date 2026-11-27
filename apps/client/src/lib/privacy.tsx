@@ -3,51 +3,36 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { analyticsConfigured, setAnalyticsConsent } from "./analytics";
 import {
   PRIVACY_PREFERENCES_KEY,
-  analyticsConfigured,
   readPrivacyPreferences,
-  sessionReplayConfigured,
   storePrivacyPreferences,
   type PrivacyPreferences,
-  type PrivacyPreferenceSelection,
 } from "./privacy-preferences";
-import {
-  initializeSwetrix,
-  startSwetrixSessionReplay,
-  stopSwetrixSessionReplay,
-  stopSwetrixTracking,
-} from "./swetrix";
 
 interface PrivacyContextValue {
   preferences: PrivacyPreferences | null;
   analyticsConfigured: boolean;
-  sessionReplayConfigured: boolean;
   settingsOpen: boolean;
   setSettingsOpen: Dispatch<SetStateAction<boolean>>;
-  savePreferences: (selection: PrivacyPreferenceSelection) => void;
+  savePreferences: (analytics: boolean) => void;
 }
 
 const PrivacyContext = createContext<PrivacyContextValue | null>(null);
 
 export function PrivacyProvider({ children }: { children: ReactNode }) {
-  const location = useLocation();
   const [preferences, setPreferences] = useState(readPrivacyPreferences);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const savePreferences = useCallback((selection: PrivacyPreferenceSelection) => {
-    const next = storePrivacyPreferences(selection);
-    if (!next.analytics) stopSwetrixTracking();
-    else if (!next.sessionReplay) void stopSwetrixSessionReplay();
-    setPreferences(next);
+  const savePreferences = useCallback((analytics: boolean) => {
+    setPreferences(storePrivacyPreferences(analytics));
   }, []);
 
   useEffect(() => {
@@ -58,25 +43,12 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", synchronize);
   }, []);
 
-  useLayoutEffect(() => {
-    if (!preferences?.analytics) {
-      stopSwetrixTracking();
-      return;
-    }
-    initializeSwetrix();
-    if (preferences.sessionReplay) void startSwetrixSessionReplay();
-    else void stopSwetrixSessionReplay();
-  }, [location.hash, location.pathname, location.search, preferences]);
+  useEffect(() => {
+    setAnalyticsConsent(preferences?.analytics === true);
+  }, [preferences]);
 
   const value = useMemo<PrivacyContextValue>(
-    () => ({
-      preferences,
-      analyticsConfigured,
-      sessionReplayConfigured,
-      settingsOpen,
-      setSettingsOpen,
-      savePreferences,
-    }),
+    () => ({ preferences, analyticsConfigured, settingsOpen, setSettingsOpen, savePreferences }),
     [preferences, savePreferences, settingsOpen]
   );
 

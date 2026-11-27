@@ -1,4 +1,4 @@
-import { ChartNoAxesCombined, LockKeyhole, MousePointer2, type LucideIcon } from "lucide-react";
+import { ChartNoAxesCombined, LockKeyhole, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/cn";
@@ -9,25 +9,13 @@ import { Button, type ButtonProps } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader } from "./ui/dialog";
 
 export function PrivacyControls() {
-  const {
-    preferences,
-    analyticsConfigured,
-    sessionReplayConfigured,
-    settingsOpen,
-    setSettingsOpen,
-    savePreferences,
-  } = usePrivacy();
+  const { preferences, analyticsConfigured, settingsOpen, setSettingsOpen, savePreferences } =
+    usePrivacy();
   const [analytics, setAnalytics] = useState(preferences?.analytics ?? false);
-  const [sessionReplay, setSessionReplay] = useState(preferences?.sessionReplay ?? false);
   const copy = privacyControlsCopy[useLocale().documentLocale];
-  const consentDescription = sessionReplayConfigured
-    ? copy.description.withReplay
-    : copy.description.withoutReplay;
 
   useEffect(() => {
-    if (!settingsOpen) return;
-    setAnalytics(preferences?.analytics ?? false);
-    setSessionReplay(preferences?.sessionReplay ?? false);
+    if (settingsOpen) setAnalytics(preferences?.analytics ?? false);
   }, [preferences, settingsOpen]);
 
   if (!analyticsConfigured) return null;
@@ -68,7 +56,7 @@ export function PrivacyControls() {
                   id="privacy-consent-description"
                   className="mt-1.5 max-w-2xl text-sm leading-6 text-muted"
                 >
-                  {consentDescription}
+                  {copy.description}
                 </p>
               </div>
             </div>
@@ -84,7 +72,7 @@ export function PrivacyControls() {
                   className="w-full whitespace-nowrap bg-surface/90"
                   variant="outline"
                   size="lg"
-                  onClick={() => savePreferences({ analytics: false, sessionReplay: false })}
+                  onClick={() => savePreferences(false)}
                 >
                   {copy.reject}
                 </Button>
@@ -94,11 +82,9 @@ export function PrivacyControls() {
                   className="w-full whitespace-nowrap bg-surface/90"
                   variant="outline"
                   size="lg"
-                  onClick={() =>
-                    savePreferences({ analytics: true, sessionReplay: sessionReplayConfigured })
-                  }
+                  onClick={() => savePreferences(true)}
                 >
-                  {copy.acceptAll}
+                  {copy.accept}
                 </Button>
               </div>
               <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3">
@@ -145,26 +131,8 @@ export function PrivacyControls() {
               label={copy.usageAnalytics.label}
               description={copy.usageAnalytics.description}
               checked={analytics}
-              onChange={(checked) => {
-                setAnalytics(checked);
-                if (!checked) setSessionReplay(false);
-              }}
+              onChange={setAnalytics}
             />
-            {sessionReplayConfigured ? (
-              <PreferenceToggle
-                id="session-replay"
-                icon={MousePointer2}
-                label={copy.sessionReplay.label}
-                description={
-                  analytics
-                    ? copy.sessionReplay.description
-                    : `${copy.sessionReplay.description} ${copy.sessionReplay.requiresAnalytics}`
-                }
-                checked={sessionReplay}
-                disabled={!analytics}
-                onChange={setSessionReplay}
-              />
-            ) : null}
           </div>
           <div className="mt-5 grid gap-2 min-[400px]:grid-cols-2">
             <Button
@@ -172,7 +140,7 @@ export function PrivacyControls() {
               className="w-full"
               variant="outline"
               onClick={() => {
-                savePreferences({ analytics: false, sessionReplay: false });
+                savePreferences(false);
                 setSettingsOpen(false);
               }}
             >
@@ -183,7 +151,7 @@ export function PrivacyControls() {
               className="w-full"
               variant="outline"
               onClick={() => {
-                savePreferences({ analytics, sessionReplay });
+                savePreferences(analytics);
                 setSettingsOpen(false);
               }}
             >

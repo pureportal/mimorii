@@ -26,8 +26,6 @@
     "test:e2e": "pnpm --filter @mimorii/api test:e2e",
     "seed": "pnpm --filter @mimorii/api seed",
     "openapi": "pnpm --filter @mimorii/api openapi:generate",
-    "swetrix:configure": "node scripts/configure-swetrix.mjs",
-    "swetrix:verify": "node scripts/verify-swetrix.mjs",
     "agent-desktop:check": "cargo check --manifest-path apps/agent-desktop/Cargo.toml",
     "agent-desktop:test": "cargo test --manifest-path apps/agent-desktop/Cargo.toml",
     "agent-desktop:build": "cargo build --release --manifest-path apps/agent-desktop/Cargo.toml",

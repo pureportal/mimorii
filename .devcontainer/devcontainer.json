@@ -8,12 +8,6 @@
     }
   },
   "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
-  "remoteEnv": {
-    "SWETRIX_ADMIN_API_URL": "https://swetrix.pureportal.io/backend",
-    "VITE_SWETRIX_DEV_MODE": "true",
-    "VITE_SWETRIX_PROJECT_ID": "vN8owpoxr4NW",
-    "VITE_SWETRIX_API_URL": "https://swetrix.pureportal.io/backend/v1/log"
-  },
   "forwardPorts": [4310, 5180],
   "portsAttributes": {
     "4310": {
@@ -25,12 +19,6 @@
       "label": "Mimorii web",
       "onAutoForward": "openPreview",
       "visibility": "private"
-    }
-  },
-  "secrets": {
-    "SWETRIX_API_KEY": {
-      "description": "Swetrix account API key used only by the configuration and verification commands.",
-      "documentationUrl": "https://swetrix.pureportal.io"
     }
   },
   "customizations": {
