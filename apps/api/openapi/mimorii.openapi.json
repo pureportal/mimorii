@@ -1,6 +1,54 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/auth/account/export": {
+      "get": {
+        "operationId": "exportAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/account": {
+      "delete": {
+        "operationId": "deleteAccount",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/api/auth/register": {
       "post": {
         "operationId": "register",
@@ -3977,6 +4025,42 @@
         ]
       }
     },
+    "/api/teams/{teamId}/incidents/{id}/acknowledge": {
+      "post": {
+        "operationId": "acknowledge",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Incidents"
+        ]
+      }
+    },
     "/api/teams/{teamId}/maintenance": {
       "get": {
         "operationId": "list",
@@ -5383,54 +5467,12 @@
         ]
       }
     },
-    "/api/teams/{teamId}/resources/{resourceId}/alerts": {
-      "get": {
-        "operationId": "list",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resourceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Resource alerts"
-        ]
-      },
+    "/api/teams/{teamId}/apps": {
       "post": {
         "operationId": "create",
         "parameters": [
           {
             "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resourceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -5443,7 +5485,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateResourceAlertDto"
+                "$ref": "#/components/schemas/CreateAppDto"
               }
             }
           }
@@ -5459,103 +5501,7 @@
           }
         ],
         "tags": [
-          "Resource alerts"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/resources/{resourceId}/alerts/{id}": {
-      "patch": {
-        "operationId": "update",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resourceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateResourceAlertDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Resource alerts"
-        ]
-      },
-      "delete": {
-        "operationId": "remove",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "resourceId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Resource alerts"
+          "Apps"
         ]
       }
     },
@@ -5912,44 +5858,6 @@
         ],
         "tags": [
           "Technologies"
-        ]
-      }
-    },
-    "/api/teams/{teamId}/heartbeats/foxytail": {
-      "post": {
-        "operationId": "enroll",
-        "parameters": [
-          {
-            "name": "teamId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnrollFoxytailDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Heartbeats"
         ]
       }
     },
@@ -6351,6 +6259,182 @@
         },
         "tags": [
           "Heartbeat ingestion"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/resources/{resourceId}/alerts": {
+      "get": {
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResourceAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/resources/{resourceId}/alerts/{id}": {
+      "patch": {
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
+        ]
+      },
+      "delete": {
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Resource alerts"
         ]
       }
     },
@@ -7491,6 +7575,386 @@
         ]
       }
     },
+    "/api/teams/{teamId}/traffic/sites": {
+      "get": {
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrafficSiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/traffic/sites/{id}": {
+      "get": {
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      },
+      "patch": {
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTrafficSiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      },
+      "delete": {
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/traffic/sites/{id}/report": {
+      "get": {
+        "operationId": "report",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/traffic/sites/{id}/live": {
+      "get": {
+        "operationId": "live",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/traffic/sites/{id}/heatmap": {
+      "get": {
+        "operationId": "heatmap",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "device",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
+    "/api/teams/{teamId}/traffic/sites/{id}/heatmap-link": {
+      "post": {
+        "operationId": "heatmapLink",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHeatmapLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Traffic"
+        ]
+      }
+    },
     "/api/teams/{teamId}/audit": {
       "get": {
         "operationId": "list",
@@ -7629,6 +8093,17 @@
       }
     },
     "schemas": {
+      "DeleteAccountDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
       "RegisterDto": {
         "type": "object",
         "properties": {
@@ -9154,145 +9629,31 @@
           }
         }
       },
-      "CreateResourceAlertDto": {
+      "CreateAppDto": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "foxytail",
+              "machdoch-cloud",
+              "lifie"
+            ]
+          },
           "name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 100
           },
-          "metric": {
+          "address": {
             "type": "string",
-            "enum": [
-              "cpuPercent",
-              "memoryPercent",
-              "storagePercent",
-              "loadAverage",
-              "batteryPercent",
-              "batteryTemperatureCelsius",
-              "containerCount",
-              "unhealthyContainerCount",
-              "internetAvailable",
-              "lowMemory",
-              "backgroundRestricted"
-            ]
-          },
-          "operator": {
-            "type": "string",
-            "enum": [
-              "greaterThan",
-              "greaterThanOrEqual",
-              "lessThan",
-              "lessThanOrEqual",
-              "equals"
-            ]
-          },
-          "threshold": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          },
-          "recoveryThreshold": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          },
-          "requiredSamples": {
-            "type": "number",
-            "default": 1,
-            "minimum": 1,
-            "maximum": 10
-          },
-          "enabled": {
-            "type": "boolean",
-            "default": true
+            "maxLength": 2048
           }
         },
         "required": [
-          "name",
-          "metric",
-          "operator",
-          "threshold"
+          "kind",
+          "name"
         ]
-      },
-      "UpdateResourceAlertDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100
-          },
-          "metric": {
-            "type": "string",
-            "enum": [
-              "cpuPercent",
-              "memoryPercent",
-              "storagePercent",
-              "loadAverage",
-              "batteryPercent",
-              "batteryTemperatureCelsius",
-              "containerCount",
-              "unhealthyContainerCount",
-              "internetAvailable",
-              "lowMemory",
-              "backgroundRestricted"
-            ]
-          },
-          "operator": {
-            "type": "string",
-            "enum": [
-              "greaterThan",
-              "greaterThanOrEqual",
-              "lessThan",
-              "lessThanOrEqual",
-              "equals"
-            ]
-          },
-          "threshold": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          },
-          "recoveryThreshold": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          },
-          "requiredSamples": {
-            "type": "number",
-            "default": 1,
-            "minimum": 1,
-            "maximum": 10
-          },
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          }
-        }
       },
       "BulkCheckActionDto": {
         "type": "object",
@@ -9495,20 +9856,6 @@
           }
         }
       },
-      "EnrollFoxytailDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "default": "Foxytail"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
       "CreateHeartbeatMonitorDto": {
         "type": "object",
         "properties": {
@@ -9612,6 +9959,138 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          }
+        }
+      },
+      "CreateResourceAlertDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "batteryPercent",
+              "batteryTemperatureCelsius",
+              "memoryPercent",
+              "storagePercent",
+              "internetAvailable",
+              "lowMemory",
+              "backgroundRestricted"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "greaterThan",
+              "greaterThanOrEqual",
+              "lessThan",
+              "lessThanOrEqual",
+              "equals"
+            ]
+          },
+          "threshold": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "recoveryThreshold": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "requiredSamples": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "metric",
+          "operator",
+          "threshold"
+        ]
+      },
+      "UpdateResourceAlertDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "batteryPercent",
+              "batteryTemperatureCelsius",
+              "memoryPercent",
+              "storagePercent",
+              "internetAvailable",
+              "lowMemory",
+              "backgroundRestricted"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "greaterThan",
+              "greaterThanOrEqual",
+              "lessThan",
+              "lessThanOrEqual",
+              "equals"
+            ]
+          },
+          "threshold": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "recoveryThreshold": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "requiredSamples": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
@@ -10533,6 +11012,61 @@
           "contactName",
           "email",
           "tier"
+        ]
+      },
+      "CreateTrafficSiteDto": {
+        "type": "object",
+        "properties": {
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "domains": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "resourceId"
+        ]
+      },
+      "UpdateTrafficSiteDto": {
+        "type": "object",
+        "properties": {
+          "domains": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "heatmapsEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateHeatmapLinkDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "tablet",
+              "mobile"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "device"
         ]
       }
     }
