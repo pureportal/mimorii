@@ -13,6 +13,8 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 - TCP ports, DNS records, TLS certificates on any port, SMTP servers, gRPC health endpoints, NTP servers, and domain registration expiry
 - CPU, memory, load, disks, and discovered server technologies
 - Scheduled jobs and backups through heartbeat URLs
+- Website traffic, Core Web Vitals, JavaScript errors, custom events, click heatmaps, and scroll depth with a cookieless tracking script
+- Foxytail, Machdoch, and Lifie as ready-made apps that set up their health check, heartbeat, log source, and log alerts in one step
 - Services inside private networks through Linux and Windows agents
 - Android device availability, battery, memory, storage, connectivity, power, and thermal state
 - Application logs sent as JSON, NDJSON, plain text, Loki push requests, or OpenTelemetry (JSON or protobuf) from Alloy, Promtail, Fluent Bit, Vector, the OpenTelemetry Collector, or plain HTTP, for teams where a global administrator enabled logs
@@ -21,16 +23,17 @@ Mimorii is a self-hosted home for uptime, server health, incidents, and reliabil
 
 Mimorii keeps check history and turns failures into an operational timeline. You can:
 
-- investigate and update incidents in one place, with the log volume and top error patterns of linked resources around each incident
+- acknowledge, investigate, and update incidents in one place, see who is handling each one, with the log volume and top error patterns of linked resources around each incident
 - search, filter, group into patterns, and live-tail logs with autocomplete and team-shared saved searches, and open incidents when a log pattern appears or stops appearing
 - ask an AI assistant connected through MCP to search logs, summarize patterns, and create log alert rules
 - schedule recurring maintenance and suppress planned alerts
 - route notifications by event, resource, severity, or team
-- notify people by email, signed webhook, browser push, or Android push
+- notify people by email, browser push, Android push, or webhook; Slack, Discord, Microsoft Teams, Google Chat, and ntfy addresses receive native messages, every other address a signed JSON event
 - review delivery attempts and retry failures
 - export resources, checks, check results, daily availability, incidents, and the audit log as CSV, JSON, or NDJSON
 - measure availability, latency, service goals, and error budgets
 - share read-only dashboards and public status pages
+- download your personal data or delete your account under **Account → Your data**
 - invite teammates with roles and keep an audit trail of important changes
 
 ## A typical workflow
@@ -181,6 +184,30 @@ To monitor the Android device itself, also install the [Mimorii Agent](https://g
 The desktop agent reports host health and runs HTTP, TCP, and DNS checks. It cannot execute remote commands. Android reports device status but does not run active monitoring checks. See [Android applications](docs/android-apps.md) for Android permissions and platform limits.
 
 For a checks-only probe, Mimorii also provides a [Docker check runner](docs/agent-docker.md). Deployment requirements are in [Monitoring checks](docs/monitoring-checks.md).
+
+## Track website traffic
+
+Open **Insights → Traffic**, choose the website resource, and paste the generated snippet into the site:
+
+```html
+<script
+  defer
+  src="https://mimorii.example.com/api/traffic/script.js"
+  data-site="<site key>"
+></script>
+```
+
+The script sets no cookies and stores nothing in the browser. See [Website traffic](docs/website-traffic.md) for events, heatmaps, and what is stored.
+
+## Connect an app
+
+Choose **Add resource → App** and pick Foxytail, Machdoch, or Lifie. Mimorii creates the resource with the right health check, heartbeat, log source, and log alerts and shows the values to paste into the app. New app types are added as one entry in `packages/contracts/src/apps.ts`.
+
+| App      | Health check                     | Telemetry                                                                                                                                                                                        |
+| -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Foxytail | `/health/ready`                  | Heartbeat with database, Redis, library, scan, and transcode metrics (Foxytail → Settings → Monitoring)                                                                                          |
+| Machdoch | `/healthz` of Machdoch Cloud     | Cloud and desktop app activity as logs labeled `service="machdoch-cloud"`; alerts open incidents when a desktop app disconnects or Machdoch reports errors (Machdoch Cloud → Settings → Mimorii) |
+| Lifie    | `/health`, `status` must be `ok` | —                                                                                                                                                                                                |
 
 ## Monitor a scheduled job
 
