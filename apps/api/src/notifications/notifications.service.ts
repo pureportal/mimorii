@@ -29,6 +29,7 @@ import type {
 } from "./notifications.dto.js";
 import { MailService } from "../common/mail.service.js";
 import { pinnedRequest } from "../common/pinned-request.js";
+import { webhookRequest } from "./webhook-payload.js";
 import { publicBaseUrl } from "../common/public-url.js";
 import { TargetSafetyService, UnsafeTargetException } from "../common/target-safety.service.js";
 
@@ -518,9 +519,11 @@ export class NotificationsService {
     configuration: WebhookConfiguration
   ): Promise<void> {
     const timestamp = new Date().toISOString();
-    const body = JSON.stringify({ event, timestamp, data: payload });
+    const request = webhookRequest(configuration.url, event, payload, timestamp);
+    const body = request.body;
     const headers: Record<string, string> = {
-      "content-type": "application/json",
+      ...request.headers,
+      "content-type": request.contentType,
       "user-agent": "Mimorii/0.1 notification",
       "x-mimorii-event": event,
       "x-mimorii-timestamp": timestamp,

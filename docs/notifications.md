@@ -4,6 +4,21 @@ Mimorii sends browser notifications with standard Web Push and Android notificat
 
 Monitoring creates notifications on state changes, including failed checks, threshold breaches, recoveries, opened or resolved incidents, missed or recovered heartbeats, service-level objective breaches, and maintenance transitions. Retries of the same occurrence are deduplicated. A later occurrence or state change remains eligible for delivery.
 
+## Webhooks
+
+The webhook address decides the message format:
+
+| Address                                                            | Format                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------------------ |
+| `hooks.slack.com`                                                  | Slack message with a link to Mimorii                   |
+| `discord.com/api/webhooks/…`                                       | Discord embed                                          |
+| `*.webhook.office.com`, `*.logic.azure.com`, `*.powerplatform.com` | Microsoft Teams adaptive card                          |
+| `chat.googleapis.com`                                              | Google Chat message                                    |
+| `ntfy.sh`                                                          | ntfy notification with title, priority, and click link |
+| any other address                                                  | JSON `{ event, timestamp, data }`                      |
+
+Every request carries `x-mimorii-event` and `x-mimorii-timestamp`. With a signing secret, `x-mimorii-signature` is `sha256=` followed by the HMAC-SHA256 of `<timestamp>.<body>`.
+
 ## Browser setup
 
 Web Push uses one VAPID key pair. Generate it once:

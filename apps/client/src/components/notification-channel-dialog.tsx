@@ -1,4 +1,9 @@
-import type { NotificationChannelSummary, NotificationChannelType } from "@mimorii/contracts";
+import {
+  webhookFormatFor,
+  webhookFormatLabels,
+  type NotificationChannelSummary,
+  type NotificationChannelType,
+} from "@mimorii/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { BellRing } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
@@ -29,6 +34,8 @@ export function NotificationChannelDialog({
     channel?.recipientUserIds.length ? channel.recipientUserIds : session ? [session.user.id] : []
   );
   const [saving, setSaving] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const webhookFormat = webhookUrl ? webhookFormatFor(webhookUrl) : null;
   const members = useQuery({
     queryKey: ["members", teamId],
     queryFn: () => api<Member[]>(`/teams/${teamId}/members`),
@@ -38,6 +45,7 @@ export function NotificationChannelDialog({
   useEffect(() => {
     if (!open) return;
     setType(channel?.type ?? "email");
+    setWebhookUrl("");
     setPushUserIds(
       channel?.recipientUserIds.length ? channel.recipientUserIds : session ? [session.user.id] : []
     );
@@ -129,18 +137,34 @@ export function NotificationChannelDialog({
           ) : type === "webhook" ? (
             <>
               <Field>
-                <FieldLabel htmlFor="channel-webhook-url">Webhook URL</FieldLabel>
-                <Input id="channel-webhook-url" name="webhookUrl" type="url" required={!channel} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="channel-webhook-secret">Signing secret</FieldLabel>
-                <PasswordInput
-                  id="channel-webhook-secret"
-                  name="webhookSecret"
-                  visibilityLabel="signing secret"
-                  maxLength={200}
+                <div className="flex items-center justify-between gap-2">
+                  <FieldLabel htmlFor="channel-webhook-url">Webhook URL</FieldLabel>
+                  {webhookFormat && webhookFormat !== "json" ? (
+                    <span className="text-xs font-semibold text-violet-strong">
+                      {webhookFormatLabels[webhookFormat]}
+                    </span>
+                  ) : null}
+                </div>
+                <Input
+                  id="channel-webhook-url"
+                  name="webhookUrl"
+                  type="url"
+                  required={!channel}
+                  value={webhookUrl}
+                  onChange={(event) => setWebhookUrl(event.target.value)}
                 />
               </Field>
+              {webhookFormat === null || webhookFormat === "json" ? (
+                <Field>
+                  <FieldLabel htmlFor="channel-webhook-secret">Signing secret</FieldLabel>
+                  <PasswordInput
+                    id="channel-webhook-secret"
+                    name="webhookSecret"
+                    visibilityLabel="signing secret"
+                    maxLength={200}
+                  />
+                </Field>
+              ) : null}
             </>
           ) : (
             <Field>

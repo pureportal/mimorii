@@ -6,6 +6,7 @@ export * from "./logs.js";
 export * from "./password-reset.js";
 export * from "./traffic.js";
 export * from "./two-factor.js";
+export * from "./webhooks.js";
 
 export const teamRoles = ["owner", "admin", "member", "viewer"] as const;
 export type TeamRole = (typeof teamRoles)[number];
